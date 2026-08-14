@@ -42,6 +42,28 @@ These were verified by reading the code on 2026-08-15. Do not re-derive them.
 | Navigation | Next.js App Router | Routes `/` (recording), `/meeting-details?id=`, `/notes/[id]`, `/settings`. Sidebar (`components/Sidebar/index.tsx`) is the central nav surface; meeting nav = `router.push(\`/meeting-details?id=${id}\`)` + `setCurrentMeeting`. |
 | Meeting list refresh | `components/Sidebar/SidebarProvider.tsx::fetchMeetings` | Uses `api_get_meetings`; `refetchMeetings` exposed via context. |
 | Local LLM sidecar | `summary/summary_engine/*`, `llama-helper/` | BuiltInAI provider. Untouched by this contract. |
+| Custom template storage (in-flight) | `summary/templates/store.rs` | A storage layer (create/update/delete/duplicate with id sanitization, builtin protection, atomic writes) landed in-tree on 2026-08-15. It depends on loader fns `is_builtin_template_id`, `template_source`, `custom_templates_dir` that do not exist yet — see §1.1. |
+
+### 1.1 In-flight work observed after the initial contract commit (binding reconciliation)
+
+Parallel agents are landing work directly in this tree. The commit `06c33b1` (this document's
+first commit) contains some of it. The table below is the **binding reconciliation**: canonical
+names win; the listed in-tree names MUST be renamed/aligned at integration.
+
+| Concern | In-tree (agent) | Canonical (this contract) |
+|---|---|---|
+| Calendar range command | `api_get_meetings_by_date_range` (invoked in `frontend/src/services/meetingService.ts`) | `api_get_meetings_by_range` (§3.1) |
+| Meeting list payload | `api_get_meetings` now also returns `created_at`/`updated_at` (edit to `api/api.rs::Meeting`) | Keep — additive and harmless; sidebar history grouping uses it |
+| Sidebar history grouping | Today/Yesterday/Earlier grouping using `lib/calendar.ts::localDateKey` (edit to `Sidebar/index.tsx`) | Keep — matches §10 local-day semantics |
+| Context command names | `context_create`, `context_update`, `context_delete`, `context_list`, `context_get`, `context_add_meeting`, `context_remove_meeting`, `context_list_meetings`, `context_get_memory`, `context_save_memory` (`src-tauri/src/contexts/commands.rs`) | Task-mandated `api_*` names in §7.2 (`api_create_context_thread`, ...). Rename at integration. |
+| Context tables | `contexts`, `context_meetings`, `context_memory` (opaque JSON doc) in migration `20260815000000_add_context_threads.sql` | `contexts` + `context_meetings` kept; `context_memory` **retired** and replaced by `contexts.memory_markdown` + relational `context_memory_items` (§6). Per-item provenance is a hard requirement. |
+| Context module dir | `src-tauri/src/contexts/` (registered in lib.rs as `pub mod contexts;`) | Either `context/` or `contexts/` accepted; command names + schema are the binding parts. Owner normalizes at integration. |
+| Context models | `ContextModel`, `ContextSummary`, `ContextMemory` added to `database/models.rs` | Keep `ContextModel`/`ContextSummary`; replace `ContextMemory` with `ContextMemoryItemModel` (§7.1). |
+| Template frontend service | `frontend/src/services/templateService.ts` (in-tree, committed) calls `api_save_template`, `api_delete_template`, `api_get_template_json` | Canonical commands are §4.2 (`api_create_custom_template`, `api_update_custom_template`, `api_delete_custom_template`, `api_duplicate_template` + `api_get_template_json`). Owner aligns the service wrapper at integration. |
+| Template editor UI | `frontend/src/components/templates/{SummaryTemplateManager,TemplateEditor}.tsx`, `frontend/src/lib/template-schema.ts` (in-tree) | Keep. |
+| Template storage backend | `summary/templates/store.rs` (in-tree) | Keep as the storage layer for §4.2 commands. |
+| Dev tooling | `package.json`/`pnpm-lock.yaml` gained eslint + bun devDeps | Owner reviews; no RUNTIME dependencies may be added without owner approval. |
+| Migration numbering | agent file `20260815000000_add_context_threads.sql` | Owner will amend this file to the §6 schema; daily summaries go in a separate `20260815000001_add_daily_summaries.sql` (§11). |
 
 ---
 
@@ -347,12 +369,13 @@ Behavior:
 
 ## 6. D — Context Threads (Schema)
 
-Single owner migration (§11) creates exactly these tables. Follow the repo's text-PK,
-snake_case, TEXT-timestamp conventions. Timestamps written as RFC3339 UTC strings
-(`Utc::now().to_rfc3339()`).
+Binding schema (reconciled with the in-flight `contexts`/`context_meetings` tables — §1.1).
+Follow the repo's text-PK, snake_case, TEXT-timestamp conventions. Timestamps written as
+RFC3339 UTC strings (`Utc::now().to_rfc3339()`). The in-flight `context_memory` (opaque JSON)
+table is NOT part of the binding schema and is removed at integration.
 
 ```sql
-CREATE TABLE IF NOT EXISTS context_threads (
+CREATE TABLE IF NOT EXISTS contexts (
     id TEXT PRIMARY KEY,                       -- "context-<uuid>"
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
@@ -361,17 +384,17 @@ CREATE TABLE IF NOT EXISTS context_threads (
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS meeting_context_links (
-    id TEXT PRIMARY KEY,                       -- "mcl-<uuid>"
-    context_id TEXT NOT NULL REFERENCES context_threads(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS context_meetings (
+    context_id TEXT NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL,
-    UNIQUE(context_id, meeting_id)
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (context_id, meeting_id)       -- composite PK prevents duplicate links
 );
+CREATE INDEX IF NOT EXISTS idx_context_meetings_meeting_id ON context_meetings(meeting_id);
 
 CREATE TABLE IF NOT EXISTS context_memory_items (
     id TEXT PRIMARY KEY,                       -- "cmi-<uuid>"
-    context_id TEXT NOT NULL REFERENCES context_threads(id) ON DELETE CASCADE,
+    context_id TEXT NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     source_meeting_id TEXT,                    -- NULL = manually entered, no provenance
     kind TEXT NOT NULL,                        -- fact | decision | action | question | note
     content TEXT NOT NULL,
@@ -379,18 +402,16 @@ CREATE TABLE IF NOT EXISTS context_memory_items (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_links_context ON meeting_context_links(context_id);
-CREATE INDEX IF NOT EXISTS idx_links_meeting ON meeting_context_links(meeting_id);
-CREATE INDEX IF NOT EXISTS idx_memory_context ON context_memory_items(context_id);
-CREATE INDEX IF NOT EXISTS idx_memory_source ON context_memory_items(source_meeting_id);
+CREATE INDEX IF NOT EXISTS idx_memory_items_context ON context_memory_items(context_id);
+CREATE INDEX IF NOT EXISTS idx_memory_items_source ON context_memory_items(source_meeting_id);
 ```
 
 Deletion semantics (documented behavior, enforced in Rust repositories because FK pragmas are
 not guaranteed — §11 enables `PRAGMA foreign_keys=ON` AND repositories still clean manually):
 
-- Meeting deleted → its `meeting_context_links` rows AND its `context_memory_items` rows
-  (`source_meeting_id = meeting`) are deleted (derived data dies with source; provenance never dangles). Extend
-  `delete_meeting_with_transaction` (owner-owned).
+- Meeting deleted → its `context_meetings` rows AND its `context_memory_items` rows
+  (`source_meeting_id = meeting`) are deleted (derived data dies with source; provenance never
+  dangles). Extend `delete_meeting_with_transaction` (owner-owned).
 - Context thread deleted → its links and memory items deleted (manual delete in one transaction).
 - Meeting removed from context → link row deleted; memory items with that `source_meeting_id`
   are KEPT (they remain accepted knowledge; provenance still points at the meeting).
@@ -399,7 +420,11 @@ not guaranteed — §11 enables `PRAGMA foreign_keys=ON` AND repositories still 
 
 ## 7. E — Context APIs
 
-New module `src-tauri/src/context/` (mod.rs, commands.rs, repository.rs, memory.rs). Agent-owned files.
+Module dir: `src-tauri/src/contexts/` (in-flight, already registered in lib.rs) or
+`src-tauri/src/context/`; owner normalizes at integration. Files: mod.rs, commands.rs,
+service.rs, plus `database/repositories/context.rs` (in-flight). Binding parts: the command
+names below, the §6 schema, and the IPC structs in §7.1. DB-layer model names map as
+`ContextModel` (thread row), `ContextSummary` (list row), `ContextMemoryItemModel` (memory item row).
 
 ### 7.1 Structs (serde structs exactly as shown)
 
@@ -576,11 +601,15 @@ Flow in the command:
 
 ## 11. Migration Plan
 
-- **Exactly ONE** new migration for all four features, created by the Integration Owner:
-  `src-tauri/migrations/20260815000000_add_intelligence_features.sql` containing §5.1 and §6
-  tables + indexes. `sqlx::migrate!` picks it up by filename automatically (newest date).
-- Agents MUST NOT commit migration files in their branches (they may use a throwaway local file
-  for testing and must delete it before pushing).
+- Context tables (§6): the in-flight file `src-tauri/migrations/20260815000000_add_context_threads.sql`
+  becomes the single context migration. The Integration Owner amends it to the binding schema:
+  `contexts` (+`memory_markdown`), `context_meetings`, `context_memory_items`; the
+  `context_memory` table is removed.
+- Daily summaries (§5.1): ONE separate migration
+  `src-tauri/migrations/20260815000001_add_daily_summaries.sql`, created by the Integration
+  Owner (or the daily agent with owner sign-off). No other migration files may be added.
+- `sqlx::migrate!` picks up files by sorted filename automatically (newest date = applied last).
+- Agents MUST NOT add additional migration files in their branches.
 - Owner also enables FK enforcement as belt-and-braces:
   `SqliteConnectOptions::new().filename(path).create_if_missing(true).pragma("foreign_keys","ON")`
   in `database/manager.rs::new` (manual cleanup in repositories remains the source of truth).
@@ -593,31 +622,36 @@ Flow in the command:
 
 | File | Why shared |
 |---|---|
-| `frontend/src-tauri/src/lib.rs` | central `invoke_handler` registration |
+| `frontend/src-tauri/src/lib.rs` | central `invoke_handler` registration + module decls |
 | `frontend/src-tauri/src/api/mod.rs` | add `pub mod calendar;` |
+| `frontend/src-tauri/src/api/api.rs` | agent already touched it (created_at in `Meeting`); owner reviews/keeps |
+| `frontend/src-tauri/src/database/models.rs` | context models landed here; owner finalizes (`ContextMemoryItemModel`) |
+| `frontend/src-tauri/src/database/repositories/mod.rs` | `pub mod context;` landed; owner keeps |
 | `frontend/src-tauri/src/summary/mod.rs` | re-exports of new commands/`__cmd__` variants |
 | `frontend/src-tauri/src/summary/commands.rs` | `api_process_transcript` +`context_id`; daily command registration |
 | `frontend/src-tauri/src/summary/service.rs` | `prior_context_memory` param + cache fingerprint |
-| `frontend/src-tauri/src/summary/template_commands.rs` | `TemplateInfo.source`/`is_readonly` |
-| `frontend/src-tauri/src/summary/templates/loader.rs` | `is_builtin_template_id`, `get_template_json_raw`, source-aware `list_templates` |
-| `frontend/src-tauri/src/summary/templates/mod.rs` | re-exports |
+| `frontend/src-tauri/src/summary/template_commands.rs` | `TemplateInfo.source`/`is_readonly` + §4.2 command wrappers over `store.rs` |
+| `frontend/src-tauri/src/summary/templates/loader.rs` | `is_builtin_template_id`, `template_source`, `custom_templates_dir` (store.rs depends on these), source-aware `list_templates` |
+| `frontend/src-tauri/src/summary/templates/mod.rs` | re-exports (`store` module is agent-owned) |
 | `frontend/src-tauri/src/database/manager.rs` | `foreign_keys` pragma |
 | `frontend/src-tauri/src/database/repositories/meeting.rs` | extend delete transaction (context links, memory items, daily summaries) |
-| `frontend/src-tauri/migrations/20260815000000_add_intelligence_features.sql` | single canonical migration |
+| `frontend/src-tauri/migrations/20260815000000_add_context_threads.sql` | owner amends to binding §6 schema |
+| `frontend/src-tauri/migrations/20260815000001_add_daily_summaries.sql` | owner creates |
 | `frontend/src/types/index.ts` | re-exports from feature type files only |
-| `frontend/src/components/Sidebar/index.tsx` | nav entries (Calendar, Context, Templates) |
-| `frontend/src/components/Sidebar/SidebarProvider.tsx` | refetch triggers |
+| `frontend/src/components/Sidebar/index.tsx` | nav entries (Calendar, Context, Templates); agent history-grouping edit reviewed/kept |
+| `frontend/src/components/Sidebar/SidebarProvider.tsx` | refetch triggers; agent edit reviewed/kept |
 | `frontend/src/hooks/useNavigation.ts` | only if nav changes needed |
 | `frontend/src/app/settings/page.tsx` | template-management entry point wiring |
+| `frontend/package.json` / `pnpm-lock.yaml` | dev-tooling additions reviewed by owner; no runtime deps without approval |
 
 ### Feature agent owned (NEW files only — agents must not edit any file above)
 
 | Agent | Rust (new) | Frontend (new) |
 |---|---|---|
-| Calendar | `src-tauri/src/api/calendar.rs` | `types/calendar.ts`, `services/calendarService.ts`, `hooks/useCalendar.ts`, `app/calendar/page.tsx`, `components/Calendar/*` |
-| Templates | `src-tauri/src/summary/templates/custom_commands.rs` (+ draft of `daily_brief.json`) | `types/templateManagement.ts`, `services/templateService.ts`, `app/templates/page.tsx`, `components/TemplateEditor/*` |
-| Daily | `src-tauri/src/summary/daily/{mod.rs,commands.rs,service.rs}`, `src-tauri/src/database/repositories/daily_summary.rs` | `types/dailySummary.ts`, `services/dailySummaryService.ts`, `app/daily/page.tsx`, `components/DailyBrief/*` |
-| Context | `src-tauri/src/context/{mod.rs,commands.rs,repository.rs,memory.rs}` | `types/context.ts`, `services/contextService.ts`, `hooks/useContextThreads.ts`, `app/context/page.tsx`, `app/context/[id]/page.tsx`, `components/Context/*` |
+| Calendar | `src-tauri/src/api/calendar.rs` | `types/calendar.ts` (or in-flight `lib/calendar.ts` + `types/daily.ts`), `services/meetingService.ts` (in-flight; rename command call to `api_get_meetings_by_range`), `app/calendar/page.tsx`, `components/Calendar/*` |
+| Templates | `src-tauri/src/summary/templates/store.rs` (in-flight, keep) + draft of `daily_brief.json` | in-flight `services/templateService.ts`, `components/templates/*`, `lib/template-schema.ts` (align command names to §4.2), `app/templates/page.tsx` |
+| Daily | `src-tauri/src/summary/daily/{mod.rs,commands.rs,service.rs}`, `src-tauri/src/database/repositories/daily_summary.rs` | `types/daily.ts` (in-flight), `services/dailySummaryService.ts`, `lib/daily/timeline.ts` (in-flight, keep), `app/daily/page.tsx`, `components/DailyBrief/*` |
+| Context | `src-tauri/src/contexts/*` (in-flight; rename commands to §7.2), `src-tauri/src/database/repositories/context.rs` (in-flight; add memory-items ops) | `types/context.ts`, `services/contextService.ts`, `app/context/page.tsx`, `app/context/[id]/page.tsx`, `components/Context/*` |
 
 ### Route ownership (no collisions)
 
@@ -646,6 +680,10 @@ Flow in the command:
 Agents: run `cargo fmt --all -- --check`, `cargo check -p meetily`, `cargo test -p meetily`,
 `pnpm lint`, `pnpm build`, and `node tests/lib/*.test.mjs` in their environment, and report each
 as PASS / FAIL / ENV-MISSING with the exact error. Never claim a test passes without running it.
+
+Note: an agent added `eslint`, `eslint-config-next`, `@eslint/eslintrc`, and `bun` devDependencies
+in-flight. These are NOT yet verified on this machine; the table above reflects the pre-change
+state. The owner re-verifies the baseline after `pnpm install`.
 
 ---
 
