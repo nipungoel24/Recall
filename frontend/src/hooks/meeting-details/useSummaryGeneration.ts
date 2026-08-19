@@ -56,6 +56,8 @@ interface UseSummaryGenerationProps {
   modelConfig: ModelConfig;
   isModelConfigLoading: boolean;
   selectedTemplate: string;
+  /** Context whose saved knowledge is prepended for this meeting's summary (contract §8.2). */
+  contextId?: string | null;
   onMeetingUpdated?: () => Promise<void>;
   updateMeetingTitle: (title: string) => void;
   setAiSummary: (summary: Summary | null) => void;
@@ -68,6 +70,7 @@ export function useSummaryGeneration({
   modelConfig,
   isModelConfigLoading,
   selectedTemplate,
+  contextId = null,
   onMeetingUpdated,
   updateMeetingTitle,
   setAiSummary,
@@ -157,6 +160,7 @@ export function useSummaryGeneration({
         customPrompt: customPrompt,
         templateId: selectedTemplate,
         summaryLanguage,
+        ...(contextId ? { contextId } : {}),
       }) as any;
 
       const process_id = result.process_id;
@@ -392,6 +396,7 @@ export function useSummaryGeneration({
     meeting.created_at,
     modelConfig,
     selectedTemplate,
+    contextId,
     startSummaryPolling,
     setAiSummary,
     updateMeetingTitle,

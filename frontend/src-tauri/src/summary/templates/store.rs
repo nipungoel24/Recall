@@ -401,20 +401,28 @@ pub fn duplicate_template(
     source_id: &str,
     new_id: Option<&str>,
 ) -> Result<(String, Template), TemplateError> {
-    if loader::template_source(source_id).is_none() {
-        return Err(TemplateError::not_found(source_id));
-    }
-
-    let template = loader::get_template(source_id).map_err(|e| {
-        TemplateError::new(
-            TemplateError::KIND_INVALID_STRUCTURE,
-            format!("Source template '{}' could not be loaded: {}", source_id, e),
-        )
-    })?;
+    let source_id = sanitize_template_id(source_id)?;
+    let local_source = template_file_path(dir, &source_id);
+    let template = if local_source.is_file() {
+        let raw = std::fs::read_to_string(&local_source).map_err(TemplateError::io)?;
+        super::validate_and_parse_template(&raw).map_err(|e| {
+            TemplateError::new(
+                TemplateError::KIND_INVALID_STRUCTURE,
+                format!("Source template '{}' could not be loaded: {}", source_id, e),
+            )
+        })?
+    } else {
+        loader::get_template(&source_id).map_err(|e| {
+            TemplateError::new(
+                TemplateError::KIND_NOT_FOUND,
+                format!("Source template '{}' could not be loaded: {}", source_id, e),
+            )
+        })?
+    };
 
     let id = match new_id {
         Some(raw) => sanitize_template_id(raw)?,
-        None => generate_duplicate_id(dir, source_id)?,
+        None => generate_duplicate_id(dir, &source_id)?,
     };
 
     if loader::is_builtin_template_id(&id) {

@@ -38,6 +38,39 @@ pub struct Transcript {
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct ContextModel {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    /// Durable-core memory digest (owned by the context-memory engine, Agent 8).
+    pub memory_markdown: String,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct ContextSummaryModel {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+    pub meeting_count: i64,
+    pub memory_item_count: i64,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct ContextMeetingModel {
+    pub id: String,
+    pub title: String,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+    pub folder_path: Option<String>,
+    pub seg_sum: Option<f64>,
+    pub last_end: Option<f64>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct SummaryProcess {
     pub meeting_id: String,
     pub status: String,
@@ -49,8 +82,27 @@ pub struct SummaryProcess {
     pub end_time: Option<chrono::DateTime<chrono::Utc>>,
     pub chunk_count: i64,
     pub processing_time: f64,
-    pub metadata: Option<String>, // JSON
+    pub metadata: Option<String>,      // JSON
     pub result_backup: Option<String>, // Backup of result before regeneration
+    pub result_backup_timestamp: Option<chrono::DateTime<chrono::Utc>>, // When backup was created
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct DailySummaryProcess {
+    pub id: String,
+    pub date: String,
+    pub status: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub error: Option<String>,
+    pub result: Option<String>, // JSON
+    pub start_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub end_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub chunk_count: i64,
+    pub processing_time: f64,
+    pub meeting_ids: String, // JSON array of source meeting ids
+    pub source_fingerprint: Option<String>, // Hash of source meeting identity for regeneration detection
+    pub result_backup: Option<String>,      // Backup of result before regeneration
     pub result_backup_timestamp: Option<chrono::DateTime<chrono::Utc>>, // When backup was created
 }
 
@@ -101,9 +153,9 @@ pub struct Setting {
 impl Setting {
     /// Parse the custom OpenAI config from JSON string
     pub fn get_custom_openai_config(&self) -> Option<crate::summary::CustomOpenAIConfig> {
-        self.custom_openai_config.as_ref().and_then(|json| {
-            serde_json::from_str(json).ok()
-        })
+        self.custom_openai_config
+            .as_ref()
+            .and_then(|json| serde_json::from_str(json).ok())
     }
 }
 

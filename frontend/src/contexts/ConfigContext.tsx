@@ -129,6 +129,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   // Ollama models list and error state
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [error, setError] = useState<string>('');
+  // Tracks completion of the initial model-config load so one-time startup
+  // work (like the Ollama probe) never runs before the real provider is known.
+  const [modelConfigLoaded, setModelConfigLoaded] = useState(false);
 
   // Device configuration state
   const [selectedDevices, setSelectedDevices] = useState<SelectedDevices>({
@@ -175,21 +178,35 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const preferencesLoadedRef = useRef(false);
   const isLoadingRef = useRef(false);
 
-  // Load Ollama models (uses saved endpoint, re-runs when endpoint changes after config load)
+  // Load Ollama models only when the configured provider actually uses
+  // Ollama. Previously this ran unconditionally on mount (and re-ran per
+  // provider mount), spending up to ~5s in a network timeout / CLI fallback
+  // even when another provider (e.g. builtin-ai) was configured.
   useEffect(() => {
+    if (!modelConfigLoaded || modelConfig.provider !== 'ollama') {
+      setModels([]);
+      return;
+    }
+
+    let cancelled = false;
     const loadModels = async () => {
       try {
         const endpoint = modelConfig.ollamaEndpoint || null;
         const modelList = await invoke<OllamaModel[]>('get_ollama_models', { endpoint });
+        if (cancelled) return;
         setModels(modelList);
         setError('');
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load Ollama models');
         console.error('Error loading models:', err);
       }
     };
     loadModels();
-  }, [modelConfig.ollamaEndpoint]);
+    return () => {
+      cancelled = true;
+    };
+  }, [modelConfigLoaded, modelConfig.provider, modelConfig.ollamaEndpoint]);
 
   // Load transcript configuration on mount
   useEffect(() => {
@@ -286,6 +303,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to fetch saved model config in ConfigContext:', error);
+      } finally {
+        // One-time startup work (e.g. provider-specific model probing) may
+        // now run against the real configured provider.
+        setModelConfigLoaded(true);
       }
     };
     fetchModelConfig();
@@ -298,8 +319,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         const providers = ['claude', 'groq', 'openai', 'openrouter'];
         const keys = await Promise.all(
           providers.map(p =>
-            invoke<string>('api_get_api_key', { provider: p })
-              .catch(() => null) // Gracefully handle missing keys
+            configService.getApiKey(p).catch(() => null) // Gracefully handle missing keys
           )
         );
 
@@ -361,8 +381,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     loadDevicePreferences();
   }, []);
 
-  // Calculate model options based on available models
-  const modelOptions: Record<ModelConfig['provider'], string[]> = {
+  // Calculate model options based on available models.
+  // Memoized so the context value (and every consumer) does not get a fresh
+  // options object on unrelated state changes.
+  const modelOptions: Record<ModelConfig['provider'], string[]> = useMemo(() => ({
     ollama: models.map(model => model.name),
     claude: ['claude-3-5-sonnet-latest'],
     groq: ['llama-3.3-70b-versatile'],
@@ -370,7 +392,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     openai: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     'builtin-ai': [],
     'custom-openai': [],
-  };
+  }), [models]);
 
   // Toggle confidence indicator with localStorage persistence
   const toggleConfidenceIndicator = useCallback((checked: boolean) => {

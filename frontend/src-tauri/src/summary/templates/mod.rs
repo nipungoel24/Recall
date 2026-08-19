@@ -44,7 +44,7 @@ mod types;
 
 // Re-export public API
 pub use loader::{
-    get_template, is_builtin_template_id, list_template_ids, list_templates,
+    get_template, get_template_json_raw, is_builtin_template_id, list_template_ids, list_templates,
     list_templates_with_source, set_bundled_templates_dir, template_source,
     validate_and_parse_template,
 };

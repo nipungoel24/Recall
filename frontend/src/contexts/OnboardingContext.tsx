@@ -214,14 +214,20 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   };
 
   const isCompletingRef = useRef(false);
+  // Becomes true once the persisted status has finished loading (success or
+  // failure). Until then, the auto-save below must never fire: saving the
+  // default `completed=false` state over a previously completed onboarding
+  // would permanently reset a returning user back to the welcome screen.
+  const statusLoadedRef = useRef(false);
 
   // Auto-save on state change (debounced)
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-    // Don't auto-save if completed (to avoid overwriting completion status)
-    // Also don't auto-save if we are currently in the process of completing
-    if (completed || isCompletingRef.current) return;
+    // Don't auto-save until the persisted status has been restored, and
+    // never auto-save when completed (to avoid overwriting completion
+    // status) or while completion is in progress.
+    if (!statusLoadedRef.current || completed || isCompletingRef.current) return;
 
     saveTimeoutRef.current = setTimeout(() => {
       saveOnboardingStatus();
@@ -370,6 +376,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
     } catch (error) {
       console.error('[OnboardingContext] Failed to load onboarding status:', error);
+    } finally {
+      // Persisted status (or its absence) is now known; auto-save may only
+      // begin after this point so it can never overwrite a completed status
+      // with the pre-load default state.
+      statusLoadedRef.current = true;
     }
   };
 

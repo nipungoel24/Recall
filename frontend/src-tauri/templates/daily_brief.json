@@ -1,0 +1,47 @@
+{
+  "name": "Daily Brief",
+  "description": "End-of-day executive brief synthesizing every meeting on one calendar day.",
+  "sections": [
+    {
+      "title": "Executive Overview",
+      "instruction": "A 2-4 sentence high-level narrative of the day's meetings, key outcomes, and overall trajectory",
+      "format": "paragraph"
+    },
+    {
+      "title": "Major Decisions",
+      "instruction": "Every decision made across the day's meetings, each attributed to its source meeting title in brackets",
+      "format": "list"
+    },
+    {
+      "title": "Action Items",
+      "instruction": "All action items with owner and the source meeting title when identifiable",
+      "format": "list",
+      "item_format": "| **Action** | **Owner** | **Source Meeting** |\n| --- | --- | --- |"
+    },
+    {
+      "title": "Open Questions",
+      "instruction": "Unresolved questions or items awaiting a decision, each attributed to its source meeting title",
+      "format": "list"
+    },
+    {
+      "title": "Risks & Blockers",
+      "instruction": "Risks, blockers, and impediments raised during the day, with owners and source meeting titles",
+      "format": "list"
+    },
+    {
+      "title": "Cross-Meeting Themes",
+      "instruction": "Topics, decisions, or concerns that appeared in more than one meeting during the day",
+      "format": "list"
+    },
+    {
+      "title": "Follow-ups",
+      "instruction": "Important follow-up meetings, commitments, or next steps for the coming days",
+      "format": "list"
+    },
+    {
+      "title": "Meeting Digest",
+      "instruction": "One short paragraph per source meeting summarizing its purpose and outcome, preserving each meeting's title",
+      "format": "paragraph"
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 "use client";
 
 import { Summary, SummaryResponse, Transcript } from '@/types';
-import { EditableTitle } from '@/components/EditableTitle';
 import { BlockNoteSummaryView, BlockNoteSummaryViewRef } from '@/components/AISummary/BlockNoteSummaryView';
 import { EmptyStateSummary } from '@/components/EmptyStateSummary';
 import { ModelConfig } from '@/components/ModelSettingsModal';
@@ -14,6 +13,7 @@ import { Languages, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { LanguagePickerPopover } from '@/components/LanguagePickerPopover';
+import { AddToContextButton } from '@/components/Context/AddToContextButton';
 import { useRecentLanguages } from '@/hooks/useRecentLanguages';
 import { labelForCode } from '@/lib/summary-languages';
 import {
@@ -60,15 +60,14 @@ interface SummaryPanelProps {
   onTemplateSelect: (templateId: string, templateName: string) => void;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
+  /** Context whose saved knowledge is included in AI summaries (contract §8.2). */
+  summaryContextId?: string | null;
+  onSummaryContextChange?: (contextId: string | null) => void;
 }
 
 export function SummaryPanel({
   meeting,
   meetingTitle,
-  onTitleChange,
-  isEditingTitle,
-  onStartEditTitle,
-  onFinishEditTitle,
   isTitleDirty,
   summaryRef,
   isSaving,
@@ -95,7 +94,9 @@ export function SummaryPanel({
   selectedTemplate,
   onTemplateSelect,
   isModelConfigLoading = false,
-  onOpenModelSettings
+  onOpenModelSettings,
+  summaryContextId = null,
+  onSummaryContextChange
 }: SummaryPanelProps) {
   const [summaryLang, setSummaryLang] = useState<string | null>(null);
   const [summaryLangStorage, setSummaryLangStorage] = useState<SummaryLanguageStorage>('metadata');
@@ -256,13 +257,19 @@ export function SummaryPanel({
     <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
       {/* Title area */}
       <div className="p-4 border-b border-gray-200">
-        {/* <EditableTitle
-          title={meetingTitle}
-          isEditing={isEditingTitle}
-          onStartEditing={onStartEditTitle}
-          onFinishEditing={onFinishEditTitle}
-          onChange={onTitleChange}
-        /> */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h2 className="text-sm font-medium text-gray-500 truncate pr-2" title={meetingTitle}>
+            {meetingTitle}
+          </h2>
+          <div className="flex-shrink-0">
+            <AddToContextButton
+              meetingId={meeting.id}
+              meetingTitle={meetingTitle}
+              summaryContextId={summaryContextId}
+              onSummaryContextChange={onSummaryContextChange}
+            />
+          </div>
+        </div>
 
         {/* Button groups - only show when summary exists */}
         {aiSummary && !isSummaryLoading && (

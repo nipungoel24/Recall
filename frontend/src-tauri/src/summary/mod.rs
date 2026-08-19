@@ -30,6 +30,9 @@ pub struct CustomOpenAIConfig {
 }
 
 pub mod commands;
+pub(crate) mod daily_brief;
+pub mod daily_commands;
+pub mod daily_service;
 pub(crate) mod language_detection;
 pub mod llm_client;
 pub(crate) mod metadata;
@@ -61,14 +64,24 @@ pub use commands::{
 
 // Re-export template commands
 pub use template_commands::{
-    __cmd__api_create_template, __cmd__api_delete_template, __cmd__api_duplicate_template,
-    __cmd__api_get_template_details, __cmd__api_list_templates, __cmd__api_update_template,
-    __cmd__api_validate_template, __tauri_command_name_api_create_template,
-    __tauri_command_name_api_delete_template, __tauri_command_name_api_duplicate_template,
-    __tauri_command_name_api_get_template_details, __tauri_command_name_api_list_templates,
-    __tauri_command_name_api_update_template, __tauri_command_name_api_validate_template,
-    api_create_template, api_delete_template, api_duplicate_template, api_get_template_details,
-    api_list_templates, api_update_template, api_validate_template,
+    __cmd__api_create_custom_template, __cmd__api_delete_custom_template,
+    __cmd__api_duplicate_template, __cmd__api_get_template_details, __cmd__api_get_template_json,
+    __cmd__api_list_templates, __cmd__api_update_custom_template, __cmd__api_validate_template,
+    __tauri_command_name_api_create_custom_template,
+    __tauri_command_name_api_delete_custom_template, __tauri_command_name_api_duplicate_template,
+    __tauri_command_name_api_get_template_details, __tauri_command_name_api_get_template_json,
+    __tauri_command_name_api_list_templates, __tauri_command_name_api_update_custom_template,
+    __tauri_command_name_api_validate_template, api_create_custom_template,
+    api_delete_custom_template, api_duplicate_template, api_get_template_details,
+    api_get_template_json, api_list_templates, api_update_custom_template, api_validate_template,
+};
+
+// Re-export daily brief commands
+pub use daily_commands::{
+    __cmd__api_cancel_daily_summary, __cmd__api_generate_daily_summary,
+    __cmd__api_get_daily_summary, __tauri_command_name_api_cancel_daily_summary,
+    __tauri_command_name_api_generate_daily_summary, __tauri_command_name_api_get_daily_summary,
+    api_cancel_daily_summary, api_generate_daily_summary, api_get_daily_summary,
 };
 
 // Re-export commonly used items

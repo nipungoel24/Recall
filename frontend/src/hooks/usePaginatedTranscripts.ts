@@ -56,6 +56,11 @@ export function usePaginatedTranscripts({
     const loadedMeetingIdRef = useRef<string | null>(null);
     const isLoadingRef = useRef(false);
     const lastLoadTimeRef = useRef(0); // Debounce protection
+    // Tracks the meeting the user is currently viewing. Async continuations
+    // compare against it so responses from a previous meeting can never
+    // overwrite the state of the meeting now on screen.
+    const meetingIdRef = useRef(meetingId);
+    meetingIdRef.current = meetingId;
 
     // Reset state when meeting changes
     const reset = useCallback(() => {
@@ -72,14 +77,17 @@ export function usePaginatedTranscripts({
     // Load meeting metadata
     const loadMetadata = useCallback(async (): Promise<MeetingMetadata | null> => {
         if (!meetingId) return null;
+        const requestMeetingId = meetingId;
 
         try {
             const data = await invoke<MeetingMetadata>('api_get_meeting_metadata', {
-                meetingId,
+                meetingId: requestMeetingId,
             });
+            if (meetingIdRef.current !== requestMeetingId) return null; // stale response
             setMetadata(data);
             return data;
         } catch (err) {
+            if (meetingIdRef.current !== requestMeetingId) return null;
             console.error('Failed to load meeting metadata:', err);
             setError('Failed to load meeting details');
             return null;
@@ -92,16 +100,19 @@ export function usePaginatedTranscripts({
         append: boolean = true
     ): Promise<Transcript[]> => {
         if (!meetingId) return [];
+        const requestMeetingId = meetingId;
 
         try {
             const response = await invoke<PaginatedTranscriptsResponse>(
                 'api_get_meeting_transcripts',
                 {
-                    meetingId,
+                    meetingId: requestMeetingId,
                     limit: DEFAULT_PAGE_SIZE,
                     offset,
                 }
             );
+
+            if (meetingIdRef.current !== requestMeetingId) return []; // stale response
 
             const newTranscripts = response.transcripts;
 
@@ -125,6 +136,7 @@ export function usePaginatedTranscripts({
 
             return newTranscripts;
         } catch (err) {
+            if (meetingIdRef.current !== requestMeetingId) return [];
             console.error('Failed to load transcripts:', err);
             setError('Failed to load transcripts');
             return [];

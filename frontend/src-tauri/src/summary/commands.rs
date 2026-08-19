@@ -339,6 +339,7 @@ pub async fn api_process_transcript<R: Runtime>(
     template_id: Option<String>,
     summary_language: Option<String>,
     _auth_token: Option<String>,
+    context_id: Option<String>,
 ) -> Result<ProcessTranscriptResponse, String> {
     use uuid::Uuid;
 
@@ -362,6 +363,45 @@ pub async fn api_process_transcript<R: Runtime>(
             Some(t.to_string())
         }
     });
+
+    // Continuous meeting context (contract §8.1): when a context thread is
+    // selected, load and pre-render its compact memory as supplementary
+    // background for this meeting. Only the compact block is sent — never full
+    // historical transcripts. A failure here never blocks the summary.
+    let prior_context_memory = match context_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+    {
+        Some(context_id) => match crate::context::load_and_render_context_memory(
+            &pool,
+            context_id,
+            crate::context::model::DEFAULT_MAX_MEMORY_ITEMS,
+            crate::context::model::MemoryBudget::default(),
+        )
+        .await
+        {
+            Ok(Some(markdown)) => {
+                log_info!(
+                    "Loaded compact context memory for meeting {} from context {}",
+                    m_id,
+                    context_id
+                );
+                Some(markdown)
+            }
+            Ok(None) => None,
+            Err(e) => {
+                log_warn!(
+                    "Failed to load context memory for meeting {} (context {}, summary proceeds without it): {}",
+                    m_id,
+                    context_id,
+                    e
+                );
+                None
+            }
+        },
+        None => None,
+    };
 
     // Create or reset the process entry in the database
     SummaryProcessesRepository::create_or_reset_process(&pool, &m_id)
@@ -390,6 +430,9 @@ pub async fn api_process_transcript<R: Runtime>(
 
     // Spawn background task for actual processing
     let meeting_id_clone = m_id.clone();
+    let context_id = context_id
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty());
     tauri::async_runtime::spawn(async move {
         SummaryService::process_transcript_background(
             app,
@@ -401,6 +444,8 @@ pub async fn api_process_transcript<R: Runtime>(
             final_prompt,
             final_template_id,
             summary_language,
+            context_id,
+            prior_context_memory,
         )
         .await;
     });

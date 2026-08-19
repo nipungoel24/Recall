@@ -30,7 +30,10 @@ impl DatabaseManager {
             }
         }
 
-        let pool = SqlitePool::connect(tauri_db_path).await?;
+        use std::str::FromStr;
+        let options = sqlx::sqlite::SqliteConnectOptions::from_str(tauri_db_path)?
+            .pragma("foreign_keys", "ON");
+        let pool = SqlitePool::connect_with(options).await?;
 
         sqlx::migrate!("./migrations").run(&pool).await?;
 
@@ -104,7 +107,10 @@ impl DatabaseManager {
                             Ok(db_manager)
                         }
                         Err(retry_err) => {
-                            log::error!("Database connection failed even after WAL cleanup: {}", retry_err);
+                            log::error!(
+                                "Database connection failed even after WAL cleanup: {}",
+                                retry_err
+                            );
                             Err(retry_err)
                         }
                     }

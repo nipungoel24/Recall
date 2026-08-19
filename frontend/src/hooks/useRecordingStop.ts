@@ -8,6 +8,7 @@ import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateCon
 import { storageService } from '@/services/storageService';
 import { transcriptService } from '@/services/transcriptService';
 import Analytics from '@/lib/analytics';
+import { routes } from '@/lib/routes';
 import {
   applyPinnedSummaryLanguageToMeeting,
   detectAndCacheSummaryLanguage,
@@ -328,7 +329,7 @@ export function useRecordingStop(
             action: {
               label: 'View Meeting',
               onClick: () => {
-                router.push(`/meeting-details?id=${meetingId}`);
+                router.push(routes.meeting(meetingId));
                 Analytics.trackButtonClick('view_meeting_from_toast', 'recording_complete');
               }
             },
@@ -337,7 +338,7 @@ export function useRecordingStop(
 
           // Auto-navigate after a short delay with source parameter
           setTimeout(() => {
-            router.push(`/meeting-details?id=${meetingId}&source=recording`);
+            router.push(routes.meeting(meetingId, 'recording'));
             clearTranscripts()
             Analytics.trackPageView('meeting_details');
 

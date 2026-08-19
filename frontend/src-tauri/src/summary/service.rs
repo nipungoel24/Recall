@@ -1,3 +1,6 @@
+use crate::context::engine::MemoryEngine;
+use crate::context::extraction::LlmMemoryExtractor;
+use crate::context::model::MemoryBudget;
 use crate::database::repositories::{
     meeting::MeetingsRepository, setting::SettingsRepository, summary::SummaryProcessesRepository,
 };
@@ -77,7 +80,7 @@ struct EnglishSummaryCache {
     output_language: Option<String>,
 }
 
-fn stable_text_fingerprint(text: &str) -> String {
+pub(crate) fn stable_text_fingerprint(text: &str) -> String {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
 
@@ -191,9 +194,173 @@ fn extract_cached_english_markdown(
 /// Summary service - handles all summary generation logic
 pub struct SummaryService;
 
+/// Fully-resolved runtime configuration for one summary-generation session.
+///
+/// Shared by per-meeting summary generation and daily brief generation so
+/// both flows use the user's currently configured provider, API key, and
+/// model-specific context-size limits through the exact same code path.
+#[derive(Clone)]
+pub(crate) struct ProviderRuntimeConfig {
+    pub provider: LLMProvider,
+    pub api_key: String,
+    pub ollama_endpoint: Option<String>,
+    pub custom_openai_endpoint: Option<String>,
+    pub custom_openai_max_tokens: Option<u32>,
+    pub custom_openai_temperature: Option<f32>,
+    pub custom_openai_top_p: Option<f32>,
+    /// Maximum tokens of source content allowed in a single provider pass.
+    pub token_threshold: usize,
+}
+
+/// Resolves provider, credentials, endpoints, and the token threshold for a
+/// summary-generation session from the stored user settings.
+pub(crate) async fn resolve_provider_runtime_config(
+    pool: &SqlitePool,
+    model_provider: &str,
+    model_name: &str,
+) -> Result<ProviderRuntimeConfig, String> {
+    // Parse provider
+    let provider = LLMProvider::from_str(model_provider)?;
+
+    // Validate and setup api_key, Flexible for Ollama, BuiltInAI, and CustomOpenAI
+    let api_key = if provider == LLMProvider::Ollama
+        || provider == LLMProvider::BuiltInAI
+        || provider == LLMProvider::CustomOpenAI
+    {
+        // These providers don't require API keys from the standard database column
+        String::new()
+    } else {
+        match SettingsRepository::get_api_key(pool, model_provider).await {
+            Ok(Some(key)) if !key.is_empty() => key,
+            Ok(None) | Ok(Some(_)) => {
+                return Err(format!("API key not found for {}", model_provider));
+            }
+            Err(e) => {
+                return Err(format!(
+                    "Failed to retrieve API key for {}: {}",
+                    model_provider, e
+                ));
+            }
+        }
+    };
+
+    // Get Ollama endpoint if provider is Ollama
+    let ollama_endpoint = if provider == LLMProvider::Ollama {
+        match SettingsRepository::get_model_config(pool).await {
+            Ok(Some(config)) => config.ollama_endpoint,
+            Ok(None) => None,
+            Err(e) => {
+                info!("Failed to retrieve Ollama endpoint: {}, using default", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Get CustomOpenAI config if provider is CustomOpenAI
+    let (
+        custom_openai_endpoint,
+        custom_openai_api_key,
+        custom_openai_max_tokens,
+        custom_openai_temperature,
+        custom_openai_top_p,
+    ) = if provider == LLMProvider::CustomOpenAI {
+        match SettingsRepository::get_custom_openai_config(pool).await {
+            Ok(Some(config)) => {
+                info!("✓ Using custom OpenAI endpoint: {}", config.endpoint);
+                (
+                    Some(config.endpoint),
+                    config.api_key,
+                    config.max_tokens.map(|t| t as u32),
+                    config.temperature,
+                    config.top_p,
+                )
+            }
+            Ok(None) => {
+                return Err(
+                    "Custom OpenAI provider selected but no configuration found".to_string()
+                );
+            }
+            Err(e) => {
+                return Err(format!("Failed to retrieve custom OpenAI config: {}", e));
+            }
+        }
+    } else {
+        (None, None, None, None, None)
+    };
+
+    // For CustomOpenAI, use its API key (if any) instead of the empty string
+    let final_api_key = if provider == LLMProvider::CustomOpenAI {
+        custom_openai_api_key.unwrap_or_default()
+    } else {
+        api_key
+    };
+
+    // Dynamically fetch context size based on provider and model
+    let token_threshold = if provider == LLMProvider::Ollama {
+        match METADATA_CACHE
+            .get_or_fetch(model_name, ollama_endpoint.as_deref())
+            .await
+        {
+            Ok(metadata) => {
+                // Reserve 300 tokens for prompt overhead
+                let optimal = metadata.context_size.saturating_sub(300);
+                info!(
+                    "✓ Using dynamic context for {}: {} tokens (chunk size: {})",
+                    model_name, metadata.context_size, optimal
+                );
+                optimal
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to fetch context for {}: {}. Using default 4000",
+                    model_name, e
+                );
+                4000 // Fallback to safe default
+            }
+        }
+    } else if provider == LLMProvider::BuiltInAI {
+        // Get model's context size from registry
+        use crate::summary::summary_engine::models;
+        let model = models::get_model_by_name(model_name)
+            .ok_or_else(|| format!("Unknown model: {}", model_name));
+
+        match model {
+            Ok(model_def) => {
+                // Reserve 300 tokens for prompt overhead
+                let optimal = model_def.context_size.saturating_sub(300) as usize;
+                info!(
+                    "✓ Using BuiltInAI context size: {} tokens (chunk size: {})",
+                    model_def.context_size, optimal
+                );
+                optimal
+            }
+            Err(e) => {
+                warn!("{}, using default 2048", e);
+                1748 // 2048 - 300 for overhead
+            }
+        }
+    } else {
+        // Cloud providers (OpenAI, Claude, Groq, CustomOpenAI) handle large contexts automatically
+        100000 // Effectively unlimited for single-pass processing
+    };
+
+    Ok(ProviderRuntimeConfig {
+        provider,
+        api_key: final_api_key,
+        ollama_endpoint,
+        custom_openai_endpoint,
+        custom_openai_max_tokens,
+        custom_openai_temperature,
+        custom_openai_top_p,
+        token_threshold,
+    })
+}
+
 impl SummaryService {
     /// Registers a new cancellation token for a meeting
-    fn register_cancellation_token(meeting_id: &str) -> CancellationToken {
+    pub(crate) fn register_cancellation_token(meeting_id: &str) -> CancellationToken {
         let token = CancellationToken::new();
         if let Ok(mut registry) = CANCELLATION_REGISTRY.lock() {
             registry.insert(meeting_id.to_string(), token.clone());
@@ -219,7 +386,7 @@ impl SummaryService {
     }
 
     /// Cleans up the cancellation token after processing completes
-    fn cleanup_cancellation_token(meeting_id: &str) {
+    pub(crate) fn cleanup_cancellation_token(meeting_id: &str) {
         if let Ok(mut registry) = CANCELLATION_REGISTRY.lock() {
             if registry.remove(meeting_id).is_some() {
                 info!("Cleaned up cancellation token for meeting: {}", meeting_id);
@@ -296,6 +463,12 @@ impl SummaryService {
     /// * `model_name` - Specific model (e.g., "gpt-4", "llama3.2:latest")
     /// * `custom_prompt` - Optional user-provided context
     /// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
+    /// * `context_id` - Optional context thread id (continuous meeting context).
+    ///   When present, memory extracted from this meeting's summary is merged
+    ///   into that thread after the summary completes.
+    /// * `prior_context_memory` - Pre-rendered compact context memory block
+    ///   from earlier meetings of the thread (contract §8); prepended to
+    ///   `custom_prompt` as supplementary background data.
     pub async fn process_transcript_background<R: tauri::Runtime>(
         _app: AppHandle<R>,
         pool: SqlitePool,
@@ -306,6 +479,8 @@ impl SummaryService {
         custom_prompt: String,
         template_id: String,
         summary_language: Option<String>,
+        context_id: Option<String>,
+        prior_context_memory: Option<String>,
     ) {
         let start_time = Instant::now();
         info!(
@@ -316,142 +491,14 @@ impl SummaryService {
         // Register cancellation token for this meeting
         let cancellation_token = Self::register_cancellation_token(&meeting_id);
 
-        // Parse provider
-        let provider = match LLMProvider::from_str(&model_provider) {
-            Ok(p) => p,
-            Err(e) => {
-                Self::update_process_failed(&pool, &meeting_id, &e).await;
-                return;
-            }
-        };
-
-        // Validate and setup api_key, Flexible for Ollama, BuiltInAI, and CustomOpenAI
-        let api_key = if provider == LLMProvider::Ollama
-            || provider == LLMProvider::BuiltInAI
-            || provider == LLMProvider::CustomOpenAI
-        {
-            // These providers don't require API keys from the standard database column
-            String::new()
-        } else {
-            match SettingsRepository::get_api_key(&pool, &model_provider).await {
-                Ok(Some(key)) if !key.is_empty() => key,
-                Ok(None) | Ok(Some(_)) => {
-                    let err_msg = format!("API key not found for {}", &model_provider);
-                    Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
+        let provider_config =
+            match resolve_provider_runtime_config(&pool, &model_provider, &model_name).await {
+                Ok(config) => config,
+                Err(e) => {
+                    Self::update_process_failed(&pool, &meeting_id, &e).await;
                     return;
                 }
-                Err(e) => {
-                    let err_msg =
-                        format!("Failed to retrieve API key for {}: {}", &model_provider, e);
-                    Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
-                    return;
-                }
-            }
-        };
-
-        // Get Ollama endpoint if provider is Ollama
-        let ollama_endpoint = if provider == LLMProvider::Ollama {
-            match SettingsRepository::get_model_config(&pool).await {
-                Ok(Some(config)) => config.ollama_endpoint,
-                Ok(None) => None,
-                Err(e) => {
-                    info!("Failed to retrieve Ollama endpoint: {}, using default", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        // Get CustomOpenAI config if provider is CustomOpenAI
-        let (
-            custom_openai_endpoint,
-            custom_openai_api_key,
-            custom_openai_max_tokens,
-            custom_openai_temperature,
-            custom_openai_top_p,
-        ) = if provider == LLMProvider::CustomOpenAI {
-            match SettingsRepository::get_custom_openai_config(&pool).await {
-                Ok(Some(config)) => {
-                    info!("✓ Using custom OpenAI endpoint: {}", config.endpoint);
-                    (
-                        Some(config.endpoint),
-                        config.api_key,
-                        config.max_tokens.map(|t| t as u32),
-                        config.temperature,
-                        config.top_p,
-                    )
-                }
-                Ok(None) => {
-                    let err_msg = "Custom OpenAI provider selected but no configuration found";
-                    Self::update_process_failed(&pool, &meeting_id, err_msg).await;
-                    return;
-                }
-                Err(e) => {
-                    let err_msg = format!("Failed to retrieve custom OpenAI config: {}", e);
-                    Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
-                    return;
-                }
-            }
-        } else {
-            (None, None, None, None, None)
-        };
-
-        // For CustomOpenAI, use its API key (if any) instead of the empty string
-        let final_api_key = if provider == LLMProvider::CustomOpenAI {
-            custom_openai_api_key.unwrap_or_default()
-        } else {
-            api_key
-        };
-
-        // Dynamically fetch context size based on provider and model
-        let token_threshold = if provider == LLMProvider::Ollama {
-            match METADATA_CACHE
-                .get_or_fetch(&model_name, ollama_endpoint.as_deref())
-                .await
-            {
-                Ok(metadata) => {
-                    // Reserve 300 tokens for prompt overhead
-                    let optimal = metadata.context_size.saturating_sub(300);
-                    info!(
-                        "✓ Using dynamic context for {}: {} tokens (chunk size: {})",
-                        model_name, metadata.context_size, optimal
-                    );
-                    optimal
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to fetch context for {}: {}. Using default 4000",
-                        model_name, e
-                    );
-                    4000 // Fallback to safe default
-                }
-            }
-        } else if provider == LLMProvider::BuiltInAI {
-            // Get model's context size from registry
-            use crate::summary::summary_engine::models;
-            let model = models::get_model_by_name(&model_name)
-                .ok_or_else(|| format!("Unknown model: {}", model_name));
-
-            match model {
-                Ok(model_def) => {
-                    // Reserve 300 tokens for prompt overhead
-                    let optimal = model_def.context_size.saturating_sub(300) as usize;
-                    info!(
-                        "✓ Using BuiltInAI context size: {} tokens (chunk size: {})",
-                        model_def.context_size, optimal
-                    );
-                    optimal
-                }
-                Err(e) => {
-                    warn!("{}, using default 2048", e);
-                    1748 // 2048 - 300 for overhead
-                }
-            }
-        } else {
-            // Cloud providers (OpenAI, Claude, Groq, CustomOpenAI) handle large contexts automatically
-            100000 // Effectively unlimited for single-pass processing
-        };
+            };
 
         // Get app data directory for BuiltInAI provider
         let app_data_dir = _app.path().app_data_dir().ok();
@@ -478,19 +525,28 @@ impl SummaryService {
         };
         let template_fingerprint = template_cache_fingerprint(&template);
 
+        // Effective prompt (contract §8.1): the pre-rendered compact context
+        // memory block is prepended to the user custom prompt as a bounded
+        // block. Existing template instructions are never replaced; context is
+        // supplementary background data.
+        let effective_prompt = crate::context::prompts::build_effective_prompt(
+            prior_context_memory.as_deref(),
+            &custom_prompt,
+        );
+
         let cache_source = build_summary_cache_source(
             &text,
-            &custom_prompt,
+            &effective_prompt,
             &template_id,
             &template_fingerprint,
-            token_threshold,
+            provider_config.token_threshold,
             &model_provider,
             &model_name,
-            ollama_endpoint.as_deref(),
-            custom_openai_endpoint.as_deref(),
-            custom_openai_max_tokens,
-            custom_openai_temperature,
-            custom_openai_top_p,
+            provider_config.ollama_endpoint.as_deref(),
+            provider_config.custom_openai_endpoint.as_deref(),
+            provider_config.custom_openai_max_tokens,
+            provider_config.custom_openai_temperature,
+            provider_config.custom_openai_top_p,
         );
 
         let cached_english = match SummaryProcessesRepository::get_summary_data(&pool, &meeting_id).await {
@@ -523,19 +579,19 @@ impl SummaryService {
         let client = reqwest::Client::new();
         let result = generate_meeting_summary(
             &client,
-            &provider,
+            &provider_config.provider,
             &model_name,
-            &final_api_key,
+            &provider_config.api_key,
             &text,
-            &custom_prompt,
+            &effective_prompt,
             &template_id,
             &template,
-            token_threshold,
-            ollama_endpoint.as_deref(),
-            custom_openai_endpoint.as_deref(),
-            custom_openai_max_tokens,
-            custom_openai_temperature,
-            custom_openai_top_p,
+            provider_config.token_threshold,
+            provider_config.ollama_endpoint.as_deref(),
+            provider_config.custom_openai_endpoint.as_deref(),
+            provider_config.custom_openai_max_tokens,
+            provider_config.custom_openai_temperature,
+            provider_config.custom_openai_top_p,
             app_data_dir.as_ref(),
             Some(&cancellation_token),
             summary_language.as_deref(),
@@ -590,6 +646,59 @@ impl SummaryService {
                     error!("Failed to save completed process for {}: {}", meeting_id, e);
                 } else {
                     info!("Summary saved successfully for meeting_id: {}", meeting_id);
+                }
+
+                // Update continuous context memory in the background when this
+                // meeting was summarized in a context thread. This is secondary
+                // enrichment: failures here never affect the meeting, its
+                // transcript, or its saved summary.
+                if let Some(context_id_mem) = context_id.clone() {
+                    let pool_mem = pool.clone();
+                    let client_mem = client.clone();
+                    let meeting_id_mem = meeting_id.clone();
+                    let english_mem = english_markdown.clone();
+                    let model_name_mem = model_name.clone();
+                    let app_data_dir_mem = app_data_dir.clone();
+                    let provider_config_mem = provider_config.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let extractor = LlmMemoryExtractor::new(
+                            client_mem,
+                            provider_config_mem.provider,
+                            model_name_mem,
+                            provider_config_mem.api_key,
+                            provider_config_mem.ollama_endpoint,
+                            provider_config_mem.custom_openai_endpoint,
+                            provider_config_mem.custom_openai_max_tokens,
+                            provider_config_mem.custom_openai_temperature,
+                            provider_config_mem.custom_openai_top_p,
+                            app_data_dir_mem,
+                        );
+                        match MemoryEngine::update_context_after_meeting(
+                            &pool_mem,
+                            &extractor,
+                            &context_id_mem,
+                            &meeting_id_mem,
+                            &english_mem,
+                            MemoryBudget::default(),
+                        )
+                        .await
+                        {
+                            Ok(report) => info!(
+                                "Context memory updated (context {}) for meeting {}: added={}, refreshed={}, resolved={}, folded={}, active={}",
+                                context_id_mem,
+                                meeting_id_mem,
+                                report.added,
+                                report.refreshed,
+                                report.resolved,
+                                report.folded,
+                                report.active_items
+                            ),
+                            Err(e) => warn!(
+                                "Context memory update failed for meeting {} (context {}, meeting data unaffected): {}",
+                                meeting_id_mem, context_id_mem, e
+                            ),
+                        }
+                    });
                 }
             }
             Err(e) => {
@@ -976,6 +1085,30 @@ mod tests {
 
         assert_eq!(
             extract_cached_english_markdown(&raw, &changed_threshold, Some("de")).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_changed_custom_prompt_rejects_cache() {
+        let source = sample_cache_source();
+        let raw = build_summary_result_json(
+            "# Reunion\n## Points\nBonjour",
+            "# Meeting\n## Points\nHello",
+            source.clone(),
+            Some("fr"),
+        )
+        .to_string();
+
+        // The effective prompt includes prior context memory (contract §8.1);
+        // a change to it must invalidate the cached English summary.
+        let changed_prompt = SummaryCacheSource {
+            custom_prompt_fingerprint: stable_text_fingerprint("CONTEXT BLOCK\n---\ncustom prompt"),
+            ..source
+        };
+
+        assert_eq!(
+            extract_cached_english_markdown(&raw, &changed_prompt, Some("de")).unwrap(),
             None
         );
     }

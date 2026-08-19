@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, CalendarDays, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload, LayoutList, LayoutTemplate, Sun } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -16,6 +16,9 @@ import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
+import { configService } from '@/services/configService';
+import { localDateKey } from '@/lib/calendar';
+import { routes } from '@/lib/routes';
 
 import {
   Dialog,
@@ -36,8 +39,44 @@ interface SidebarItem {
   id: string;
   title: string;
   type: 'folder' | 'file';
+  created_at?: string;
   children?: SidebarItem[];
 }
+
+interface HistoryGroup {
+  label: string;
+  items: SidebarItem[];
+}
+
+/**
+ * Bucket meeting history items into Today / Yesterday / Earlier based on
+ * their LOCAL calendar day (created_at is a UTC instant, converted locally).
+ */
+const groupChildrenByHistory = (children: SidebarItem[]): HistoryGroup[] => {
+  const today = new Date();
+  const todayKey = localDateKey(today);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const yesterdayKey = localDateKey(yesterday);
+
+  const groups: HistoryGroup[] = [
+    { label: 'Today', items: [] },
+    { label: 'Yesterday', items: [] },
+    { label: 'Earlier', items: [] },
+  ];
+
+  for (const child of children) {
+    if (child.type !== 'file') continue;
+    let bucketIndex = 2; // Earlier by default (e.g. missing created_at)
+    if (child.created_at) {
+      const key = localDateKey(new Date(child.created_at));
+      if (key === todayKey) bucketIndex = 0;
+      else if (key === yesterdayKey) bucketIndex = 1;
+    }
+    groups[bucketIndex].items.push(child);
+  }
+
+  return groups.filter(group => group.items.length > 0);
+};
 
 const Sidebar: React.FC = () => {
   const router = useRouter();
@@ -120,9 +159,7 @@ const Sidebar: React.FC = () => {
           // Fetch API key if not included and provider requires it
           if (data.provider !== 'ollama' && !data.apiKey) {
             try {
-              const apiKeyData = await invoke('api_get_api_key', {
-                provider: data.provider
-              }) as string;
+              const apiKeyData = await configService.getApiKey(data.provider);
               data.apiKey = apiKeyData;
             } catch (err) {
               console.error('Failed to fetch API key:', err);
@@ -237,15 +274,30 @@ const Sidebar: React.FC = () => {
     }
   };
 
-  // Handle search input changes
-  const handleSearchChange = useCallback(async (value: string) => {
+  // Handle search input changes.
+  // Title filtering is local and instant; the backend transcript search is
+  // debounced so it only runs after the user pauses typing (and stale
+  // responses are dropped by the provider's sequence guard).
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
 
     // If search query is empty, just return to normal view
     if (!value.trim()) return;
-
-    // Search through transcripts
-    await searchTranscripts(value);
 
     // Make sure the meetings folder is expanded when searching
     if (!expandedFolders.has('meetings')) {
@@ -253,6 +305,12 @@ const Sidebar: React.FC = () => {
       newExpanded.add('meetings');
       setExpandedFolders(newExpanded);
     }
+
+    // Search through transcripts after a short typing pause
+    searchDebounceRef.current = setTimeout(() => {
+      searchDebounceRef.current = null;
+      searchTranscripts(value);
+    }, 300);
   }, [expandedFolders, searchTranscripts]);
 
   // Combine search results with sidebar items
@@ -450,6 +508,7 @@ const Sidebar: React.FC = () => {
     const isHomePage = pathname === '/';
     const isMeetingPage = pathname?.includes('/meeting-details');
     const isSettingsPage = pathname === '/settings';
+    const isCalendarPage = pathname === '/calendar';
 
     return (
       <TooltipProvider>
@@ -460,6 +519,7 @@ const Sidebar: React.FC = () => {
             <TooltipTrigger asChild>
               <button
                 onClick={() => router.push('/')}
+                aria-label="Home"
                 className={`p-2 rounded-lg transition-colors duration-150 ${isHomePage ? 'bg-gray-100' : 'hover:bg-gray-100'
                   }`}
               >
@@ -476,6 +536,7 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
+                aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
                 className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-full transition-colors duration-150 shadow-sm`}
               >
                 {isRecording ? (
@@ -487,6 +548,70 @@ const Sidebar: React.FC = () => {
             </TooltipTrigger>
             <TooltipContent side="right">
               <p>{isRecording ? "Recording in progress..." : "Start Recording"}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => router.push('/calendar')}
+                aria-label="Calendar"
+                className={`p-2 rounded-lg transition-colors duration-150 ${isCalendarPage ? 'bg-gray-100' : 'hover:bg-gray-100'
+                  }`}
+              >
+                <CalendarDays className="w-5 h-5 text-gray-600" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Calendar</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => router.push('/daily')}
+                aria-label="Daily"
+                className={`p-2 rounded-lg transition-colors duration-150 ${pathname === '/daily' ? 'bg-gray-100' : 'hover:bg-gray-100'
+                  }`}
+              >
+                <Sun className="w-5 h-5 text-gray-600" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Daily</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => router.push('/context')}
+                aria-label="Contexts"
+                className={`p-2 rounded-lg transition-colors duration-150 ${pathname?.includes('/context') ? 'bg-gray-100' : 'hover:bg-gray-100'
+                  }`}
+              >
+                <LayoutList className="w-5 h-5 text-gray-600" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Contexts</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => router.push('/templates')}
+                aria-label="Templates"
+                className={`p-2 rounded-lg transition-colors duration-150 ${pathname === '/templates' ? 'bg-gray-100' : 'hover:bg-gray-100'
+                  }`}
+              >
+                <LayoutTemplate className="w-5 h-5 text-gray-600" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Templates</p>
             </TooltipContent>
           </Tooltip>
 
@@ -513,6 +638,7 @@ const Sidebar: React.FC = () => {
                   if (isCollapsed) toggleCollapse();
                   toggleFolder('meetings');
                 }}
+                aria-label="Meeting Notes"
                 className={`p-2 rounded-lg transition-colors duration-150 ${isMeetingPage ? 'bg-gray-100' : 'hover:bg-gray-100'
                   }`}
               >
@@ -528,6 +654,7 @@ const Sidebar: React.FC = () => {
             <TooltipTrigger asChild>
               <button
                 onClick={() => router.push('/settings')}
+                aria-label="Settings"
                 className={`p-2 rounded-lg transition-colors duration-150 ${isSettingsPage ? 'bg-gray-100' : 'hover:bg-gray-100'
                   }`}
               >
@@ -578,8 +705,9 @@ const Sidebar: React.FC = () => {
               toggleFolder(item.id);
             } else {
               setCurrentMeeting({ id: item.id, title: item.title });
-              const basePath = item.id.startsWith('intro-call') ? '/' :
-                item.id.includes('-') ? `/meeting-details?id=${item.id}` : `/notes/${item.id}`;
+              const basePath = item.id.startsWith('intro-call')
+                ? routes.home()
+                : routes.meeting(item.id);
               router.push(basePath);
             }
           }}
@@ -665,6 +793,7 @@ const Sidebar: React.FC = () => {
       {/* Floating collapse button */}
       <button
         onClick={toggleCollapse}
+        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         className="absolute -right-6 top-20 z-50 p-1 bg-white hover:bg-gray-100 rounded-full shadow-lg border"
         style={{ transform: 'translateX(50%)' }}
       >
@@ -723,13 +852,71 @@ const Sidebar: React.FC = () => {
           {/* Fixed navigation items */}
           <div className="flex-shrink-0">
             {!isCollapsed && (
-              <div
-                onClick={() => router.push('/')}
-                className="p-3  text-lg font-semibold items-center hover:bg-gray-100 h-10   flex mx-3 mt-3 rounded-lg cursor-pointer"
-              >
-                <Home className="w-4 h-4 mr-2" />
-                <span>Home</span>
-              </div>
+              <>
+                <div
+                  onClick={() => router.push('/')}
+                  className="p-3  text-lg font-semibold items-center hover:bg-gray-100 h-10   flex mx-3 mt-3 rounded-lg cursor-pointer"
+                >
+                  <Home className="w-4 h-4 mr-2" />
+                  <span>Home</span>
+                </div>
+                <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  Meetings
+                </div>
+                <div
+                  onClick={handleRecordingToggle}
+                  className="p-3 text-lg font-semibold items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer hover:bg-gray-100"
+                >
+                  <Mic className="w-4 h-4 mr-2 text-red-500" />
+                  <span>Record / New Meeting</span>
+                </div>
+                <div
+                  onClick={() => router.push('/calendar')}
+                  className={`p-3 text-lg font-semibold items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/calendar' ? 'bg-gray-100' : 'hover:bg-gray-100'
+                    }`}
+                >
+                  <CalendarDays className="w-4 h-4 mr-2 text-gray-600" />
+                  <span>Calendar</span>
+                </div>
+                <div
+                  onClick={() => router.push('/daily')}
+                  className={`p-3 text-lg font-semibold items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/daily' ? 'bg-gray-100' : 'hover:bg-gray-100'
+                    }`}
+                >
+                  <Sun className="w-4 h-4 mr-2 text-gray-600" />
+                  <span>Daily</span>
+                </div>
+                <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  Knowledge
+                </div>
+                <div
+                  onClick={() => router.push('/context')}
+                  className={`p-3 text-lg font-semibold items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname?.includes('/context') ? 'bg-gray-100' : 'hover:bg-gray-100'
+                    }`}
+                >
+                  <LayoutList className="w-4 h-4 mr-2 text-gray-600" />
+                  <span>Contexts</span>
+                </div>
+                <div
+                  onClick={() => router.push('/templates')}
+                  className={`p-3 text-lg font-semibold items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/templates' ? 'bg-gray-100' : 'hover:bg-gray-100'
+                    }`}
+                >
+                  <LayoutTemplate className="w-4 h-4 mr-2 text-gray-600" />
+                  <span>Templates</span>
+                </div>
+                <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  System
+                </div>
+                <div
+                  onClick={() => router.push('/settings')}
+                  className={`p-3 text-lg font-semibold items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/settings' ? 'bg-gray-100' : 'hover:bg-gray-100'
+                    }`}
+                >
+                  <Settings className="w-4 h-4 mr-2 text-gray-600" />
+                  <span>Settings</span>
+                </div>
+              </>
             )}
           </div>
 
@@ -760,11 +947,28 @@ const Sidebar: React.FC = () => {
               <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
                 {filteredSidebarItems
                   .filter(item => item.type === 'folder' && expandedFolders.has(item.id) && item.children)
-                  .map(item => (
-                    <div key={`${item.id}-children`} className="mx-3">
-                      {item.children!.map(child => renderItem(child, 1))}
-                    </div>
-                  ))}
+                  .map(item => {
+                    const children = item.children ?? [];
+                    // Group meeting history by local day when not searching.
+                    const historyGroups = !searchQuery.trim() && item.id === 'meetings'
+                      ? groupChildrenByHistory(children)
+                      : null;
+
+                    return (
+                      <div key={`${item.id}-children`} className="mx-3">
+                        {historyGroups
+                          ? historyGroups.map(group => (
+                              <div key={group.label}>
+                                <div className="px-3 pt-3 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                  {group.label}
+                                </div>
+                                {group.items.map(child => renderItem(child, 1))}
+                              </div>
+                            ))
+                          : children.map(child => renderItem(child, 1))}
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>

@@ -33,6 +33,7 @@ import {
   type SectionFormat,
   type TemplateDefinition,
   type TemplateFieldErrors,
+  type TemplateSection,
 } from '@/lib/template-schema';
 import {
   TemplateServiceError,
@@ -58,11 +59,11 @@ interface EditorState {
   definition: TemplateDefinition;
 }
 
-function initialState(props: TemplateEditorProps): EditorState {
+function initialState(input: Pick<TemplateEditorProps, 'initialId' | 'initialDefinition'>): EditorState {
   return {
-    templateId: props.initialId ?? '',
-    definition: props.initialDefinition
-      ? structuredClone(props.initialDefinition)
+    templateId: input.initialId ?? '',
+    definition: input.initialDefinition
+      ? structuredClone(input.initialDefinition)
       : createEmptyDefinition(),
   };
 }
@@ -75,7 +76,7 @@ export function TemplateEditor({
   initialDefinition,
   onSave,
 }: TemplateEditorProps) {
-  const [state, setState] = useState<EditorState>(() => initialState({ open, onOpenChange, mode, initialId, initialDefinition }));
+  const [state, setState] = useState<EditorState>(() => initialState({ initialId, initialDefinition }));
   const [submittedOnce, setSubmittedOnce] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -83,12 +84,11 @@ export function TemplateEditor({
   // Reset the form whenever the dialog (re)opens for a new target.
   useEffect(() => {
     if (open) {
-      setState(initialState({ open, onOpenChange, mode, initialId, initialDefinition }));
+      setState(initialState({ initialId, initialDefinition }));
       setSubmittedOnce(false);
       setFormError(null);
       setIsSaving(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, initialId, initialDefinition]);
 
   const fieldErrors: TemplateFieldErrors = submittedOnce
@@ -111,7 +111,7 @@ export function TemplateEditor({
     setFormError(null);
   }, []);
 
-  const updateSection = useCallback((index: number, patch: Partial<typeof state.definition.sections[number]>) => {
+  const updateSection = useCallback((index: number, patch: Partial<TemplateSection>) => {
     setState((prev) => {
       const sections = [...prev.definition.sections];
       sections[index] = { ...sections[index], ...patch };
@@ -196,7 +196,8 @@ export function TemplateEditor({
             {mode === 'create' ? 'New Summary Template' : 'Edit Summary Template'}
           </DialogTitle>
           <DialogDescription>
-            Sections define what the AI extracts when generating a summary.
+            Each section becomes a heading in the generated summary, and its instruction
+            tells the AI what to extract there.
             {mode === 'edit' && ' The template id cannot be changed.'}
           </DialogDescription>
         </DialogHeader>

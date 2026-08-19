@@ -172,18 +172,19 @@ pub async fn api_validate_template<R: Runtime>(
 /// # Returns
 /// TemplateInfo for the created template on success
 #[tauri::command]
-pub async fn api_create_template<R: Runtime>(
+pub async fn api_create_custom_template<R: Runtime>(
     _app: tauri::AppHandle<R>,
     template_id: String,
     template_json: String,
-) -> Result<TemplateInfo, TemplateError> {
+) -> Result<TemplateInfo, String> {
     info!(
-        "api_create_template called for template_id: {}",
+        "api_create_custom_template called for template_id: {}",
         template_id
     );
 
-    let dir = templates::store::resolve_custom_templates_dir()?;
-    let (id, template) = templates::store::create_template(&dir, &template_id, &template_json)?;
+    let dir = templates::store::resolve_custom_templates_dir().map_err(|e| e.to_string())?;
+    let (id, template) = templates::store::create_template(&dir, &template_id, &template_json)
+        .map_err(|e| e.to_string())?;
 
     let created = template_info(
         id,
@@ -213,20 +214,21 @@ pub async fn api_create_template<R: Runtime>(
 /// # Returns
 /// TemplateInfo for the updated template on success
 #[tauri::command]
-pub async fn api_update_template<R: Runtime>(
+pub async fn api_update_custom_template<R: Runtime>(
     _app: tauri::AppHandle<R>,
     template_id: String,
     template_json: String,
     new_id: Option<String>,
-) -> Result<TemplateInfo, TemplateError> {
+) -> Result<TemplateInfo, String> {
     info!(
-        "api_update_template called for template_id: {}",
+        "api_update_custom_template called for template_id: {}",
         template_id
     );
 
-    let dir = templates::store::resolve_custom_templates_dir()?;
+    let dir = templates::store::resolve_custom_templates_dir().map_err(|e| e.to_string())?;
     let (id, template) =
-        templates::store::update_template(&dir, &template_id, new_id.as_deref(), &template_json)?;
+        templates::store::update_template(&dir, &template_id, new_id.as_deref(), &template_json)
+            .map_err(|e| e.to_string())?;
 
     let updated = template_info(
         id,
@@ -250,17 +252,17 @@ pub async fn api_update_template<R: Runtime>(
 /// # Arguments
 /// * `template_id` - Identifier of the custom template to delete
 #[tauri::command]
-pub async fn api_delete_template<R: Runtime>(
+pub async fn api_delete_custom_template<R: Runtime>(
     _app: tauri::AppHandle<R>,
     template_id: String,
-) -> Result<(), TemplateError> {
+) -> Result<(), String> {
     info!(
-        "api_delete_template called for template_id: {}",
+        "api_delete_custom_template called for template_id: {}",
         template_id
     );
 
-    let dir = templates::store::resolve_custom_templates_dir()?;
-    templates::store::delete_template(&dir, &template_id)?;
+    let dir = templates::store::resolve_custom_templates_dir().map_err(|e| e.to_string())?;
+    templates::store::delete_template(&dir, &template_id).map_err(|e| e.to_string())?;
 
     info!("Deleted custom template '{}'", template_id);
 
@@ -271,33 +273,29 @@ pub async fn api_delete_template<R: Runtime>(
 /// new custom template.
 ///
 /// The source is loaded through the regular fallback chain, re-serialized
-/// and validated, then persisted as a custom template. If `new_id` is
-/// omitted, an id is auto-generated (`<source>_copy`, `<source>_copy_2`,
-/// ...). Built-in ids cannot be used as the duplication target.
+/// and validated, then persisted as a custom template.
 ///
 /// # Arguments
-/// * `source_template_id` - Identifier of the template to duplicate
-/// * `new_template_id` - Optional identifier for the duplicate
+/// * `template_id` - Identifier of the template to duplicate
+/// * `new_template_id` - Identifier for the duplicate
 ///
 /// # Returns
 /// TemplateInfo for the duplicated template on success
 #[tauri::command]
 pub async fn api_duplicate_template<R: Runtime>(
     _app: tauri::AppHandle<R>,
-    source_template_id: String,
-    new_template_id: Option<String>,
-) -> Result<TemplateInfo, TemplateError> {
+    template_id: String,
+    new_template_id: String,
+) -> Result<TemplateInfo, String> {
     info!(
-        "api_duplicate_template called for source_template_id: {}",
-        source_template_id
+        "api_duplicate_template called for template_id: {}, new_template_id: {}",
+        template_id, new_template_id
     );
 
-    let dir = templates::store::resolve_custom_templates_dir()?;
-    let (id, template) = templates::store::duplicate_template(
-        &dir,
-        &source_template_id,
-        new_template_id.as_deref(),
-    )?;
+    let dir = templates::store::resolve_custom_templates_dir().map_err(|e| e.to_string())?;
+    let (id, template) =
+        templates::store::duplicate_template(&dir, &template_id, Some(&new_template_id))
+            .map_err(|e| e.to_string())?;
 
     let duplicated = template_info(
         id,
@@ -307,10 +305,27 @@ pub async fn api_duplicate_template<R: Runtime>(
     );
     info!(
         "Duplicated template '{}' into custom template '{}' ({})",
-        source_template_id, duplicated.name, duplicated.id
+        template_id, duplicated.name, duplicated.id
     );
 
     Ok(duplicated)
+}
+
+/// Gets the raw JSON string of any template by identifier (resolving fallbacks).
+///
+/// # Arguments
+/// * `template_id` - Identifier of the template to retrieve
+#[tauri::command]
+pub async fn api_get_template_json<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    template_id: String,
+) -> Result<String, String> {
+    info!(
+        "api_get_template_json called for template_id: {}",
+        template_id
+    );
+    templates::get_template_json_raw(&template_id)
+        .ok_or_else(|| format!("Template '{}' not found", template_id))
 }
 
 #[cfg(test)]

@@ -1,16 +1,19 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Copy, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 import { useTemplates } from '@/hooks/useTemplates';
 import { isCustomTemplate, type TemplateDefinition, type TemplateInfo } from '@/lib/template-schema';
 import {
   TemplateServiceError,
+  duplicateTemplate,
   getTemplateDefinition,
 } from '@/services/templateService';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationModal } from '@/components/ConfirmationModel/confirmation-modal';
 import { TemplateEditor } from '@/components/templates/TemplateEditor';
 
@@ -25,6 +28,7 @@ export function SummaryTemplateManager() {
     error,
     saveTemplate,
     deleteTemplate,
+    refreshTemplates,
   } = useTemplates();
 
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
@@ -56,6 +60,27 @@ export function SummaryTemplateManager() {
       setEditorLoading(false);
     }
   }, []);
+
+  const handleDuplicate = useCallback(
+    async (template: TemplateInfo) => {
+      try {
+        const duplicated = await duplicateTemplate(template.id, `${template.id}_copy`);
+        Analytics.trackFeatureUsed('template_duplicated');
+        toast.success('Template duplicated', {
+          description: `"${duplicated.name}" is ready to use.`,
+        });
+        await refreshTemplates();
+      } catch (err) {
+        toast.error('Failed to duplicate template', {
+          description:
+            err instanceof TemplateServiceError
+              ? err.message
+              : 'A copy of this template may already exist.',
+        });
+      }
+    },
+    [refreshTemplates],
+  );
 
   const handleEditorSave = useCallback(
     async (templateId: string, templateJson: string) => {
@@ -91,103 +116,135 @@ export function SummaryTemplateManager() {
   }, [deleteTemplate, templateToDelete]);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Summary Templates</h3>
-          <p className="text-sm text-gray-600">
-            Custom templates appear in the template picker whenever you generate a
-            summary. Built-in templates cannot be edited or deleted.
+          <h2 className="text-lg font-semibold text-gray-900">Summary Templates</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Built-in templates are read-only. Your templates can be edited, duplicated, or
+            deleted.
           </p>
         </div>
-        <Button onClick={openCreateEditor}>
-          <Plus /> New template
+        <Button variant="blue" onClick={openCreateEditor}>
+          <Plus /> New Template
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-600 mt-6">
-          <Loader2 className="animate-spin" /> Loading templates...
-        </div>
-      ) : error ? (
-        <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : (
-        <div className="mt-6 space-y-6">
-          <section>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Custom templates</h4>
-            {customTemplates.length === 0 ? (
-              <div className="rounded-md border border-dashed border-gray-300 p-6 text-center">
-                <FileText className="mx-auto h-8 w-8 text-gray-300 mb-2" />
-                <p className="text-sm text-gray-600">
-                  No custom templates yet. Create one to tailor summaries to your workflow.
-                </p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
-                {customTemplates.map((template) => (
-                  <li key={template.id} className="flex items-center justify-between gap-4 p-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{template.name}</span>
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-                          Custom
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 truncate" title={template.description}>
-                        {template.description}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditEditor(template)}
-                        disabled={editorLoading}
-                        title={`Edit ${template.name}`}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setTemplateToDelete(template)}
-                        title={`Delete ${template.name}`}
-                      >
-                        <Trash2 className="text-red-600" />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {readOnlyTemplates.length > 0 && (
+      <div className="p-6">
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : error ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : (
+          <div className="space-y-8">
             <section>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Built-in templates</h4>
-              <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
-                {readOnlyTemplates.map((template) => (
-                  <li key={template.id} className="flex items-center justify-between gap-4 p-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{template.name}</span>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                          Built-in
-                        </span>
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                My Templates
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  {customTemplates.length}
+                </span>
+              </h3>
+              {customTemplates.length === 0 ? (
+                <div className="rounded-md border border-dashed border-gray-300 p-6 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-gray-300 mb-2" />
+                  <p className="text-sm text-gray-600">
+                    No custom templates yet. Create one to tailor summaries to your workflow.
+                  </p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {customTemplates.map((template) => (
+                    <li key={template.id} className="flex items-center justify-between gap-4 p-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900">{template.name}</span>
+                          <Badge variant="blue">Custom</Badge>
+                        </div>
+                        <p className="text-sm text-gray-500 truncate mt-0.5" title={template.description}>
+                          {template.description}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-600 truncate" title={template.description}>
-                        {template.description}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditEditor(template)}
+                          disabled={editorLoading}
+                          title={`Edit ${template.name}`}
+                          aria-label={`Edit ${template.name}`}
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void handleDuplicate(template)}
+                          title={`Duplicate ${template.name}`}
+                          aria-label={`Duplicate ${template.name}`}
+                        >
+                          <Copy />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setTemplateToDelete(template)}
+                          title={`Delete ${template.name}`}
+                          aria-label={`Delete ${template.name}`}
+                        >
+                          <Trash2 className="text-red-600" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
-          )}
-        </div>
-      )}
+
+            {readOnlyTemplates.length > 0 && (
+              <section>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                  Built-in Templates
+                  <span className="ml-2 text-xs font-normal text-gray-400">
+                    {readOnlyTemplates.length}
+                  </span>
+                </h3>
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {readOnlyTemplates.map((template) => (
+                    <li key={template.id} className="flex items-center justify-between gap-4 p-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900">{template.name}</span>
+                          <Badge variant="default">Built-in</Badge>
+                        </div>
+                        <p className="text-sm text-gray-500 truncate mt-0.5" title={template.description}>
+                          {template.description}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void handleDuplicate(template)}
+                          title={`Duplicate ${template.name} as a custom template`}
+                          aria-label={`Duplicate ${template.name}`}
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
 
       <TemplateEditor
         open={editorTarget !== null && !editorLoading}

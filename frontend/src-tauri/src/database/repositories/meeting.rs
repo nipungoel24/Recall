@@ -27,33 +27,80 @@ impl MeetingsRepository {
     ///
     /// Duration is derived from transcript timing metadata only (no transcript text
     /// is fetched), so this stays cheap even with many meetings.
-    pub async fn get_meetings_by_date_range(
+    pub async fn get_meetings_by_range(
         pool: &SqlitePool,
-        start_date: &str,
-        end_date: &str,
+        start_utc: &str,
+        end_utc: &str,
     ) -> Result<Vec<CalendarMeeting>, SqlxError> {
-        if start_date.trim().is_empty() || end_date.trim().is_empty() {
+        if start_utc.trim().is_empty() || end_utc.trim().is_empty() {
             return Err(SqlxError::Protocol(
-                "start_date and end_date cannot be empty".to_string(),
+                "start_utc and end_utc cannot be empty".to_string(),
             ));
         }
 
-        let meetings = sqlx::query_as::<_, CalendarMeeting>(
+        // Row helper to parse SQL results.
+        #[derive(sqlx::FromRow)]
+        struct MeetingRangeRow {
+            id: String,
+            title: String,
+            created_at: String,
+            updated_at: String,
+            folder_path: Option<String>,
+            seg_sum: Option<f64>,
+            last_end: Option<f64>,
+        }
+
+        let rows = sqlx::query_as::<_, MeetingRangeRow>(
             "SELECT m.id, m.title, m.created_at, m.updated_at, m.folder_path,
-                    ROUND(
-                        (SELECT MAX(t.audio_end_time) FROM transcripts t WHERE t.meeting_id = m.id)
-                        - (SELECT MIN(t.audio_start_time) FROM transcripts t WHERE t.meeting_id = m.id),
-                        1
-                    ) AS duration_seconds
+                    SUM(t.duration) AS seg_sum,
+                    MAX(t.audio_end_time) AS last_end
              FROM meetings m
-             WHERE julianday(m.created_at) >= julianday(?1)
-               AND julianday(m.created_at) < julianday(?2)
-             ORDER BY m.created_at ASC",
+             LEFT JOIN transcripts t ON t.meeting_id = m.id
+             WHERE datetime(m.created_at) >= datetime(?1) AND datetime(m.created_at) < datetime(?2)
+             GROUP BY m.id
+             ORDER BY datetime(m.created_at) ASC",
         )
-        .bind(start_date)
-        .bind(end_date)
+        .bind(start_utc)
+        .bind(end_utc)
         .fetch_all(pool)
         .await?;
+
+        let meetings = rows
+            .into_iter()
+            .map(|r| {
+                // Derivation rule: last_end (MAX(t.audio_end_time) > 0.0) else seg_sum (SUM(t.duration)) else None
+                let duration_seconds = if let Some(last_end) = r.last_end {
+                    if last_end > 0.0 {
+                        Some(last_end)
+                    } else if let Some(seg_sum) = r.seg_sum {
+                        if seg_sum > 0.0 {
+                            Some(seg_sum)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else if let Some(seg_sum) = r.seg_sum {
+                    if seg_sum > 0.0 {
+                        Some(seg_sum)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                CalendarMeeting {
+                    id: r.id,
+                    title: r.title,
+                    created_at: r.created_at,
+                    updated_at: r.updated_at,
+                    folder_path: r.folder_path,
+                    duration_seconds,
+                }
+            })
+            .collect();
 
         Ok(meetings)
     }
@@ -104,11 +151,12 @@ impl MeetingsRepository {
         let mut transaction = conn.begin().await?;
 
         // Get meeting details
-        let meeting: Option<MeetingModel> =
-            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?")
-                .bind(meeting_id)
-                .fetch_optional(&mut *transaction)
-                .await?;
+        let meeting: Option<MeetingModel> = sqlx::query_as(
+            "SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?",
+        )
+        .bind(meeting_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
 
         if meeting.is_none() {
             transaction.rollback().await?;
@@ -162,11 +210,12 @@ impl MeetingsRepository {
             ));
         }
 
-        let meeting: Option<MeetingModel> =
-            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?")
-                .bind(meeting_id)
-                .fetch_optional(pool)
-                .await?;
+        let meeting: Option<MeetingModel> = sqlx::query_as(
+            "SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?",
+        )
+        .bind(meeting_id)
+        .fetch_optional(pool)
+        .await?;
 
         Ok(meeting)
     }
@@ -185,19 +234,17 @@ impl MeetingsRepository {
         }
 
         // Get total count of transcripts for this meeting
-        let total: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM transcripts WHERE meeting_id = ?"
-        )
-        .bind(meeting_id)
-        .fetch_one(pool)
-        .await?;
+        let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM transcripts WHERE meeting_id = ?")
+            .bind(meeting_id)
+            .fetch_one(pool)
+            .await?;
 
         // Get paginated transcripts ordered by audio_start_time
         let transcripts = sqlx::query_as::<_, Transcript>(
             "SELECT * FROM transcripts
              WHERE meeting_id = ?
              ORDER BY audio_start_time ASC
-             LIMIT ? OFFSET ?"
+             LIMIT ? OFFSET ?",
         )
         .bind(meeting_id)
         .bind(limit)
@@ -307,7 +354,25 @@ async fn delete_meeting_with_transaction(
         .execute(&mut *transaction)
         .await?;
 
-    // 4. Finally, delete the meeting
+    // 4. Delete from context_meetings
+    sqlx::query("DELETE FROM context_meetings WHERE meeting_id = ?")
+        .bind(meeting_id)
+        .execute(&mut *transaction)
+        .await?;
+
+    // 5. Delete from context_memory_items
+    sqlx::query("DELETE FROM context_memory_items WHERE source_meeting_id = ?")
+        .bind(meeting_id)
+        .execute(&mut *transaction)
+        .await?;
+
+    // 6. Clean up daily_summaries (remove/delete entries containing this meeting ID in their JSON array)
+    sqlx::query("DELETE FROM daily_summaries WHERE EXISTS (SELECT 1 FROM json_each(daily_summaries.meeting_ids) WHERE json_each.value = ?)")
+        .bind(meeting_id)
+        .execute(&mut *transaction)
+        .await?;
+
+    // 7. Finally, delete the meeting
     let result = sqlx::query("DELETE FROM meetings WHERE id = ?")
         .bind(meeting_id)
         .execute(&mut *transaction)

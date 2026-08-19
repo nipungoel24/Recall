@@ -1,22 +1,26 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { MeetingMetadata } from '@/types';
 
 
 interface SidebarItem {
   id: string;
   title: string;
   type: 'folder' | 'file';
+  created_at?: string;
   children?: SidebarItem[];
 }
 
 export interface CurrentMeeting {
   id: string;
   title: string;
+  /** UTC creation instant (RFC 3339). Optional to keep legacy call sites working. */
+  created_at?: string;
 }
 
 // Search result type for transcript search
@@ -86,10 +90,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const fetchMeetings = React.useCallback(async () => {
     if (serverAddress) {
       try {
-        const meetings = await invoke('api_get_meetings') as Array<{ id: string, title: string }>;
-        const transformedMeetings = meetings.map((meeting: any) => ({
+        const meetings = await invoke('api_get_meetings') as Array<MeetingMetadata>;
+        const transformedMeetings = meetings.map((meeting) => ({
           id: meeting.id,
-          title: meeting.title
+          title: meeting.title,
+          created_at: meeting.created_at,
         }));
         setMeetings(transformedMeetings);
         Analytics.trackBackendConnection(true);
@@ -113,37 +118,43 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     fetchSettings();
   }, []);
 
-  const baseItems: SidebarItem[] = [
+  // Memoize the derived sidebar tree: recreated only when the meeting list
+  // actually changes, and reused by every consumer render in between.
+  const baseItems: SidebarItem[] = useMemo(() => [
     {
       id: 'meetings',
       title: 'Meeting Notes',
       type: 'folder' as const,
       children: [
-        ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
+        ...meetings.map(meeting => ({
+          id: meeting.id,
+          title: meeting.title,
+          type: 'file' as const,
+          created_at: meeting.created_at,
+        }))
       ]
     },
-  ];
+  ], [meetings]);
 
 
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed(prev => !prev);
+  }, []);
 
   // Update current meeting when on home page
   useEffect(() => {
     if (pathname === '/') {
       setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
     }
-    setSidebarItems(baseItems);
   }, [pathname]);
 
   // Update sidebar items when meetings change
   useEffect(() => {
     setSidebarItems(baseItems);
-  }, [meetings]);
+  }, [baseItems]);
 
   // Function to handle recording toggle from sidebar
-  const handleRecordingToggle = () => {
+  const handleRecordingToggle = useCallback(() => {
     if (!isRecording) {
       // Check if already on home page
       if (pathname === '/') {
@@ -161,28 +172,35 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       Analytics.trackButtonClick('start_recording', 'sidebar');
     }
     // The actual recording start/stop is handled in the Home component
-  };
+  }, [isRecording, pathname, router]);
 
-  // Function to search through meeting transcripts
-  const searchTranscripts = async (query: string) => {
+  // Function to search through meeting transcripts.
+  // Stale responses are dropped so fast typing never shows old results.
+  const searchSeqRef = useRef(0);
+  const searchTranscripts = useCallback(async (query: string) => {
     if (!query.trim()) {
+      searchSeqRef.current += 1;
       setSearchResults([]);
       return;
     }
 
+    const seq = ++searchSeqRef.current;
     try {
       setIsSearching(true);
 
-
       const results = await invoke('api_search_transcripts', { query }) as TranscriptSearchResult[];
+      if (seq !== searchSeqRef.current) return;
       setSearchResults(results);
     } catch (error) {
+      if (seq !== searchSeqRef.current) return;
       console.error('Error searching transcripts:', error);
       setSearchResults([]);
     } finally {
-      setIsSearching(false);
+      if (seq === searchSeqRef.current) {
+        setIsSearching(false);
+      }
     }
-  };
+  }, []);
 
   // Summary polling management
   const startSummaryPolling = React.useCallback((
@@ -289,31 +307,52 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
 
 
-  return (
-    <SidebarContext.Provider value={{
-      currentMeeting,
-      setCurrentMeeting,
-      sidebarItems,
-      isCollapsed,
-      toggleCollapse,
-      meetings,
-      setMeetings,
-      isMeetingActive,
-      setIsMeetingActive,
-      handleRecordingToggle,
-      searchTranscripts,
-      searchResults,
-      isSearching,
-      setServerAddress,
-      serverAddress,
-      transcriptServerAddress,
-      setTranscriptServerAddress,
-      activeSummaryPolls,
-      startSummaryPolling,
-      stopSummaryPolling,
-      refetchMeetings: fetchMeetings,
+  // Memoize the context value so consumers only re-render when a slice of
+  // state they actually read changes (previously every provider render
+  // created a fresh value object and re-rendered the whole tree).
+  const contextValue = useMemo(() => ({
+    currentMeeting,
+    setCurrentMeeting,
+    sidebarItems,
+    isCollapsed,
+    toggleCollapse,
+    meetings,
+    setMeetings,
+    isMeetingActive,
+    setIsMeetingActive,
+    handleRecordingToggle,
+    searchTranscripts,
+    searchResults,
+    isSearching,
+    setServerAddress,
+    serverAddress,
+    transcriptServerAddress,
+    setTranscriptServerAddress,
+    activeSummaryPolls,
+    startSummaryPolling,
+    stopSummaryPolling,
+    refetchMeetings: fetchMeetings,
+  }), [
+    currentMeeting,
+    sidebarItems,
+    isCollapsed,
+    toggleCollapse,
+    meetings,
+    isMeetingActive,
+    handleRecordingToggle,
+    searchTranscripts,
+    searchResults,
+    isSearching,
+    serverAddress,
+    transcriptServerAddress,
+    activeSummaryPolls,
+    startSummaryPolling,
+    stopSummaryPolling,
+    fetchMeetings,
+  ]);
 
-    }}>
+  return (
+    <SidebarContext.Provider value={contextValue}>
       {children}
     </SidebarContext.Provider>
   );

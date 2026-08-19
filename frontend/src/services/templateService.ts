@@ -24,13 +24,13 @@
  *    Backend-side schema validation. The frontend MUST call this before
  *    saving and MUST surface the returned error to the user.
  *
- * 4. `api_save_template(template_id: string, template_json: string)`
+ * 4. `api_create_custom_template(template_id: string, template_json: string)`
  *      -> Ok({ id, name, description, source: 'custom' }) | Err(message)
  *    Validates the JSON, then writes it to the user custom templates
  *    directory as `<template_id>.json`. Rejects ids reserved for
  *    built-in/bundled templates.
  *
- * 5. `api_delete_template(template_id: string)` -> Ok(()) | Err(message)
+ * 5. `api_delete_custom_template(template_id: string)` -> Ok(()) | Err(message)
  *    Deletes `<template_id>.json` from the user custom templates
  *    directory. MUST reject built-in/bundled template ids.
  *
@@ -46,10 +46,9 @@ import {
   parseTemplateDefinition,
   type TemplateDefinition,
   type TemplateInfo,
-  type TemplateSource,
 } from '@/lib/template-schema';
 
-export type TemplateOrigin = TemplateSource | 'unknown';
+export type TemplateOrigin = TemplateInfo['source'];
 
 export interface RawTemplateInfoDto {
   id?: string;
@@ -158,21 +157,53 @@ export async function saveTemplate(
     throw new TemplateServiceError(parsed.error);
   }
 
+  let isUpdate = false;
   try {
-    const saved = await invoke<RawTemplateInfoDto>('api_save_template', {
-      templateId,
-      templateJson,
-    });
-    return normalizeTemplateInfo({ ...saved, id: templateId, source: 'custom' });
+    const existing = await listTemplates();
+    isUpdate = existing.some((t) => t.id === templateId && t.source === 'custom');
+  } catch {
+    // If listing fails, we assume it might be a new template creation
+  }
+
+  try {
+    if (isUpdate) {
+      const saved = await invoke<RawTemplateInfoDto>('api_update_custom_template', {
+        templateId,
+        templateJson,
+      });
+      return normalizeTemplateInfo({ ...saved, id: templateId, source: 'custom' });
+    } else {
+      const saved = await invoke<RawTemplateInfoDto>('api_create_custom_template', {
+        templateId,
+        templateJson,
+      });
+      return normalizeTemplateInfo({ ...saved, id: templateId, source: 'custom' });
+    }
   } catch (error) {
-    throw new TemplateServiceError(friendlyCommandError('api_save_template', error));
+    const cmd = isUpdate ? 'api_update_custom_template' : 'api_create_custom_template';
+    throw new TemplateServiceError(friendlyCommandError(cmd, error));
   }
 }
 
 export async function deleteTemplate(templateId: string): Promise<void> {
   try {
-    await invoke<void>('api_delete_template', { templateId });
+    await invoke<void>('api_delete_custom_template', { templateId });
   } catch (error) {
-    throw new TemplateServiceError(friendlyCommandError('api_delete_template', error));
+    throw new TemplateServiceError(friendlyCommandError('api_delete_custom_template', error));
+  }
+}
+
+export async function duplicateTemplate(
+  templateId: string,
+  newTemplateId: string,
+): Promise<TemplateInfo> {
+  try {
+    const duplicated = await invoke<RawTemplateInfoDto>('api_duplicate_template', {
+      templateId,
+      newTemplateId,
+    });
+    return normalizeTemplateInfo(duplicated);
+  } catch (error) {
+    throw new TemplateServiceError(friendlyCommandError('api_duplicate_template', error));
   }
 }

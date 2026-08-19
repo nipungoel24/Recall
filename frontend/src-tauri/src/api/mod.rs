@@ -1,4 +1,5 @@
 pub mod api;
+pub mod calendar;
 pub mod commands;
 
 pub use api::*;

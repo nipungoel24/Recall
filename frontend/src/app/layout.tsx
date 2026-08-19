@@ -92,9 +92,12 @@ export default function RootLayout({
       })
       .catch((error) => {
         console.error('[Layout] Failed to check onboarding status:', error)
-        // Default to showing onboarding if we can't check
-        setShowOnboarding(true)
-        setOnboardingCompleted(false)
+        // Fail open to the main app: a transient IPC failure must never
+        // dump a returning user into the onboarding welcome screen. New
+        // installs (no persisted status) still reach onboarding via the
+        // successful `null` status path.
+        setShowOnboarding(false)
+        setOnboardingCompleted(true)
       })
   }, [])
 

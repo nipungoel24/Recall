@@ -6,9 +6,11 @@ import PageContent from "./page-content";
 import { useRouter, useSearchParams } from "next/navigation";
 import Analytics from "@/lib/analytics";
 import { invoke } from "@tauri-apps/api/core";
-import { LoaderIcon } from "lucide-react";
+import { ArrowLeft, LoaderIcon } from "lucide-react";
 import { useConfig } from "@/contexts/ConfigContext";
 import { usePaginatedTranscripts } from "@/hooks/usePaginatedTranscripts";
+import { Skeleton } from '@/components/ui/skeleton';
+import { routes } from '@/lib/routes';
 
 interface MeetingDetailsResponse {
   id: string;
@@ -199,11 +201,18 @@ function MeetingDetailsContent() {
     setError(null);
     setIsLoading(true);
 
+    // Stale guard: if the user navigates to another meeting while this
+    // fetch is in flight, its result is dropped instead of flashing the
+    // wrong meeting's summary.
+    let stale = false;
+
     const fetchMeetingSummary = async () => {
       try {
         const summary = await invoke('api_get_summary', {
           meetingId: meetingId,
         }) as any;
+
+        if (stale) return;
 
         console.log('FETCH SUMMARY: Raw response:', summary);
 
@@ -295,6 +304,7 @@ function MeetingDetailsContent() {
         console.log('LEGACY FORMAT: Formatted summary:', formattedSummary);
         setMeetingSummary(formattedSummary);
       } catch (error) {
+        if (stale) return;
         console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
         // Don't set error state for summary fetch failure, set to null to show generate button
         setMeetingSummary(null);
@@ -305,11 +315,17 @@ function MeetingDetailsContent() {
       try {
         await fetchMeetingSummary();
       } finally {
-        setIsLoading(false);
+        if (!stale) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      stale = true;
+    };
   }, [meetingId]);
 
   // Auto-generation check: runs when meeting is loaded with no summary
@@ -337,13 +353,14 @@ function MeetingDetailsContent() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center bg-white rounded-xl border border-gray-200 shadow-sm p-10 max-w-md">
+          <p className="text-sm text-gray-700 mb-4">{error}</p>
           <button
-            onClick={() => router.push('/')}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => router.push(routes.home())}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
           >
+            <ArrowLeft className="h-4 w-4" />
             Go Back
           </button>
         </div>
@@ -351,33 +368,98 @@ function MeetingDetailsContent() {
     );
   }
 
-  // Show loading spinner while initial data loads
+  // Show skeleton layout while initial data loads
   if ((isLoading || isLoadingTranscripts) || !meetingDetails) {
-    return <div className="flex items-center justify-center h-screen">
-      <LoaderIcon className="animate-spin size-6 " />
-    </div>;
+    return (
+      <div className="flex flex-col h-screen bg-gray-50">
+        <MeetingDetailsTopBar title="" />
+        <div className="flex flex-1 overflow-hidden">
+          <div className="hidden md:flex md:w-1/4 lg:w-1/3 border-r border-gray-200 bg-white flex-col p-4 space-y-3">
+            <Skeleton className="h-8 w-1/2" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+          <div className="flex-1 bg-white p-4 space-y-3">
+            <Skeleton className="h-6 w-1/3" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  return <PageContent
-    meeting={meetingDetails}
-    summaryData={meetingSummary}
-    shouldAutoGenerate={shouldAutoGenerate}
-    onAutoGenerateComplete={() => setShouldAutoGenerate(false)}
-    onMeetingUpdated={async () => {
-      // Refetch meeting details to get updated title from backend
-      await fetchMeetingDetails();
-      // Refetch meetings list to update sidebar
-      await refetchMeetings();
-    }}
-    onRefetchTranscripts={refetch}
-    // Pagination props for efficient transcript loading
-    segments={segments}
-    hasMore={hasMore}
-    isLoadingMore={isLoadingMore}
-    totalCount={totalCount}
-    loadedCount={loadedCount}
-    onLoadMore={loadMore}
-  />;
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      <MeetingDetailsTopBar title={meetingDetails.title} createdAt={meetingDetails.created_at} />
+      <PageContent
+        meeting={meetingDetails}
+        summaryData={meetingSummary}
+        shouldAutoGenerate={shouldAutoGenerate}
+        onAutoGenerateComplete={() => setShouldAutoGenerate(false)}
+        onMeetingUpdated={async () => {
+          // Refetch meeting details to get updated title from backend
+          await fetchMeetingDetails();
+          // Refetch meetings list to update sidebar
+          await refetchMeetings();
+        }}
+        onRefetchTranscripts={refetch}
+        // Pagination props for efficient transcript loading
+        segments={segments}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        totalCount={totalCount}
+        loadedCount={loadedCount}
+        onLoadMore={loadMore}
+      />
+    </div>
+  );
+}
+
+/**
+ * Slim orientation bar above the three-panel meeting workspace: a
+ * deterministic back action (never depends on browser history) plus the
+ * meeting identity (title and when it happened).
+ */
+function MeetingDetailsTopBar({ title, createdAt }: { title: string; createdAt?: string }) {
+  const router = useRouter();
+  const happenedLabel = createdAt
+    ? new Date(createdAt).toLocaleString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : '';
+  return (
+    <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4">
+      <button
+        type="button"
+        onClick={() => router.push(routes.home())}
+        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Home
+      </button>
+      <span className="h-4 w-px bg-gray-200" />
+      <span className="truncate text-sm font-medium text-gray-800" title={title}>
+        {title}
+      </span>
+      {happenedLabel && (
+        <>
+          <span className="hidden sm:inline h-4 w-px bg-gray-200" />
+          <span className="hidden sm:inline flex-shrink-0 text-xs text-gray-400 tabular-nums">
+            {happenedLabel}
+          </span>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function MeetingDetails() {

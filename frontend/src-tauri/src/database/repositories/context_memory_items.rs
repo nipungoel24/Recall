@@ -573,6 +573,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_context_memory_isolation_between_contexts() {
+        let pool = test_pool().await;
+        insert_meeting(&pool, "meeting-a", "A", "2026-08-15T09:00:00Z").await;
+        insert_meeting(&pool, "meeting-b", "B", "2026-08-15T10:00:00Z").await;
+        let ctx_a = ContextsRepository::create_context(&pool, "Context A", Some("a"))
+            .await
+            .unwrap();
+        let ctx_b = ContextsRepository::create_context(&pool, "Context B", Some("b"))
+            .await
+            .unwrap();
+
+        // Knowledge extracted for Context A...
+        ContextMemoryItemsRepository::add_item(
+            &pool,
+            &ctx_a.id,
+            "decision",
+            "Use PostgreSQL",
+            Some("meeting-a"),
+            None,
+        )
+        .await
+        .unwrap();
+        ContextMemoryItemsRepository::add_item(
+            &pool,
+            &ctx_a.id,
+            "action",
+            "Prepare migration plan",
+            Some("meeting-b"),
+            Some("open"),
+        )
+        .await
+        .unwrap();
+
+        // ...and unrelated knowledge for Context B.
+        ContextMemoryItemsRepository::add_item(
+            &pool,
+            &ctx_b.id,
+            "fact",
+            "Team uses Go for tooling",
+            Some("meeting-a"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Each context sees ONLY its own items (no cross-context leakage).
+        let items_a = ContextMemoryItemsRepository::list_for_context(&pool, &ctx_a.id)
+            .await
+            .unwrap();
+        let contents_a: Vec<&str> = items_a.iter().map(|i| i.content.as_str()).collect();
+        assert_eq!(contents_a.len(), 2);
+        assert!(contents_a.contains(&"Use PostgreSQL"));
+        assert!(contents_a.contains(&"Prepare migration plan"));
+        assert!(!contents_a.contains(&"Team uses Go for tooling"));
+
+        let items_b = ContextMemoryItemsRepository::list_for_context(&pool, &ctx_b.id)
+            .await
+            .unwrap();
+        assert_eq!(items_b.len(), 1);
+        assert_eq!(items_b[0].content, "Team uses Go for tooling");
+
+        // Deleting Context A's memory never touches Context B's.
+        for item in &items_a {
+            ContextMemoryItemsRepository::delete_item(&pool, &item.id)
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            ContextMemoryItemsRepository::count_for_context(&pool, &ctx_a.id)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            ContextMemoryItemsRepository::count_for_context(&pool, &ctx_b.id)
+                .await
+                .unwrap(),
+            1
+        );
+    }
+
+    #[tokio::test]
     async fn test_add_item_rejects_unknown_context_and_unknown_source_meeting() {
         let pool = test_pool().await;
         insert_meeting(&pool, "meeting-a", "A", "2026-08-15T09:00:00Z").await;

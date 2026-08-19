@@ -91,17 +91,33 @@ describe("saveTemplate", () => {
   });
 
   test("normalizes the saved template as custom", async () => {
+    invokeMock.mockResolvedValueOnce([]);
     invokeMock.mockResolvedValueOnce({ id: "weekly_review", name: "Weekly Review", description: "d" });
 
     const saved = await saveTemplate("weekly_review", VALID_TEMPLATE_JSON);
     expect(saved).toMatchObject({ id: "weekly_review", source: "custom" });
-    expect(invokeMock).toHaveBeenCalledWith("api_save_template", {
+    expect(invokeMock).toHaveBeenCalledWith("api_create_custom_template", {
+      templateId: "weekly_review",
+      templateJson: VALID_TEMPLATE_JSON,
+    });
+  });
+
+  test("updates an existing custom template via the update command", async () => {
+    invokeMock.mockResolvedValueOnce([
+      { id: "weekly_review", name: "Weekly Review", description: "d", source: "custom" },
+    ]);
+    invokeMock.mockResolvedValueOnce({ id: "weekly_review", name: "Weekly Review", description: "d" });
+
+    const saved = await saveTemplate("weekly_review", VALID_TEMPLATE_JSON);
+    expect(saved).toMatchObject({ id: "weekly_review", source: "custom" });
+    expect(invokeMock).toHaveBeenCalledWith("api_update_custom_template", {
       templateId: "weekly_review",
       templateJson: VALID_TEMPLATE_JSON,
     });
   });
 
   test("surfaces backend validation errors", async () => {
+    invokeMock.mockResolvedValueOnce([]);
     invokeMock.mockRejectedValueOnce("Template name cannot be empty");
     await expect(saveTemplate("x", VALID_TEMPLATE_JSON)).rejects.toThrow(
       "Template name cannot be empty",
@@ -153,7 +169,7 @@ describe("deleteTemplate", () => {
   test("calls the backend delete command", async () => {
     invokeMock.mockResolvedValueOnce(null);
     await deleteTemplate("weekly_review");
-    expect(invokeMock).toHaveBeenCalledWith("api_delete_template", {
+    expect(invokeMock).toHaveBeenCalledWith("api_delete_custom_template", {
       templateId: "weekly_review",
     });
   });

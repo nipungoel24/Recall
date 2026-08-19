@@ -1,0 +1,22 @@
+[package]
+name = "meetily-qa-regression"
+version = "0.1.0"
+edition = "2021"
+description = "QA regression harness: path-includes live agent modules from frontend/src-tauri/src so their pure logic and embedded tests run without compiling the (env-blocked) main crate. Owned by QA; not part of the main cargo workspace."
+publish = false
+
+# Standalone workspace: never joins the repo-root workspace.
+[workspace]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4.31", features = ["serde"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "chrono", "derive", "macros"] }
+log = "0.4"
+tracing = "0.1"
+tempfile = "3.3.0"
+dirs = "5.0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

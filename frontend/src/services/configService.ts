@@ -8,6 +8,33 @@
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
 
+/**
+ * In-flight request deduplication for read-only config fetches.
+ *
+ * Several components (provider context, sidebar, meeting-details, settings
+ * dialogs) request the same config values independently during startup. This
+ * shares a single backend call per key while any request is in flight, then
+ * forgets it, so later requests (e.g. after the user saves new values) always
+ * hit the backend fresh. No caching, so no staleness is possible.
+ */
+const inFlight = new Map<string, Promise<unknown>>();
+
+function dedupeInFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key);
+  if (existing) {
+    return existing as Promise<T>;
+  }
+  const promise = fn();
+  inFlight.set(key, promise);
+  const forget = () => {
+    if (inFlight.get(key) === promise) {
+      inFlight.delete(key);
+    }
+  };
+  promise.then(forget, forget);
+  return promise;
+}
+
 export interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude' | 'openrouter' | 'openai' | 'builtin-ai' | 'custom-openai';
   model: string;
@@ -51,7 +78,9 @@ export class ConfigService {
    * @returns Promise with { provider, model, apiKey }
    */
   async getTranscriptConfig(): Promise<TranscriptModelProps> {
-    return invoke<TranscriptModelProps>('api_get_transcript_config');
+    return dedupeInFlight('transcript-config', () =>
+      invoke<TranscriptModelProps>('api_get_transcript_config')
+    );
   }
 
   /**
@@ -59,7 +88,17 @@ export class ConfigService {
    * @returns Promise with { provider, model, whisperModel }
    */
   async getModelConfig(): Promise<ModelConfig> {
-    return invoke<ModelConfig>('api_get_model_config');
+    return dedupeInFlight('model-config', () => invoke<ModelConfig>('api_get_model_config'));
+  }
+
+  /**
+   * Get the saved API key for one provider.
+   * @returns Promise with the key or null when none is stored
+   */
+  async getApiKey(provider: string): Promise<string | null> {
+    return dedupeInFlight(`api-key:${provider}`, () =>
+      invoke<string | null>('api_get_api_key', { provider })
+    );
   }
 
   /**
@@ -67,7 +106,9 @@ export class ConfigService {
    * @returns Promise with { preferred_mic_device, preferred_system_device }
    */
   async getRecordingPreferences(): Promise<RecordingPreferences> {
-    return invoke<RecordingPreferences>('get_recording_preferences');
+    return dedupeInFlight('recording-preferences', () =>
+      invoke<RecordingPreferences>('get_recording_preferences')
+    );
   }
 
   /**
@@ -75,7 +116,9 @@ export class ConfigService {
    * @returns Promise with CustomOpenAIConfig or null if not configured
    */
   async getCustomOpenAIConfig(): Promise<CustomOpenAIConfig | null> {
-    return invoke<CustomOpenAIConfig | null>('api_get_custom_openai_config');
+    return dedupeInFlight('custom-openai-config', () =>
+      invoke<CustomOpenAIConfig | null>('api_get_custom_openai_config')
+    );
   }
 
   /**

@@ -7,6 +7,7 @@ import { BuiltInModelManager } from '@/components/BuiltInModelManager';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfig } from '@/contexts/ConfigContext';
+import { configService } from '@/services/configService';
 import {
   Select,
   SelectContent,
@@ -205,9 +206,7 @@ export function ModelSettingsModal({
 
   const fetchApiKey = async (provider: string) => {
     try {
-      const data = (await invoke('api_get_api_key', {
-        provider,
-      })) as string;
+      const data = await configService.getApiKey(provider);
       setApiKey(data || '');
     } catch (err) {
       console.error('Error fetching API key:', err);
@@ -270,9 +269,7 @@ export function ModelSettingsModal({
           // Fetch API key if not included in response and provider requires it
           if (data.provider !== 'ollama' && !data.apiKey) {
             try {
-              const apiKeyData = await invoke('api_get_api_key', {
-                provider: data.provider
-              }) as string;
+              const apiKeyData = await configService.getApiKey(data.provider);
               data.apiKey = apiKeyData;
               setApiKey(apiKeyData);
             } catch (err) {

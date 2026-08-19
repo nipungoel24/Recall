@@ -12,6 +12,8 @@ import { StatusOverlays } from '@/app/_components/StatusOverlays';
 import Analytics from '@/lib/analytics';
 import { SettingsModals } from './_components/SettingsModal';
 import { TranscriptPanel } from './_components/TranscriptPanel';
+import { HomeDashboard } from '@/components/Home/HomeDashboard';
+import { routes } from '@/lib/routes';
 import { useModalState } from '@/hooks/useModalState';
 import { useRecordingStateSync } from '@/hooks/useRecordingStateSync';
 import { useRecordingStart } from '@/hooks/useRecordingStart';
@@ -131,7 +133,7 @@ export default function Home() {
           action: result.meetingId ? {
             label: 'View Meeting',
             onClick: () => {
-              router.push(`/meeting-details?id=${result.meetingId}`);
+              router.push(routes.meeting(result.meetingId!));
             }
           } : undefined,
           duration: 10000,
@@ -147,8 +149,9 @@ export default function Home() {
 
         // Auto-navigate after a short delay
         if (result.meetingId) {
+          const recoveredId = result.meetingId;
           setTimeout(() => {
-            router.push(`/meeting-details?id=${result.meetingId}`);
+            router.push(routes.meeting(recoveredId));
           }, 2000);
         }
       }
@@ -189,6 +192,14 @@ export default function Home() {
   // Computed values using global status
   const isProcessingStop = status === RecordingStatus.PROCESSING_TRANSCRIPTS || isProcessing;
 
+  // Idle Home shows the productivity dashboard; any active recording state
+  // switches to the recording workspace (live transcript + controls).
+  const showRecordingWorkspace =
+    recordingState.isRecording ||
+    isStopping ||
+    isProcessingStop ||
+    status === RecordingStatus.SAVING;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -212,54 +223,60 @@ export default function Home() {
         onDelete={deleteRecoverableMeeting}
         onLoadPreview={loadMeetingTranscripts}
       />
-      <div className="flex flex-1 overflow-hidden">
-        <TranscriptPanel
-          isProcessingStop={isProcessingStop}
-          isStopping={isStopping}
-          showModal={showModal}
-        />
 
-        {/* Recording controls - only show when permissions are granted or already recording and not showing status messages */}
-        {(hasMicrophone || isRecording) &&
-          status !== RecordingStatus.PROCESSING_TRANSCRIPTS &&
-          status !== RecordingStatus.SAVING && (
-            <div className="fixed bottom-12 left-0 right-0 z-10">
-              <div
-                className="flex justify-center pl-8 transition-[margin] duration-300"
-                style={{
-                  marginLeft: sidebarCollapsed ? '4rem' : '16rem'
-                }}
-              >
-                <div className="w-2/3 max-w-[750px] flex justify-center">
-                  <div className="bg-white rounded-full shadow-lg flex items-center">
-                    <RecordingControls
-                      isRecording={recordingState.isRecording}
-                      onRecordingStop={(callApi = true) => handleRecordingStop(callApi)}
-                      onRecordingStart={handleRecordingStart}
-                      onTranscriptReceived={() => { }} // Not actually used by RecordingControls
-                      onStopInitiated={() => setIsStopping(true)}
-                      barHeights={barHeights}
-                      onTranscriptionError={(message) => {
-                        showModal('errorAlert', message);
-                      }}
-                      isRecordingDisabled={isRecordingDisabled}
-                      isParentProcessing={isProcessingStop}
-                      selectedDevices={selectedDevices}
-                      meetingName={meetingTitle}
-                    />
+      {showRecordingWorkspace ? (
+        <div className="flex flex-1 overflow-hidden">
+          <TranscriptPanel
+            isProcessingStop={isProcessingStop}
+            isStopping={isStopping}
+            showModal={showModal}
+          />
+
+          {/* Recording controls - persistent compact control while a recording
+              session is active; the idle state uses the Home dashboard CTA */}
+          {(hasMicrophone || recordingState.isRecording) &&
+            status !== RecordingStatus.PROCESSING_TRANSCRIPTS &&
+            status !== RecordingStatus.SAVING && (
+              <div className="fixed bottom-12 left-0 right-0 z-10">
+                <div
+                  className="flex justify-center pl-8 transition-[margin] duration-300"
+                  style={{
+                    marginLeft: sidebarCollapsed ? '4rem' : '16rem'
+                  }}
+                >
+                  <div className="w-2/3 max-w-[750px] flex justify-center">
+                    <div className="bg-white rounded-full shadow-lg flex items-center">
+                      <RecordingControls
+                        isRecording={recordingState.isRecording}
+                        onRecordingStop={(callApi = true) => handleRecordingStop(callApi)}
+                        onRecordingStart={handleRecordingStart}
+                        onTranscriptReceived={() => { }} // Not actually used by RecordingControls
+                        onStopInitiated={() => setIsStopping(true)}
+                        barHeights={barHeights}
+                        onTranscriptionError={(message) => {
+                          showModal('errorAlert', message);
+                        }}
+                        isRecordingDisabled={isRecordingDisabled}
+                        isParentProcessing={isProcessingStop}
+                        selectedDevices={selectedDevices}
+                        meetingName={meetingTitle}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-        {/* Status Overlays - Processing and Saving */}
-        <StatusOverlays
-          isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !recordingState.isRecording}
-          isSaving={status === RecordingStatus.SAVING}
-          sidebarCollapsed={sidebarCollapsed}
-        />
-      </div>
+          {/* Status Overlays - Processing and Saving */}
+          <StatusOverlays
+            isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !recordingState.isRecording}
+            isSaving={status === RecordingStatus.SAVING}
+            sidebarCollapsed={sidebarCollapsed}
+          />
+        </div>
+      ) : (
+        <HomeDashboard />
+      )}
     </motion.div>
   );
 }

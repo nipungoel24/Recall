@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { invoke as invokeTauri } from '@tauri-apps/api/core';
+import { configService } from '@/services/configService';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 
@@ -36,9 +37,7 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
           // Fetch API key if not included and provider requires it
           if (data.provider !== 'ollama' && data.provider !== 'custom-openai' && !data.apiKey) {
             try {
-              const apiKeyData = await invokeTauri('api_get_api_key', {
-                provider: data.provider
-              }) as string;
+              const apiKeyData = await configService.getApiKey(data.provider);
               data.apiKey = apiKeyData;
             } catch (err) {
               console.error('Failed to fetch API key:', err);

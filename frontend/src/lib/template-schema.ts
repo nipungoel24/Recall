@@ -28,7 +28,8 @@ export interface TemplateInfo {
   id: string;
   name: string;
   description: string;
-  source: TemplateSource;
+  /** 'unknown' means the backend did not report an origin; treat as read-only. */
+  source: TemplateSource | 'unknown';
 }
 
 export interface SectionFieldErrors {

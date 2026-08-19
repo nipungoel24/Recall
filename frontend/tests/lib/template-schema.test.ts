@@ -254,17 +254,15 @@ describe("isValidTemplateId", () => {
 
 describe("template source helpers", () => {
   test("only custom templates are editable/deletable", () => {
-    expect(isCustomTemplate({ id: "x", name: "X", description: "", source: "custom" })).toBe(true);
-    expect(isCustomTemplate({ id: "x", name: "X", description: "", source: "builtin" })).toBe(false);
-    expect(isCustomTemplate({ id: "x", name: "X", description: "", source: "bundled" })).toBe(false);
-    expect(isCustomTemplate({ id: "x", name: "X", description: "", source: "unknown" })).toBe(false);
+    expect(isCustomTemplate({ source: "custom" })).toBe(true);
+    expect(isCustomTemplate({ source: "builtin" })).toBe(false);
+    expect(isCustomTemplate({ source: "bundled" })).toBe(false);
+    expect(isCustomTemplate({ source: "unknown" })).toBe(false);
   });
 
   test("built-in ids are protected even when source is unknown", () => {
     for (const id of BUILTIN_TEMPLATE_IDS) {
-      expect(
-        isBuiltinTemplate({ id, name: "N", description: "", source: "unknown" }),
-      ).toBe(true);
+      expect(isBuiltinTemplate({ id, source: "unknown" })).toBe(true);
     }
   });
 });

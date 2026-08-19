@@ -148,6 +148,19 @@ pub fn get_template(template_id: &str) -> Result<Template, String> {
     validate_and_parse_template(&json_content)
 }
 
+/// Load raw JSON string of a template by identifier (resolving fallbacks).
+pub fn get_template_json_raw(template_id: &str) -> Option<String> {
+    if let Some(custom_content) = load_custom_template(template_id) {
+        Some(custom_content)
+    } else if let Some(bundled_content) = load_bundled_template(template_id) {
+        Some(bundled_content)
+    } else if let Some(builtin_content) = defaults::get_builtin_template(template_id) {
+        Some(builtin_content.to_string())
+    } else {
+        None
+    }
+}
+
 /// Validate and parse template JSON
 ///
 /// # Arguments
