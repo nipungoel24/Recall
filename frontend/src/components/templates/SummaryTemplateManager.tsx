@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Copy, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Copy, FileText, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -26,8 +26,10 @@ export function SummaryTemplateManager() {
     availableTemplates,
     isLoading,
     error,
+    defaultTemplateId,
     saveTemplate,
     deleteTemplate,
+    setDefaultTemplate,
     refreshTemplates,
   } = useTemplates();
 
@@ -80,6 +82,24 @@ export function SummaryTemplateManager() {
       }
     },
     [refreshTemplates],
+  );
+
+  const handleSetDefault = useCallback(
+    async (template: TemplateInfo) => {
+      try {
+        await setDefaultTemplate(template.id);
+        Analytics.trackFeatureUsed('template_set_default');
+        toast.success('Default template updated', {
+          description: `New meeting summaries will use "${template.name}" by default.`,
+        });
+      } catch (err) {
+        toast.error('Failed to set default template', {
+          description:
+            err instanceof TemplateServiceError ? err.message : 'Please try again.',
+        });
+      }
+    },
+    [setDefaultTemplate],
   );
 
   const handleEditorSave = useCallback(
@@ -165,12 +185,24 @@ export function SummaryTemplateManager() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900">{template.name}</span>
                           <Badge variant="blue">Custom</Badge>
+                          {defaultTemplateId === template.id && <Badge variant="green">Default</Badge>}
                         </div>
                         <p className="text-sm text-gray-500 truncate mt-0.5" title={template.description}>
                           {template.description}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {defaultTemplateId !== template.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => void handleSetDefault(template)}
+                            title={`Use ${template.name} as the default template`}
+                            aria-label={`Set ${template.name} as default`}
+                          >
+                            <Star />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -221,12 +253,24 @@ export function SummaryTemplateManager() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900">{template.name}</span>
                           <Badge variant="default">Built-in</Badge>
+                          {defaultTemplateId === template.id && <Badge variant="green">Default</Badge>}
                         </div>
                         <p className="text-sm text-gray-500 truncate mt-0.5" title={template.description}>
                           {template.description}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {defaultTemplateId !== template.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => void handleSetDefault(template)}
+                            title={`Use ${template.name} as the default template`}
+                            aria-label={`Set ${template.name} as default`}
+                          >
+                            <Star />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

@@ -207,3 +207,26 @@ export async function duplicateTemplate(
     throw new TemplateServiceError(friendlyCommandError('api_duplicate_template', error));
   }
 }
+
+/**
+ * The persistent default summary template id, or null when unset (the UI
+ * falls back to `standard_meeting`). The backend re-validates the stored id
+ * and clears it when the template no longer exists.
+ */
+export async function getDefaultTemplateId(): Promise<string | null> {
+  try {
+    const id = await invoke<string | null>('api_get_default_template');
+    return id && id.trim() ? id : null;
+  } catch (error) {
+    throw new TemplateServiceError(friendlyCommandError('api_get_default_template', error));
+  }
+}
+
+/** Persists the default summary template id (stores the ID, not contents). */
+export async function setDefaultTemplateId(templateId: string): Promise<void> {
+  try {
+    await invoke<void>('api_set_default_template', { templateId });
+  } catch (error) {
+    throw new TemplateServiceError(friendlyCommandError('api_set_default_template', error));
+  }
+}

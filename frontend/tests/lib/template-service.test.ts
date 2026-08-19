@@ -9,10 +9,12 @@ mock.module("@tauri-apps/api/core", () => ({
 const {
   TemplateServiceError,
   deleteTemplate,
+  getDefaultTemplateId,
   getTemplateDefinition,
   listTemplates,
   normalizeTemplateInfo,
   saveTemplate,
+  setDefaultTemplateId,
   validateTemplateOnBackend,
 } = await import("../../src/services/templateService");
 
@@ -178,6 +180,43 @@ describe("deleteTemplate", () => {
     invokeMock.mockRejectedValueOnce("Cannot delete built-in template 'daily_standup'");
     await expect(deleteTemplate("daily_standup")).rejects.toThrow(
       "Cannot delete built-in template 'daily_standup'",
+    );
+  });
+});
+
+describe("default summary template", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+  });
+
+  test("getDefaultTemplateId returns the stored id", async () => {
+    invokeMock.mockResolvedValueOnce("weekly_review");
+    await expect(getDefaultTemplateId()).resolves.toBe("weekly_review");
+    expect(invokeMock).toHaveBeenCalledWith("api_get_default_template");
+  });
+
+  test("getDefaultTemplateId returns null when unset (standard_meeting fallback)", async () => {
+    invokeMock.mockResolvedValueOnce(null);
+    await expect(getDefaultTemplateId()).resolves.toBeNull();
+  });
+
+  test("getDefaultTemplateId treats blank strings as unset", async () => {
+    invokeMock.mockResolvedValueOnce("   ");
+    await expect(getDefaultTemplateId()).resolves.toBeNull();
+  });
+
+  test("setDefaultTemplateId persists via the backend command", async () => {
+    invokeMock.mockResolvedValueOnce(null);
+    await setDefaultTemplateId("client_call");
+    expect(invokeMock).toHaveBeenCalledWith("api_set_default_template", {
+      templateId: "client_call",
+    });
+  });
+
+  test("setDefaultTemplateId surfaces backend validation errors", async () => {
+    invokeMock.mockRejectedValueOnce("Failed to save default template: db error");
+    await expect(setDefaultTemplateId("nope")).rejects.toThrow(
+      "Failed to save default template: db error",
     );
   });
 });

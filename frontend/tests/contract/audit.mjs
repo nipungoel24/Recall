@@ -193,15 +193,17 @@ check(
 
 /* ── §4.2: frontend template service calls canonical commands ── */
 const templateInvocations = [...templateService.matchAll(/invoke<[^>]*>\('([a-z_0-9]+)'/g)].map((m) => m[1]);
-const canonicalTemplate = new Set([
-  'api_list_templates',
-  'api_get_template_json',
-  'api_validate_template',
-  'api_create_custom_template',
-  'api_update_custom_template',
-  'api_delete_custom_template',
-  'api_duplicate_template',
-]);
+  const canonicalTemplate = new Set([
+    'api_list_templates',
+    'api_get_template_json',
+    'api_validate_template',
+    'api_create_custom_template',
+    'api_update_custom_template',
+    'api_delete_custom_template',
+    'api_duplicate_template',
+    'api_get_default_template',
+    'api_set_default_template',
+  ]);
 for (const cmd of templateInvocations) {
   check(`templateService invokes canonical command ${cmd}`, canonicalTemplate.has(cmd));
 }

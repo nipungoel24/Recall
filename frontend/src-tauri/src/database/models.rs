@@ -148,6 +148,10 @@ pub struct Setting {
     #[sqlx(rename = "customOpenAIConfig")]
     #[serde(rename = "customOpenAIConfig")]
     pub custom_openai_config: Option<String>,
+    /// Persistent default summary template id (nullable; standard_meeting when unset)
+    #[sqlx(rename = "defaultTemplateId")]
+    #[serde(rename = "defaultTemplateId")]
+    pub default_template_id: Option<String>,
 }
 
 impl Setting {

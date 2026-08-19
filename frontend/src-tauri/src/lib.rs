@@ -689,6 +689,8 @@ pub fn run() {
             summary::template_commands::api_delete_custom_template,
             summary::template_commands::api_duplicate_template,
             summary::template_commands::api_get_template_json,
+            summary::template_commands::api_get_default_template,
+            summary::template_commands::api_set_default_template,
             // Context thread commands (§7.2)
             contexts::commands::api_list_context_threads,
             contexts::commands::api_get_context_thread,

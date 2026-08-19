@@ -38,6 +38,47 @@ impl SettingsRepository {
         Ok(setting)
     }
 
+    /// Stored default summary template id, or None when unset/never saved.
+    pub async fn get_default_template(
+        pool: &SqlitePool,
+    ) -> std::result::Result<Option<String>, sqlx::Error> {
+        let value = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT defaultTemplateId FROM settings LIMIT 1",
+        )
+        .fetch_optional(pool)
+        .await?
+        .flatten();
+        Ok(value.filter(|v| !v.trim().is_empty()))
+    }
+
+    /// Persists the default summary template id (stores the ID, never the
+    /// template contents). Creates the settings row when none exists yet.
+    pub async fn set_default_template(
+        pool: &SqlitePool,
+        template_id: &str,
+    ) -> std::result::Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO settings (id, provider, model, whisperModel, defaultTemplateId)
+            VALUES ('1', '', '', '', $1)
+            ON CONFLICT(id) DO UPDATE SET
+                defaultTemplateId = excluded.defaultTemplateId
+            "#,
+        )
+        .bind(template_id)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Clears the stored default template (fallback to standard_meeting).
+    pub async fn clear_default_template(pool: &SqlitePool) -> std::result::Result<(), sqlx::Error> {
+        sqlx::query("UPDATE settings SET defaultTemplateId = NULL WHERE id = '1'")
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn save_model_config(
         pool: &SqlitePool,
         provider: &str,
@@ -345,5 +386,91 @@ impl SettingsRepository {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("failed to open in-memory sqlite");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("failed to run migrations");
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_default_template_persistence_and_clear() {
+        let pool = test_pool().await;
+
+        // Unset by default.
+        assert_eq!(
+            SettingsRepository::get_default_template(&pool)
+                .await
+                .unwrap(),
+            None
+        );
+
+        // Set persists the id (and survives re-read).
+        SettingsRepository::set_default_template(&pool, "weekly_review")
+            .await
+            .unwrap();
+        assert_eq!(
+            SettingsRepository::get_default_template(&pool)
+                .await
+                .unwrap(),
+            Some("weekly_review".to_string())
+        );
+
+        // Overwrite works.
+        SettingsRepository::set_default_template(&pool, "daily_standup")
+            .await
+            .unwrap();
+        assert_eq!(
+            SettingsRepository::get_default_template(&pool)
+                .await
+                .unwrap(),
+            Some("daily_standup".to_string())
+        );
+
+        // Clear restores the unset state (standard_meeting fallback).
+        SettingsRepository::clear_default_template(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            SettingsRepository::get_default_template(&pool)
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn test_default_template_survives_other_settings_writes() {
+        let pool = test_pool().await;
+
+        SettingsRepository::set_default_template(&pool, "client_call")
+            .await
+            .unwrap();
+
+        // Saving model config must not clobber the stored default.
+        SettingsRepository::save_model_config(&pool, "ollama", "llama3", "large-v3", None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            SettingsRepository::get_default_template(&pool)
+                .await
+                .unwrap(),
+            Some("client_call".to_string())
+        );
     }
 }

@@ -1,3 +1,4 @@
+use crate::database::repositories::setting::SettingsRepository;
 use crate::summary::templates;
 use crate::summary::templates::store::TemplateError;
 use crate::summary::templates::TemplateSource;
@@ -326,6 +327,60 @@ pub async fn api_get_template_json<R: Runtime>(
     );
     templates::get_template_json_raw(&template_id)
         .ok_or_else(|| format!("Template '{}' not found", template_id))
+}
+
+/// Gets the persistent default summary template id, or None when unset.
+///
+/// The stored id is re-validated against the available templates on every
+/// read: if the template no longer exists (e.g. a custom default was
+/// deleted), the stored value is cleared and None is returned, leaving the
+/// built-in `standard_meeting` fallback in charge. A broken configuration can
+/// therefore never persist across restarts.
+#[tauri::command]
+pub async fn api_get_default_template(
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<Option<String>, String> {
+    let pool = state.db_manager.pool();
+    let stored = SettingsRepository::get_default_template(pool)
+        .await
+        .map_err(|e| format!("Failed to load default template: {}", e))?;
+
+    match stored {
+        None => Ok(None),
+        Some(id) => match templates::get_template(&id) {
+            Ok(_) => Ok(Some(id)),
+            Err(e) => {
+                warn!(
+                    "Stored default template '{}' no longer exists ({}); clearing",
+                    id, e
+                );
+                let _ = SettingsRepository::clear_default_template(pool).await;
+                Ok(None)
+            }
+        },
+    }
+}
+
+/// Sets the persistent default summary template. Validates that the template
+/// exists (built-in, bundled, or custom) before persisting; stores only the
+/// template ID, never its contents.
+#[tauri::command]
+pub async fn api_set_default_template(
+    state: tauri::State<'_, crate::state::AppState>,
+    template_id: String,
+) -> Result<(), String> {
+    let id = template_id.trim();
+    if id.is_empty() {
+        return Err("Template id must not be empty".to_string());
+    }
+
+    templates::get_template(id).map_err(|e| format!("Template '{}' not found: {}", id, e))?;
+
+    SettingsRepository::set_default_template(state.db_manager.pool(), id)
+        .await
+        .map_err(|e| format!("Failed to save default template: {}", e))?;
+    info!("Default summary template set to '{}'", id);
+    Ok(())
 }
 
 #[cfg(test)]
