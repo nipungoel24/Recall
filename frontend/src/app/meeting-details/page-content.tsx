@@ -57,8 +57,8 @@ export default function PageContent({
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [isRecording] = useState(false);
   const [summaryResponse] = useState<SummaryResponse | null>(null);
-  // Context whose saved knowledge is included in this meeting's AI summaries (contract §8.2)
-  const [summaryContextId, setSummaryContextId] = useState<string | null>(null);
+  // Contexts whose saved knowledge is included in this meeting's AI summaries (contract §8.2)
+  const [summaryContextIds, setSummaryContextIds] = useState<string[]>([]);
 
   // Ref to store the modal open function from SummaryGeneratorButtonGroup
   const openModelSettingsRef = useRef<(() => void) | null>(null);
@@ -118,7 +118,7 @@ export default function PageContent({
     modelConfig: modelConfig,
     isModelConfigLoading: false, // ConfigContext loads on mount
     selectedTemplate: templates.selectedTemplate,
-    contextId: summaryContextId,
+    contextIds: summaryContextIds,
     onMeetingUpdated,
     updateMeetingTitle: meetingData.updateMeetingTitle,
     setAiSummary: meetingData.setAiSummary,
@@ -229,8 +229,8 @@ export default function PageContent({
           onTemplateSelect={templates.handleTemplateSelection}
           isModelConfigLoading={false}
           onOpenModelSettings={handleRegisterModalOpen}
-          summaryContextId={summaryContextId}
-          onSummaryContextChange={setSummaryContextId}
+            summaryContextIds={summaryContextIds}
+            onSummaryContextIdsChange={setSummaryContextIds}
         />
       </div>
     </motion.div>

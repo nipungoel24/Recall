@@ -17,6 +17,11 @@ pub const DEFAULT_CONTEXT_BUDGET_TOKENS: usize = 2400;
 /// Floor for runtime budgets (small-context providers still get a compact view).
 pub const MIN_CONTEXT_BUDGET_TOKENS: usize = 400;
 
+/// Maximum number of Contexts whose memory may be attached to ONE summary
+/// generation. The combined budget is shared across the selected Contexts so
+/// prompt size stays bounded regardless of selection.
+pub const MAX_CONTEXTS_PER_SUMMARY: usize = 2;
+
 /// Upper bound (in tokens) of the meeting summary fed to extraction.
 pub const EXTRACTION_INPUT_MAX_TOKENS: usize = 8000;
 

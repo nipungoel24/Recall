@@ -6,8 +6,8 @@
 //! never full historical transcripts.
 
 use crate::context::model::{
-    CompactContextMemory, ContextMemoryItemView, MemoryBudget, DEFAULT_MAX_MEMORY_ITEMS,
-    HARD_MAX_MEMORY_ITEMS,
+    CompactContextMemory, ContextMemoryItemView, MemoryBudget, DEFAULT_CONTEXT_BUDGET_TOKENS,
+    DEFAULT_MAX_MEMORY_ITEMS, HARD_MAX_MEMORY_ITEMS, MIN_CONTEXT_BUDGET_TOKENS,
 };
 use crate::context::prompts::build_context_memory_block;
 use crate::context::render::render_inner_content;
@@ -214,5 +214,60 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(render_context_memory(&compact, MemoryBudget::default()).is_none());
+    }
+
+    /// Multi-context rendering: two contexts must produce two clearly
+    /// separated, name-labelled blocks — never one merged blob — and each
+    /// block stays within its share of the combined budget.
+    #[tokio::test]
+    async fn multi_context_blocks_stay_separate_and_bounded() {
+        let pool = test_pool().await;
+        sqlx::query(
+            "INSERT INTO contexts (id, name, description, memory_markdown, created_at, updated_at)
+             VALUES ('context-2', 'Azzurro Hotels', NULL,
+                     '- [decision | from meeting meeting-1 | 2026-01-03] Use supplier B',
+                     '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let per_context_budget = MemoryBudget {
+            context_tokens: (DEFAULT_CONTEXT_BUDGET_TOKENS / 2).max(MIN_CONTEXT_BUDGET_TOKENS),
+            ..MemoryBudget::default()
+        };
+
+        let mut blocks = Vec::new();
+        for id in ["context-1", "context-2"] {
+            let rendered = load_and_render_context_memory(
+                &pool,
+                id,
+                DEFAULT_MAX_MEMORY_ITEMS,
+                per_context_budget,
+            )
+            .await
+            .unwrap();
+            if let Some(block) = rendered {
+                blocks.push(block);
+            }
+        }
+        assert_eq!(blocks.len(), 2);
+
+        let joined = blocks.join("\n\n");
+        assert!(
+            joined.contains("from context thread \"Project Phoenix\""),
+            "block A must keep its own context label"
+        );
+        assert!(
+            joined.contains("from context thread \"Azzurro Hotels\""),
+            "block B must keep its own context label"
+        );
+        assert!(
+            joined.contains("Old durable knowledge") && joined.contains("Use supplier B"),
+            "each context's knowledge is preserved"
+        );
+        // Both blocks are individually delimited: two open and two close tags.
+        assert_eq!(joined.matches("<context_memory>").count(), 2);
+        assert_eq!(joined.matches("</context_memory>").count(), 2);
     }
 }

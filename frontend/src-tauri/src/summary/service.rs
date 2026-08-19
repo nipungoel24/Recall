@@ -463,12 +463,13 @@ impl SummaryService {
     /// * `model_name` - Specific model (e.g., "gpt-4", "llama3.2:latest")
     /// * `custom_prompt` - Optional user-provided context
     /// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
-    /// * `context_id` - Optional context thread id (continuous meeting context).
+    /// * `context_ids` - Context thread ids (continuous meeting context).
     ///   When present, memory extracted from this meeting's summary is merged
-    ///   into that thread after the summary completes.
-    /// * `prior_context_memory` - Pre-rendered compact context memory block
-    ///   from earlier meetings of the thread (contract §8); prepended to
-    ///   `custom_prompt` as supplementary background data.
+    ///   into EACH thread independently after the summary completes — a
+    ///   failure in one thread never affects the others or the meeting.
+    /// * `prior_context_memory` - Pre-rendered compact context memory blocks
+    ///   from earlier meetings of the selected threads (contract §8);
+    ///   prepended to `custom_prompt` as supplementary background data.
     pub async fn process_transcript_background<R: tauri::Runtime>(
         _app: AppHandle<R>,
         pool: SqlitePool,
@@ -479,7 +480,7 @@ impl SummaryService {
         custom_prompt: String,
         template_id: String,
         summary_language: Option<String>,
-        context_id: Option<String>,
+        context_ids: Vec<String>,
         prior_context_memory: Option<String>,
     ) {
         let start_time = Instant::now();
@@ -649,10 +650,12 @@ impl SummaryService {
                 }
 
                 // Update continuous context memory in the background when this
-                // meeting was summarized in a context thread. This is secondary
-                // enrichment: failures here never affect the meeting, its
-                // transcript, or its saved summary.
-                if let Some(context_id_mem) = context_id.clone() {
+                // meeting was summarized with context threads selected. This is
+                // secondary enrichment: failures here never affect the meeting,
+                // its transcript, or its saved summary. Each selected context
+                // updates INDEPENDENTLY — one thread's failure never blocks the
+                // others, and persistent memories are never merged.
+                if !context_ids.is_empty() {
                     let pool_mem = pool.clone();
                     let client_mem = client.clone();
                     let meeting_id_mem = meeting_id.clone();
@@ -673,30 +676,32 @@ impl SummaryService {
                             provider_config_mem.custom_openai_top_p,
                             app_data_dir_mem,
                         );
-                        match MemoryEngine::update_context_after_meeting(
-                            &pool_mem,
-                            &extractor,
-                            &context_id_mem,
-                            &meeting_id_mem,
-                            &english_mem,
-                            MemoryBudget::default(),
-                        )
-                        .await
-                        {
-                            Ok(report) => info!(
-                                "Context memory updated (context {}) for meeting {}: added={}, refreshed={}, resolved={}, folded={}, active={}",
-                                context_id_mem,
-                                meeting_id_mem,
-                                report.added,
-                                report.refreshed,
-                                report.resolved,
-                                report.folded,
-                                report.active_items
-                            ),
-                            Err(e) => warn!(
-                                "Context memory update failed for meeting {} (context {}, meeting data unaffected): {}",
-                                meeting_id_mem, context_id_mem, e
-                            ),
+                        for context_id_mem in context_ids {
+                            match MemoryEngine::update_context_after_meeting(
+                                &pool_mem,
+                                &extractor,
+                                &context_id_mem,
+                                &meeting_id_mem,
+                                &english_mem,
+                                MemoryBudget::default(),
+                            )
+                            .await
+                            {
+                                Ok(report) => info!(
+                                    "Context memory updated (context {}) for meeting {}: added={}, refreshed={}, resolved={}, folded={}, active={}",
+                                    context_id_mem,
+                                    meeting_id_mem,
+                                    report.added,
+                                    report.refreshed,
+                                    report.resolved,
+                                    report.folded,
+                                    report.active_items
+                                ),
+                                Err(e) => warn!(
+                                    "Context memory update failed for meeting {} (context {}, other contexts and meeting data unaffected): {}",
+                                    meeting_id_mem, context_id_mem, e
+                                ),
+                            }
                         }
                     });
                 }

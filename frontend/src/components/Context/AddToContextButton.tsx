@@ -23,21 +23,24 @@ import { cn } from '@/lib/utils';
 interface AddToContextButtonProps {
   meetingId: string;
   meetingTitle: string;
-  /** Selected context used for AI summaries (contract §8.2). Optional: hidden when not wired. */
-  summaryContextId?: string | null;
-  onSummaryContextChange?: (contextId: string | null) => void;
+  /** Contexts selected for AI summaries (contract §8.2). Optional: hidden when not wired. */
+  summaryContextIds?: string[];
+  onSummaryContextIdsChange?: (contextIds: string[]) => void;
 }
+
+/** Maximum number of Contexts whose memory may be attached to one summary. */
+const MAX_SUMMARY_CONTEXTS = 2;
 
 /**
  * Meeting-details action: link the current meeting to one or more Contexts,
- * create a Context inline, and (optionally) pick which Context's saved knowledge
- * should be used when generating this meeting's AI summary.
+ * create a Context inline, and (optionally) pick which Contexts' saved
+ * knowledge should be used when generating this meeting's AI summary.
  */
 export function AddToContextButton({
   meetingId,
   meetingTitle,
-  summaryContextId = null,
-  onSummaryContextChange,
+  summaryContextIds = [],
+  onSummaryContextIdsChange,
 }: AddToContextButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -139,7 +142,23 @@ export function AddToContextButton({
     }
   };
 
-  const showSummaryPicker = typeof onSummaryContextChange === 'function';
+  const showSummaryPicker = typeof onSummaryContextIdsChange === 'function';
+
+  const toggleSummaryContext = (contextId: string) => {
+    if (!onSummaryContextIdsChange) return;
+    const selected = summaryContextIds.includes(contextId);
+    if (selected) {
+      onSummaryContextIdsChange(summaryContextIds.filter((id) => id !== contextId));
+      return;
+    }
+    if (summaryContextIds.length >= MAX_SUMMARY_CONTEXTS) {
+      toast.error(`You can include up to ${MAX_SUMMARY_CONTEXTS} Contexts per summary`, {
+        description: 'Deselect one before adding another.',
+      });
+      return;
+    }
+    onSummaryContextIdsChange([...summaryContextIds, contextId]);
+  };
 
   return (
     <>
@@ -248,37 +267,29 @@ export function AddToContextButton({
                     Use Context knowledge in AI summaries
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSummaryContextChange!(null)}
-                      className={cn(
-                        'px-3 py-1.5 rounded-full text-sm border transition-colors',
-                        !summaryContextId
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-gray-300 text-gray-600 hover:bg-gray-50',
-                      )}
-                    >
-                      None
-                    </button>
-                    {contexts.map((context) => (
-                      <button
-                        key={context.id}
-                        type="button"
-                        onClick={() => onSummaryContextChange!(context.id)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-full text-sm border transition-colors',
-                          summaryContextId === context.id
-                            ? 'bg-blue-600 border-blue-600 text-white'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-50',
-                        )}
-                      >
-                        {context.name}
-                      </button>
-                    ))}
+                    {contexts.map((context) => {
+                      const isSelected = summaryContextIds.includes(context.id);
+                      return (
+                        <button
+                          key={context.id}
+                          type="button"
+                          onClick={() => toggleSummaryContext(context.id)}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            'px-3 py-1.5 rounded-full text-sm border transition-colors',
+                            isSelected
+                              ? 'bg-blue-600 border-blue-600 text-white'
+                              : 'border-gray-300 text-gray-600 hover:bg-gray-50',
+                          )}
+                        >
+                          {context.name}
+                        </button>
+                      );
+                    })}
                   </div>
                   <p className="text-xs text-gray-400 mt-1.5">
-                    Pick one Context to include its saved knowledge when generating this
-                    meeting&apos;s summary.
+                    Select up to {MAX_SUMMARY_CONTEXTS} Contexts to include their saved knowledge
+                    when generating this meeting&apos;s summary. Each Context stays separate.
                   </p>
                 </div>
               )}

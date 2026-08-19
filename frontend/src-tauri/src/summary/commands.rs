@@ -339,7 +339,7 @@ pub async fn api_process_transcript<R: Runtime>(
     template_id: Option<String>,
     summary_language: Option<String>,
     _auth_token: Option<String>,
-    context_id: Option<String>,
+    context_ids: Option<Vec<String>>,
 ) -> Result<ProcessTranscriptResponse, String> {
     use uuid::Uuid;
 
@@ -364,32 +364,42 @@ pub async fn api_process_transcript<R: Runtime>(
         }
     });
 
-    // Continuous meeting context (contract §8.1): when a context thread is
-    // selected, load and pre-render its compact memory as supplementary
-    // background for this meeting. Only the compact block is sent — never full
-    // historical transcripts. A failure here never blocks the summary.
-    let prior_context_memory = match context_id
-        .as_deref()
-        .map(str::trim)
+    // Continuous meeting context (contract §8.1): for each selected context
+    // thread, load and pre-render its compact memory as supplementary
+    // background. Contexts stay SEPARATE, delimited blocks — they are never
+    // flattened into one ambiguous blob — and the combined token budget is
+    // shared across the selected contexts so prompt size stays bounded. Only
+    // compact blocks are sent, never full historical transcripts. A failure
+    // for one context never blocks the summary.
+    let context_ids: Vec<String> = context_ids
+        .unwrap_or_default()
+        .into_iter()
+        .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty())
-    {
-        Some(context_id) => match crate::context::load_and_render_context_memory(
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .take(crate::context::model::MAX_CONTEXTS_PER_SUMMARY)
+        .collect();
+
+    let per_context_budget = crate::context::model::MemoryBudget {
+        context_tokens: (crate::context::model::DEFAULT_CONTEXT_BUDGET_TOKENS
+            / context_ids.len().max(1))
+        .max(crate::context::model::MIN_CONTEXT_BUDGET_TOKENS),
+        ..crate::context::model::MemoryBudget::default()
+    };
+
+    let mut memory_blocks: Vec<String> = Vec::new();
+    for context_id in &context_ids {
+        match crate::context::load_and_render_context_memory(
             &pool,
             context_id,
             crate::context::model::DEFAULT_MAX_MEMORY_ITEMS,
-            crate::context::model::MemoryBudget::default(),
+            per_context_budget,
         )
         .await
         {
-            Ok(Some(markdown)) => {
-                log_info!(
-                    "Loaded compact context memory for meeting {} from context {}",
-                    m_id,
-                    context_id
-                );
-                Some(markdown)
-            }
-            Ok(None) => None,
+            Ok(Some(block)) => memory_blocks.push(block),
+            Ok(None) => {}
             Err(e) => {
                 log_warn!(
                     "Failed to load context memory for meeting {} (context {}, summary proceeds without it): {}",
@@ -397,10 +407,13 @@ pub async fn api_process_transcript<R: Runtime>(
                     context_id,
                     e
                 );
-                None
             }
-        },
-        None => None,
+        }
+    }
+    let prior_context_memory = if memory_blocks.is_empty() {
+        None
+    } else {
+        Some(memory_blocks.join("\n\n"))
     };
 
     // Create or reset the process entry in the database
@@ -430,9 +443,7 @@ pub async fn api_process_transcript<R: Runtime>(
 
     // Spawn background task for actual processing
     let meeting_id_clone = m_id.clone();
-    let context_id = context_id
-        .map(|c| c.trim().to_string())
-        .filter(|c| !c.is_empty());
+    let context_ids_clone = context_ids.clone();
     tauri::async_runtime::spawn(async move {
         SummaryService::process_transcript_background(
             app,
@@ -444,7 +455,7 @@ pub async fn api_process_transcript<R: Runtime>(
             final_prompt,
             final_template_id,
             summary_language,
-            context_id,
+            context_ids_clone,
             prior_context_memory,
         )
         .await;

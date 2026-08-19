@@ -60,9 +60,9 @@ interface SummaryPanelProps {
   onTemplateSelect: (templateId: string, templateName: string) => void;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
-  /** Context whose saved knowledge is included in AI summaries (contract §8.2). */
-  summaryContextId?: string | null;
-  onSummaryContextChange?: (contextId: string | null) => void;
+  /** Contexts whose saved knowledge is included in AI summaries (contract §8.2). */
+  summaryContextIds?: string[];
+  onSummaryContextIdsChange?: (contextIds: string[]) => void;
 }
 
 export function SummaryPanel({
@@ -95,8 +95,8 @@ export function SummaryPanel({
   onTemplateSelect,
   isModelConfigLoading = false,
   onOpenModelSettings,
-  summaryContextId = null,
-  onSummaryContextChange
+  summaryContextIds = [],
+  onSummaryContextIdsChange
 }: SummaryPanelProps) {
   const [summaryLang, setSummaryLang] = useState<string | null>(null);
   const [summaryLangStorage, setSummaryLangStorage] = useState<SummaryLanguageStorage>('metadata');
@@ -265,8 +265,8 @@ export function SummaryPanel({
             <AddToContextButton
               meetingId={meeting.id}
               meetingTitle={meetingTitle}
-              summaryContextId={summaryContextId}
-              onSummaryContextChange={onSummaryContextChange}
+              summaryContextIds={summaryContextIds}
+              onSummaryContextIdsChange={onSummaryContextIdsChange}
             />
           </div>
         </div>
