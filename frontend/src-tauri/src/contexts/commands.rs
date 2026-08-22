@@ -5,7 +5,7 @@
 //! All functions are named with the canonical `api_` prefix per contract §7.2.
 
 use serde_json::json;
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::{
     context::model::{CompactContextMemory, ContextMemoryItemView},
@@ -365,4 +365,23 @@ pub async fn api_get_compact_context_memory(
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Context memory not found".to_string())
+}
+
+/// Rebuilds a Context's derived memory from the meetings currently linked to
+/// it, using the configured summary provider. The previous memory is only
+/// replaced when the rebuild fully succeeds; meetings and transcripts are
+/// never modified.
+#[tauri::command]
+pub async fn api_rebuild_context_memory(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    context_id: String,
+) -> Result<crate::contexts::service::RebuildMemoryReport, String> {
+    if context_id.trim().is_empty() {
+        return Err("context_id must not be empty".to_string());
+    }
+
+    let pool = state.db_manager.pool().clone();
+    let app_data_dir = app.path().app_data_dir().ok();
+    ContextService::rebuild_context_memory(&pool, app_data_dir, &context_id).await
 }

@@ -14,12 +14,26 @@
 
 use serde::Serialize;
 use sqlx::SqlitePool;
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::Mutex;
 use thiserror::Error;
 
+use crate::context::engine::MemoryEngine;
+use crate::context::extraction::LlmMemoryExtractor;
+use crate::context::model::MemoryBudget;
 use crate::database::{
     models::{ContextMeetingModel, ContextModel, ContextSummaryModel},
     repositories::context::ContextsRepository,
+    repositories::meeting::MeetingsRepository,
+    repositories::setting::SettingsRepository,
+    repositories::summary::SummaryProcessesRepository,
 };
+use crate::summary::service::resolve_provider_runtime_config;
+
+/// Guards against concurrent rebuilds of the same context.
+static REBUILDING: std::sync::LazyLock<Mutex<HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
 pub const MAX_CONTEXT_NAME_LENGTH: usize = 120;
 pub const MAX_CONTEXT_DESCRIPTION_LENGTH: usize = 2000;
@@ -62,6 +76,17 @@ pub struct RemoveMeetingFromContextOutcome {
     pub meeting_id: String,
     /// `false` when no link existed to remove.
     pub removed: bool,
+}
+
+/// Report for a successful Context Memory rebuild.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RebuildMemoryReport {
+    pub context_id: String,
+    /// Meetings whose summary/transcript contributed to the rebuilt memory.
+    pub meetings_processed: u32,
+    /// Total durable memory items written.
+    pub items_added: u32,
 }
 
 pub struct ContextService;
@@ -226,9 +251,241 @@ fn validate_meeting_id(meeting_id: &str) -> Result<(), ContextError> {
     Ok(())
 }
 
+impl ContextService {
+    /// Rebuilds a Context's derived memory from the meetings CURRENTLY in the
+    /// context, using the configured summary provider.
+    ///
+    /// SAFETY: the existing memory is never deleted before the rebuild
+    /// succeeds. Extraction runs against a temporary context; only on full
+    /// success are the old items atomically replaced (single transaction).
+    /// Any provider/database failure leaves the previous memory untouched.
+    /// Meetings and transcripts are never modified.
+    pub async fn rebuild_context_memory(
+        pool: &SqlitePool,
+        app_data_dir: Option<PathBuf>,
+        context_id: &str,
+    ) -> Result<RebuildMemoryReport, String> {
+        // Prevent concurrent rebuilds of the same context.
+        {
+            let mut guard = REBUILDING
+                .lock()
+                .map_err(|_| "Context memory rebuild: internal lock poisoned".to_string())?;
+            if !guard.insert(context_id.to_string()) {
+                return Err(
+                    "A Context memory rebuild is already running for this Context.".to_string(),
+                );
+            }
+        }
+        let _release_guard = RebuildGuard {
+            context_id: context_id.to_string(),
+        };
+
+        let context = ContextsRepository::get_context(pool, context_id)
+            .await
+            .map_err(|e| format!("Context memory rebuild failed: {e}"))?
+            .ok_or_else(|| "Context not found".to_string())?;
+        let _ = &context;
+
+        let meetings = ContextsRepository::list_meetings_for_context(pool, context_id)
+            .await
+            .map_err(|e| format!("Context memory rebuild failed: {e}"))?;
+
+        // Resolve the configured summary provider (same architecture as
+        // normal summary generation — local stays local, cloud stays the
+        // configured cloud provider).
+        let (provider, model_name) = match SettingsRepository::get_model_config(pool)
+            .await
+            .map_err(|e| format!("Context memory rebuild failed: {e}"))?
+        {
+            Some(s) if !s.provider.trim().is_empty() && !s.model.trim().is_empty() => {
+                (s.provider, s.model)
+            }
+            _ => {
+                return Err(
+                    "No summary model configured. Set one in Settings before rebuilding Context memory."
+                        .to_string(),
+                )
+            }
+        };
+        let config = resolve_provider_runtime_config(pool, &provider, &model_name)
+            .await
+            .map_err(|e| format!("Context memory rebuild failed: {e}"))?;
+
+        let extractor = LlmMemoryExtractor::new(
+            reqwest::Client::new(),
+            config.provider,
+            model_name,
+            config.api_key,
+            config.ollama_endpoint,
+            config.custom_openai_endpoint,
+            config.custom_openai_max_tokens,
+            config.custom_openai_temperature,
+            config.custom_openai_top_p,
+            app_data_dir,
+        );
+
+        // Temporary context for the rebuild pass.
+        let tmp = ContextsRepository::create_context(
+            pool,
+            &format!("__rebuild-{}", uuid::Uuid::new_v4()),
+            None,
+        )
+        .await
+        .map_err(|e| format!("Context memory rebuild failed: {e}"))?;
+
+        let mut meetings_processed: u32 = 0;
+        let mut items_added: u32 = 0;
+
+        // Run the extraction pipeline chronologically into the temp context.
+        let run_result: Result<(), String> = async {
+            for meeting in &meetings {
+                let source = load_meeting_source_markdown(pool, &meeting.id).await?;
+                if source.trim().is_empty() {
+                    continue;
+                }
+                let report = MemoryEngine::update_context_after_meeting(
+                    pool,
+                    &extractor,
+                    &tmp.id,
+                    &meeting.id,
+                    &source,
+                    MemoryBudget::default(),
+                )
+                .await
+                .map_err(|e| format!("Context memory rebuild failed: {e}"))?;
+                meetings_processed += 1;
+                items_added += report.added as u32;
+            }
+            Ok(())
+        }
+        .await;
+
+        // Never leave the temporary context behind, whatever happened.
+        let cleanup = async {
+            let _ = sqlx::query("DELETE FROM context_memory_items WHERE context_id = ?")
+                .bind(&tmp.id)
+                .execute(pool)
+                .await;
+            let _ = sqlx::query("DELETE FROM contexts WHERE id = ?")
+                .bind(&tmp.id)
+                .execute(pool)
+                .await;
+        };
+        if let Err(e) = run_result {
+            cleanup.await;
+            return Err(e);
+        }
+
+        // Atomic swap: replace the old derived memory in one transaction.
+        // A failure here also leaves the old memory untouched.
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| format!("Context memory rebuild failed: {e}"))?;
+        let swap_result: Result<(), sqlx::Error> = async {
+            sqlx::query("DELETE FROM context_memory_items WHERE context_id = ?")
+                .bind(context_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("UPDATE context_memory_items SET context_id = ? WHERE context_id = ?")
+                .bind(context_id)
+                .bind(&tmp.id)
+                .execute(&mut *tx)
+                .await?;
+            let digest: Option<String> =
+                sqlx::query_scalar("SELECT memory_markdown FROM contexts WHERE id = ?")
+                    .bind(&tmp.id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            sqlx::query("UPDATE contexts SET memory_markdown = ?, updated_at = ? WHERE id = ?")
+                .bind(digest.unwrap_or_default())
+                .bind(chrono::Utc::now())
+                .bind(context_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM contexts WHERE id = ?")
+                .bind(&tmp.id)
+                .execute(&mut *tx)
+                .await?;
+            Ok(())
+        }
+        .await;
+
+        match swap_result {
+            Ok(()) => {
+                tx.commit()
+                    .await
+                    .map_err(|e| format!("Context memory rebuild failed: {e}"))?;
+                tracing::info!(
+                    "Context memory rebuilt for {}: processed {} meeting(s), {} items",
+                    context_id,
+                    meetings_processed,
+                    items_added
+                );
+                Ok(RebuildMemoryReport {
+                    context_id: context_id.to_string(),
+                    meetings_processed,
+                    items_added,
+                })
+            }
+            Err(e) => {
+                let _ = tx.rollback().await;
+                cleanup.await;
+                Err(format!("Context memory rebuild failed: {e}"))
+            }
+        }
+    }
+}
+
+/// RAII guard removing the context from the rebuild set on drop.
+struct RebuildGuard {
+    context_id: String,
+}
+
+impl Drop for RebuildGuard {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = REBUILDING.lock() {
+            guard.remove(&self.context_id);
+        }
+    }
+}
+
+/// Loads the best available source text for memory extraction: the meeting's
+/// completed summary markdown when present, otherwise its transcript text.
+/// Returns an empty string when the meeting has neither.
+async fn load_meeting_source_markdown(
+    pool: &SqlitePool,
+    meeting_id: &str,
+) -> Result<String, String> {
+    if let Some(process) = SummaryProcessesRepository::get_summary_data(pool, meeting_id)
+        .await
+        .map_err(|e| format!("Failed to load summary for {}: {}", meeting_id, e))?
+    {
+        if let Some(raw) = process.result {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
+                if let Some(markdown) = value.get("markdown").and_then(|m| m.as_str()) {
+                    if !markdown.trim().is_empty() {
+                        return Ok(markdown.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    let (transcripts, _total) =
+        MeetingsRepository::get_meeting_transcripts_paginated(pool, meeting_id, 500, 0)
+            .await
+            .map_err(|e| format!("Failed to load transcript for {}: {}", meeting_id, e))?;
+    Ok(transcripts
+        .into_iter()
+        .map(|t| t.transcript)
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::repositories::context_memory_items::ContextMemoryItemsRepository;
     use chrono::{Duration, Utc};
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -797,5 +1054,45 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(context.name.chars().count(), MAX_CONTEXT_NAME_LENGTH);
+    }
+
+    #[tokio::test]
+    async fn rebuild_without_configured_model_preserves_existing_memory() {
+        let pool = test_pool().await;
+        let context = ContextService::create_context(&pool, "Rebuild Test", None)
+            .await
+            .unwrap();
+        ContextMemoryItemsRepository::add_item(
+            &pool,
+            &context.id,
+            "decision",
+            "Use Rust for the persistence layer",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // No summary model configured -> rebuild must fail...
+        let result = ContextService::rebuild_context_memory(&pool, None, &context.id).await;
+        assert!(result.is_err(), "rebuild without a model must fail");
+
+        // ...and the previous memory must remain completely intact.
+        let items = ContextMemoryItemsRepository::list_for_context(&pool, &context.id)
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "Use Rust for the persistence layer");
+    }
+
+    #[tokio::test]
+    async fn rebuild_unknown_context_fails_cleanly() {
+        let pool = test_pool().await;
+        let result = ContextService::rebuild_context_memory(&pool, None, "context-missing").await;
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("not found"),
+            "unknown context must report a not-found error"
+        );
     }
 }

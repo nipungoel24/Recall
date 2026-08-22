@@ -3,11 +3,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EditableTitle } from '@/components/EditableTitle';
 import { ContextMemorySection } from '@/components/Context/ContextMemorySection';
 import { ContextTimeline } from '@/components/Context/ContextTimeline';
@@ -17,6 +25,7 @@ import { DeleteContextDialog } from '@/components/Context/DeleteContextDialog';
 import { useContextDetail } from '@/components/Context/hooks';
 import { meetingCountLabel, meetingIdsOf } from '@/types/context';
 import { routes } from '@/lib/routes';
+import { contextService } from '@/services/contextService';
 
 export default function ContextDetailPageClient({ id }: { id: string }) {
   const router = useRouter();
@@ -28,6 +37,8 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
   const [addMeetingsOpen, setAddMeetingsOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [rebuildOpen, setRebuildOpen] = useState(false);
+  const [isRebuilding, setIsRebuilding] = useState(false);
 
   useEffect(() => {
     Analytics.trackPageView('context_detail');
@@ -66,6 +77,25 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
       router.push(routes.contexts());
     }
     return ok;
+  };
+
+  const handleRebuildConfirm = async () => {
+    setIsRebuilding(true);
+    try {
+      const report = await contextService.rebuildContextMemory(contextId);
+      Analytics.trackFeatureUsed('context_memory_rebuilt');
+      toast.success('Context memory rebuilt', {
+        description: `Processed ${report.meetingsProcessed} meeting${report.meetingsProcessed === 1 ? '' : 's'} and saved ${report.itemsAdded} item${report.itemsAdded === 1 ? '' : 's'}.`,
+      });
+      setRebuildOpen(false);
+      await context.refresh();
+    } catch (error) {
+      toast.error('Context memory rebuild failed', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsRebuilding(false);
+    }
   };
 
   if (context.isLoading) {
@@ -138,6 +168,16 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
               <Plus />
               <span className="hidden sm:inline">Add Meetings</span>
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRebuildOpen(true)}
+              disabled={isRebuilding}
+              title="Rebuild Context Memory"
+            >
+              <RefreshCw className={isRebuilding ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Rebuild Memory</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)} title="Rename Context">
               <Pencil />
               <span className="hidden sm:inline">Rename</span>
@@ -192,6 +232,33 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
         meetingCount={context.meetings.length}
         onConfirm={handleDelete}
       />
+
+      <Dialog open={rebuildOpen} onOpenChange={(open) => !isRebuilding && setRebuildOpen(open)}>
+        <DialogContent className="sm:max-w-[440px] bg-white text-gray-900">
+          <DialogHeader>
+            <DialogTitle>Rebuild Context Memory?</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Rebuild saved decisions, actions and context from meetings currently in this
+              Context. Your meetings and transcripts will not be changed. This uses your
+              configured summary provider and may take a few minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRebuildOpen(false)}
+              disabled={isRebuilding}
+            >
+              Cancel
+            </Button>
+            <Button variant="blue" size="sm" onClick={() => void handleRebuildConfirm()} disabled={isRebuilding}>
+              {isRebuilding ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+              {isRebuilding ? 'Rebuilding…' : 'Rebuild Memory'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

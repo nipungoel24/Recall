@@ -705,6 +705,7 @@ pub fn run() {
             contexts::commands::api_update_context_memory_item,
             contexts::commands::api_delete_context_memory_item,
             contexts::commands::api_get_compact_context_memory,
+            contexts::commands::api_rebuild_context_memory,
             // Built-in AI commands
             summary::summary_engine::commands::builtin_ai_list_models,
             summary::summary_engine::commands::builtin_ai_get_model_info,

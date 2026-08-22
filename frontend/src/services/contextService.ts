@@ -125,6 +125,25 @@ export class ContextService {
     return normalizeCompactContextMemory(raw as Record<string, unknown>);
   }
 
+  /**
+   * Rebuilds the Context's derived memory from its current meetings using the
+   * configured summary provider. The previous memory is only replaced when the
+   * rebuild fully succeeds; meetings and transcripts are never modified.
+   */
+  async rebuildContextMemory(contextId: string): Promise<{
+    contextId: string;
+    meetingsProcessed: number;
+    itemsAdded: number;
+  }> {
+    const raw = await invoke<unknown>('api_rebuild_context_memory', { contextId });
+    const value = raw as Record<string, unknown>;
+    return {
+      contextId: String(value.contextId ?? contextId),
+      meetingsProcessed: Number(value.meetingsProcessed ?? 0),
+      itemsAdded: Number(value.itemsAdded ?? 0),
+    };
+  }
+
   async addContextMemoryItem(
     contextId: string,
     args: AddContextMemoryItemArgs,
