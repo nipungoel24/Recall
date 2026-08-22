@@ -32,6 +32,14 @@ export interface TemplateInfo {
   source: TemplateSource | 'unknown';
 }
 
+/** A local-only representation used by the template structure preview. */
+export interface TemplatePreviewSection {
+  title: string;
+  instruction: string;
+  format: SectionFormat;
+  itemFormat?: string;
+}
+
 export interface SectionFieldErrors {
   title?: string;
   instruction?: string;
@@ -265,4 +273,27 @@ export function isBuiltinTemplate(info: Pick<TemplateInfo, 'id' | 'source'>): bo
     info.source === 'bundled' ||
     (BUILTIN_TEMPLATE_IDS as readonly string[]).includes(info.id)
   );
+}
+
+/**
+ * Projects the editor state into the structure a generated summary will use.
+ * This intentionally performs no validation, persistence, or provider call:
+ * incomplete fields receive readable placeholders so preview remains useful
+ * while a template is being drafted.
+ */
+export function templateStructurePreview(definition: TemplateDefinition): {
+  name: string;
+  description: string;
+  sections: TemplatePreviewSection[];
+} {
+  return {
+    name: definition.name.trim() || 'Untitled template',
+    description: definition.description.trim(),
+    sections: definition.sections.map((section, index) => ({
+      title: section.title.trim() || `Section ${index + 1}`,
+      instruction: section.instruction.trim() || 'No instruction yet.',
+      format: section.format,
+      ...(section.item_format?.trim() ? { itemFormat: section.item_format.trim() } : {}),
+    })),
+  };
 }

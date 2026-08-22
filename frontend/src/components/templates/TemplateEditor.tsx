@@ -28,6 +28,7 @@ import {
   definitionToJson,
   isValidTemplateId,
   slugifyTemplateId,
+  templateStructurePreview,
   validateTemplateDefinition,
   type SectionFieldErrors,
   type SectionFormat,
@@ -80,6 +81,7 @@ export function TemplateEditor({
   const [submittedOnce, setSubmittedOnce] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const preview = templateStructurePreview(state.definition);
 
   // Reset the form whenever the dialog (re)opens for a new target.
   useEffect(() => {
@@ -382,6 +384,33 @@ export function TemplateEditor({
               );
             })}
           </div>
+
+          <section aria-labelledby="template-structure-preview" className="rounded-md border border-blue-100 bg-blue-50/50 p-4">
+            <div className="mb-3">
+              <h3 id="template-structure-preview" className="text-sm font-semibold text-gray-900">
+                Template structure preview
+              </h3>
+              <p className="mt-1 text-xs text-gray-600">
+                A local preview of the headings and instructions this template provides. No AI is run.
+              </p>
+            </div>
+            <div className="space-y-3 rounded bg-white p-3 shadow-sm">
+              <div>
+                <div className="text-base font-semibold text-gray-900">{preview.name}</div>
+                {preview.description && <p className="mt-0.5 text-xs text-gray-500">{preview.description}</p>}
+              </div>
+              {preview.sections.map((section, index) => (
+                <div key={`${section.title}-${index}`} className="border-t border-gray-100 pt-3 first:border-t-0 first:pt-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-medium text-gray-800">{section.title}</h4>
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600">{section.format}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">{section.instruction}</p>
+                  {section.itemFormat && <p className="mt-1 font-mono text-[11px] text-gray-500">{section.itemFormat}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
 
           {formError && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

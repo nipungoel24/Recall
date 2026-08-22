@@ -10,6 +10,7 @@ import {
   isValidTemplateId,
   parseTemplateDefinition,
   slugifyTemplateId,
+  templateStructurePreview,
   validateTemplateDefinition,
 } from "../../src/lib/template-schema";
 
@@ -264,5 +265,30 @@ describe("template source helpers", () => {
     for (const id of BUILTIN_TEMPLATE_IDS) {
       expect(isBuiltinTemplate({ id, source: "unknown" })).toBe(true);
     }
+  });
+});
+
+describe("templateStructurePreview", () => {
+  test("derives headings and instructions locally from the schema", () => {
+    const preview = templateStructurePreview({
+      name: "Client Meeting",
+      description: "A customer conversation",
+      sections: [{ title: "Decisions", instruction: "List decisions", format: "list" }],
+    });
+    expect(preview).toEqual({
+      name: "Client Meeting",
+      description: "A customer conversation",
+      sections: [{ title: "Decisions", instruction: "List decisions", format: "list" }],
+    });
+  });
+
+  test("uses draft-safe placeholders without persistence or provider data", () => {
+    const preview = templateStructurePreview(createEmptyDefinition());
+    expect(preview.name).toBe("Untitled template");
+    expect(preview.sections[0]).toEqual({
+      title: "Section 1",
+      instruction: "No instruction yet.",
+      format: "paragraph",
+    });
   });
 });
