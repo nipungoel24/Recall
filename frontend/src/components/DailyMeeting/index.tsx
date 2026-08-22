@@ -145,6 +145,7 @@ export function DailyMeetingView({
       {isSingleDay && !isLoading && error === null && (
         <div className="mb-5">
           <DailyBriefSection
+            dateKey={dateKey ?? dateKeyOf(new Date())}
             brief={brief}
             meetingsCount={totals.meetingCount}
             onGenerate={generate}

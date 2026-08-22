@@ -1,9 +1,11 @@
 'use client';
 
-import { AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { AlertCircle, Clipboard, Download, Loader2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import type { DailyBriefState } from '@/types/daily';
 import { Button } from '@/components/ui/button';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { buildDailyBriefMarkdownExport, dailyBriefExportFilename } from '@/lib/daily/export';
 
 interface DailyBriefSectionProps {
   brief: DailyBriefState;
@@ -11,6 +13,7 @@ interface DailyBriefSectionProps {
   onGenerate: () => void;
   onCancel: () => void;
   onOpenMeeting: (meetingId: string) => void;
+  dateKey: string;
 }
 
 /**
@@ -23,21 +26,51 @@ export function DailyBriefSection({
   onGenerate,
   onCancel,
   onOpenMeeting,
+  dateKey,
 }: DailyBriefSectionProps) {
   const isBusy = brief.status === 'generating' || brief.status === 'loading';
+  const exportMarkdown = brief.markdown
+    ? buildDailyBriefMarkdownExport(dateKey, brief.markdown, brief.sources)
+    : null;
+
+  const copyBrief = async () => {
+    if (!exportMarkdown) return;
+    try {
+      await navigator.clipboard.writeText(exportMarkdown);
+      toast.success('Daily Brief copied to clipboard');
+    } catch {
+      toast.error('Could not copy Daily Brief');
+    }
+  };
+
+  const downloadBrief = () => {
+    if (!exportMarkdown) return;
+    const url = URL.createObjectURL(new Blob([exportMarkdown], { type: 'text/markdown;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = dailyBriefExportFilename(dateKey);
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <section className="border border-gray-200 rounded-lg bg-white">
       {brief.status === 'completed' && brief.markdown ? (
         <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
               <Sparkles className="h-4 w-4 text-purple-500" />
               Daily Brief
             </h2>
-            <Button variant="ghost" size="sm" onClick={onGenerate}>
-              Regenerate
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={() => void copyBrief()} title="Copy Daily Brief to clipboard">
+                <Clipboard className="h-3.5 w-3.5" /><span className="hidden sm:inline">Copy</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={downloadBrief} title="Export Daily Brief as Markdown">
+                <Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">Export</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onGenerate}>Regenerate</Button>
+            </div>
           </div>
           <MarkdownRenderer markdown={brief.markdown} />
           {brief.sources.length > 0 && (
