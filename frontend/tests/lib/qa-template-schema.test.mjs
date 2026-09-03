@@ -220,7 +220,7 @@ test('slugify output always passes isValidTemplateId', () => {
 // isValidTemplateId vs the backend contract
 // ---------------------------------------------------------------------------
 
-// Backend contract (MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md 4.1):
+// Backend contract (RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md 4.1):
 //   ^[a-z0-9][a-z0-9_-]{0,63}$
 // This test PINS the current frontend behavior and the known deltas so the
 // integration owner must consciously resolve them.

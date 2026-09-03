@@ -9,6 +9,6 @@ describe('Daily Brief export', () => {
 
   test('handles missing sources and creates a stable filename', () => {
     expect(buildDailyBriefMarkdownExport('2026-08-22', 'Body', [])).toBe('# Daily Brief — 2026-08-22\n\nBody\n');
-    expect(dailyBriefExportFilename('2026-08-22')).toBe('meetily-daily-brief-2026-08-22.md');
+    expect(dailyBriefExportFilename('2026-08-22')).toBe('recall-daily-brief-2026-08-22.md');
   });
 });

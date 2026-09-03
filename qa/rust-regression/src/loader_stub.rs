@@ -9,7 +9,8 @@
 //!   resolution order the real loader uses (custom dir -> bundled dir -> embedded).
 //! - `get_template`: parses + validates JSON from the same chain.
 //!
-//! The custom templates dir is overridable via `MEETILY_QA_TEMPLATES_DIR` so
+//! The custom templates dir is overridable via `RECALL_QA_TEMPLATES_DIR`
+//! (`MEETILY_QA_TEMPLATES_DIR` is honored as a legacy fallback) so
 //! tests never touch the real user data directory.
 
 use super::types::Template;
@@ -24,10 +25,23 @@ fn bundled_dir() -> PathBuf {
 }
 
 pub fn custom_templates_dir() -> Option<PathBuf> {
-    if let Ok(override_dir) = std::env::var("MEETILY_QA_TEMPLATES_DIR") {
+    if let Ok(override_dir) =
+        std::env::var("RECALL_QA_TEMPLATES_DIR").or_else(|_| std::env::var("MEETILY_QA_TEMPLATES_DIR"))
+    {
         return Some(PathBuf::from(override_dir));
     }
-    dirs::data_dir().map(|d| d.join("Meetily").join("templates"))
+    // Mirror the app rule (see app `brand_paths`): prefer the Recall folder,
+    // fall back to a pre-rename Meetily folder when that is what exists.
+    let base = dirs::data_dir()?;
+    let current = base.join("Recall").join("templates");
+    if current.exists() {
+        return Some(current);
+    }
+    let legacy = base.join("Meetily").join("templates");
+    if legacy.exists() {
+        return Some(legacy);
+    }
+    Some(current)
 }
 
 fn bundled_template_ids() -> Vec<String> {

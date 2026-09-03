@@ -1,6 +1,6 @@
 //! QA regression harness (not part of the app).
 //!
-//! The main `meetily` crate cannot compile on this machine today: the pinned
+//! The main `recall` crate cannot compile on this machine today: the pinned
 //! whisper-rs-sys 0.11.1 fails in BOTH binding paths (fresh bindgen produces an
 //! opaque `whisper_full_params`; the bundled bindings.rs has stale layout sizes).
 //! That is an upstream/toolchain issue independent of the intelligence features.

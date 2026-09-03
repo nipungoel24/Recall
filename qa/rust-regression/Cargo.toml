@@ -1,5 +1,5 @@
 [package]
-name = "meetily-qa-regression"
+name = "recall-qa-regression"
 version = "0.1.0"
 edition = "2021"
 description = "QA regression harness: path-includes live agent modules from frontend/src-tauri/src so their pure logic and embedded tests run without compiling the (env-blocked) main crate. Owned by QA; not part of the main cargo workspace."

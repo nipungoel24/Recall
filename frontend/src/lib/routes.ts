@@ -1,7 +1,7 @@
 /**
  * Canonical application routes.
  *
- * Meetily ships as a static export (Next.js `output: "export"`) inside the
+ * Recall ships as a static export (Next.js `output: "export"`) inside the
  * Tauri shell. Dynamic SEGMENTS (`/context/[id]`) can only be pre-rendered
  * for IDs known at build time, so every runtime-created entity (contexts,
  * meetings, notes) is addressed with a QUERY parameter on a static route:

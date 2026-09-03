@@ -13,21 +13,21 @@
 //!   chronological ordering, duration derivation (meeting_range).
 
 use chrono::{TimeZone, Utc};
-use meetily_qa_regression::context::dedup::{is_duplicate, is_resolution_match, normalize_text};
-use meetily_qa_regression::context::model::{
+use recall_qa_regression::context::dedup::{is_duplicate, is_resolution_match, normalize_text};
+use recall_qa_regression::context::model::{
     estimate_tokens, truncate_text_to_tokens, ContextMemoryItemView, MemoryBudget, MemoryItem,
     MemoryKind, DEFAULT_CONTEXT_BUDGET_TOKENS, DEFAULT_MAX_MEMORY_ITEMS, HARD_MAX_MEMORY_ITEMS,
     STATUS_DONE, STATUS_OPEN, STATUS_RESOLVED,
 };
-use meetily_qa_regression::context::prompts::{
+use recall_qa_regression::context::prompts::{
     build_context_memory_block, build_effective_prompt, build_memory_extraction_system_prompt,
     build_memory_extraction_user_prompt, sanitize_data_block,
 };
-use meetily_qa_regression::context::render::{
+use recall_qa_regression::context::render::{
     build_folded_digest, cap_content, plan_compaction, render_inner_content,
     render_open_items_reference, render_view_line,
 };
-use meetily_qa_regression::summary_templates::store::{
+use recall_qa_regression::summary_templates::store::{
     create_template, delete_template, duplicate_template, list_custom_template_ids,
     sanitize_template_id, template_file_path, update_template, TemplateError,
 };
@@ -563,7 +563,7 @@ fn utc(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> chrono::DateTime<Utc
 async fn calendar_zero_meetings_in_range_returns_empty() {
     let pool = range_pool().await;
     insert_meeting(&pool, "m", "Outside", "2026-07-01T10:00:00Z").await;
-    let items = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let items = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool, utc(2026, 8, 15, 0, 0, 0), utc(2026, 8, 16, 0, 0, 0),
     ).await.unwrap();
     assert!(items.is_empty());
@@ -581,7 +581,7 @@ async fn calendar_many_meetings_are_chronological() {
         insert_meeting(&pool, &format!("m{i}"), &format!("M{i}"), &ts).await;
     }
     // Insert out of order to prove ORDER BY, not insertion order.
-    let items = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let items = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool, utc(2026, 8, 15, 0, 0, 0), utc(2026, 8, 16, 0, 0, 0),
     ).await.unwrap();
     assert_eq!(items.len(), 100);
@@ -596,7 +596,7 @@ async fn calendar_midnight_nanosecond_boundary_is_exclusive_at_end() {
     let pool = range_pool().await;
     insert_meeting(&pool, "a", "Inside", "2026-08-15T23:59:59.999999999Z").await;
     insert_meeting(&pool, "b", "Excluded", "2026-08-16T00:00:00Z").await;
-    let items = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let items = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool, utc(2026, 8, 15, 0, 0, 0), utc(2026, 8, 16, 0, 0, 0),
     ).await.unwrap();
     let ids: Vec<_> = items.iter().map(|m| m.id.as_str()).collect();
@@ -606,7 +606,7 @@ async fn calendar_midnight_nanosecond_boundary_is_exclusive_at_end() {
 #[tokio::test]
 async fn calendar_inverted_and_equal_bounds_rejected() {
     let pool = range_pool().await;
-    let err = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let err = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool,
         utc(2026, 8, 16, 0, 0, 0),
         utc(2026, 8, 15, 0, 0, 0),
@@ -614,7 +614,7 @@ async fn calendar_inverted_and_equal_bounds_rejected() {
     .await
     .unwrap_err();
     assert!(err.to_string().contains("strictly before"));
-    let err = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let err = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool,
         utc(2026, 8, 15, 0, 0, 0),
         utc(2026, 8, 15, 0, 0, 0),
@@ -630,7 +630,7 @@ async fn calendar_mixed_stored_formats_all_match() {
     insert_meeting(&pool, "rfc-z", "A", "2026-08-15T09:00:00Z").await;
     insert_meeting(&pool, "rfc-offset", "B", "2026-08-15T10:00:00.000000000+00:00").await;
     insert_meeting(&pool, "naive", "C", "2026-08-15 11:00:00.123456").await;
-    let items = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let items = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool, utc(2026, 8, 15, 0, 0, 0), utc(2026, 8, 16, 0, 0, 0),
     ).await.unwrap();
     assert_eq!(items.len(), 3, "datetime() normalisation includes naive format");
@@ -655,7 +655,7 @@ async fn calendar_duration_derivation_rules() {
             .execute(&pool).await.unwrap();
     }
 
-    let items = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
+    let items = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_meetings_by_range(
         &pool, utc(2026, 8, 15, 0, 0, 0), utc(2026, 8, 16, 0, 0, 0),
     ).await.unwrap();
     let by_id = |id: &str| items.iter().find(|m| m.id == id).unwrap();
@@ -674,7 +674,7 @@ async fn calendar_dates_with_meetings_distinct_ascending_across_formats() {
     insert_meeting(&pool, "m4", "D", "2026-08-16T00:30:00Z").await;
     insert_meeting(&pool, "m5", "E", "2026-08-13T23:59:59Z").await;
 
-    let dates = meetily_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_dates_with_meetings(
+    let dates = recall_qa_regression::database::repositories::meeting_range::MeetingRangeRepository::get_dates_with_meetings(
         &pool, utc(2026, 8, 13, 0, 0, 0), utc(2026, 8, 16, 0, 0, 0),
     ).await.unwrap();
     assert_eq!(dates, vec!["2026-08-13", "2026-08-14"]);

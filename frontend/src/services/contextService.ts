@@ -39,7 +39,7 @@ export interface AddContextMemoryItemArgs {
 
 /**
  * Thin invoke() wrappers for the context backend commands
- * (contract §7.2 — MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md).
+ * (contract §7.2 — RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md).
  */
 export class ContextService {
   async listContextThreads(): Promise<ContextThreadSummary[]> {

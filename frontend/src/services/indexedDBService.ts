@@ -31,9 +31,16 @@ export interface StoredTranscript {
 
 class IndexedDBService {
   private db: IDBDatabase | null = null;
-  private readonly DB_NAME = 'MeetilyRecoveryDB';
+  private readonly DB_NAME = 'RecallRecoveryDB';
+  /**
+   * Pre-rename recovery database. On first init after the Meetily → Recall
+   * rebrand, any unsaved crash-recovery records are copied here once
+   * (best-effort, never throws) so in-progress meeting recovery keeps working.
+   */
+  private readonly LEGACY_DB_NAME = 'MeetilyRecoveryDB';
   private readonly DB_VERSION = 1;
   private initPromise: Promise<void> | null = null;
+  private migrationAttempted = false;
 
   /**
    * Initialize database connection
@@ -60,7 +67,9 @@ class IndexedDBService {
 
         request.onsuccess = () => {
           this.db = request.result;
-          resolve();
+          this.migrateLegacyRecoveryData()
+            .catch((e) => console.warn('Legacy recovery migration skipped:', e))
+            .finally(() => resolve());
         };
 
         request.onupgradeneeded = (event) => {
@@ -90,6 +99,83 @@ class IndexedDBService {
     });
 
     return this.initPromise;
+  }
+
+  /**
+   * One-time, best-effort migration from the pre-rename recovery database.
+   * Copies every record from the legacy `MeetilyRecoveryDB` stores into the
+   * current `RecallRecoveryDB` (using `put`, so re-runs are idempotent) and
+   * then clears the legacy stores. Never throws — recovery data is transient
+   * crash-scratch, so a failed migration must not block the app.
+   */
+  private async migrateLegacyRecoveryData(): Promise<void> {
+    if (this.migrationAttempted || !this.db) return;
+    this.migrationAttempted = true;
+
+    const legacyDb = await new Promise<IDBDatabase | null>((resolve) => {
+      try {
+        const request = indexedDB.open(this.LEGACY_DB_NAME);
+        request.onsuccess = () => {
+          const db = request.result;
+          if (db.objectStoreNames.length === 0) {
+            db.close();
+            try {
+              indexedDB.deleteDatabase(this.LEGACY_DB_NAME);
+            } catch {
+              /* ignore */
+            }
+            resolve(null);
+            return;
+          }
+          resolve(db);
+        };
+        request.onerror = () => resolve(null);
+        request.onblocked = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+
+    if (!legacyDb) return;
+
+    try {
+      for (const storeName of ['meetings', 'transcripts']) {
+        if (
+          !legacyDb.objectStoreNames.contains(storeName) ||
+          !this.db.objectStoreNames.contains(storeName)
+        ) {
+          continue;
+        }
+        const records = await new Promise<any[]>((resolve) => {
+          try {
+            const tx = legacyDb.transaction([storeName], 'readonly');
+            const req = tx.objectStore(storeName).getAll();
+            req.onsuccess = () => resolve(req.result ?? []);
+            req.onerror = () => resolve([]);
+          } catch {
+            resolve([]);
+          }
+        });
+        for (const record of records) {
+          await new Promise<void>((resolve) => {
+            try {
+              const tx = this.db!.transaction([storeName], 'readwrite');
+              const req = tx.objectStore(storeName).put(record);
+              req.onsuccess = () => resolve();
+              req.onerror = () => resolve();
+            } catch {
+              resolve();
+            }
+          });
+        }
+      }
+    } finally {
+      try {
+        legacyDb.close();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   // Meeting operations

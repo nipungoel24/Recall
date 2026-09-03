@@ -175,6 +175,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const performAutoDetection = async () => {
     // Check Homebrew (macOS only)
+    // NOTE: legacy pre-rename backend location — kept intentionally so Recall
+    // still auto-detects databases from older (Meetily) installs.
     if (typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('mac')) {
       const homebrewDbPath = '/usr/local/var/meetily/meeting_minutes.db';
       try {

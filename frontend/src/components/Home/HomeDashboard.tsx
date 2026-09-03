@@ -160,7 +160,7 @@ export function HomeDashboard() {
                 {hasMeetings ? 'Ready for your next meeting?' : 'Start your first meeting'}
               </h1>
               <p className="mt-2 max-w-md text-sm text-gray-500">
-                Capture a meeting and Meetily will transcribe, summarize, and remember the
+                Capture a meeting and Recall will transcribe, summarize, and remember the
                 important context.
               </p>
               {!hasMeetings && (

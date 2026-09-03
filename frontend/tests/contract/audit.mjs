@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Meetily Intelligence — contract conformance audit.
+ * Recall Intelligence — contract conformance audit.
  *
- * Adversarial QA gate over docs/MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md
+ * Adversarial QA gate over docs/RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md
  * (binding). Checks the parts of the contract that are cheap to verify from
  * source and that have historically drifted during parallel implementation:
  * migration numbering, DB schema, Tauri command names/registration, frontend

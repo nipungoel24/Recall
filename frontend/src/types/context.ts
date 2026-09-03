@@ -1,4 +1,4 @@
-// Context (Project) feature types — contract §7.1 (MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md).
+// Context (Project) feature types — contract §7.1 (RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md).
 // Over IPC all payloads are camelCase; the normalizers below additionally tolerate
 // snake_case keys so the UI keeps working regardless of backend serialization drift.
 

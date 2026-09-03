@@ -1,7 +1,7 @@
 import type { DailyBriefSource } from '@/types/daily';
 
 export function dailyBriefExportFilename(dateKey: string): string {
-  return `meetily-daily-brief-${dateKey}.md`;
+  return `recall-daily-brief-${dateKey}.md`;
 }
 
 /** Builds a portable, user-facing representation of an already generated brief. */
