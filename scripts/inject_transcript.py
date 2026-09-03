@@ -2,7 +2,7 @@
 """
 Meeting Transcript Database Injector
 
-Injects CSV-based transcript data into the Meetily SQLite database,
+Injects CSV-based transcript data into the Recall SQLite database,
 creating meeting entries identical to those from normal recordings.
 
 Usage:
@@ -27,21 +27,43 @@ from pathlib import Path
 
 
 def get_default_db_path() -> Path:
-    """Get the default database path based on the platform."""
+    """Get the default database path based on the platform.
+
+    Probes, in order: the live Tauri app-data location (identifier
+    ``com.meetily.ai`` is intentionally preserved across the Meetily →
+    Recall rebrand), then fresh-install ``Recall`` folders, then legacy
+    ``Meetily`` folders. Returns the first candidate whose database file
+    exists, falling back to the live location.
+    """
     system = platform.system()
 
     if system == "Darwin":  # macOS
-        base_path = Path.home() / "Library" / "Application Support" / "Meetily"
+        app_support = Path.home() / "Library" / "Application Support"
+        data_dir = Path.home() / "Library" / "Application Support"
+        config_dir = Path.home() / ".config"
     elif system == "Windows":
         appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            base_path = Path(appdata) / "Meetily"
-        else:
-            base_path = Path.home() / "AppData" / "Roaming" / "Meetily"
+        app_support = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+        data_dir = app_support
+        config_dir = app_support
     else:  # Linux and others
-        base_path = Path.home() / ".config" / "Meetily"
+        app_support = Path.home() / ".config"
+        data_dir = Path.home() / ".local" / "share"
+        config_dir = Path.home() / ".config"
 
-    return base_path / "meeting_minutes.sqlite"
+    _ = config_dir  # reserved for future config-dir probing
+    candidates = [
+        app_support / "com.meetily.ai" / "meeting_minutes.sqlite",
+        data_dir / "Recall" / "meeting_minutes.sqlite",
+        data_dir / "Meetily" / "meeting_minutes.sqlite",
+        app_support / "Recall" / "meeting_minutes.sqlite",
+        app_support / "Meetily" / "meeting_minutes.sqlite",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return app_support / "com.meetily.ai" / "meeting_minutes.sqlite"
 
 
 def estimate_duration(text: str) -> float:
@@ -227,7 +249,7 @@ def verify_injection(db_path: str, meeting_id: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Inject CSV transcript data into Meetily database",
+        description="Inject CSV transcript data into Recall database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 CSV Format (minimal - just 'text' column required):
@@ -281,7 +303,7 @@ Example usage:
 
     if not db_path.exists():
         print(f"Error: Database not found at {db_path}", file=sys.stderr)
-        print("Make sure Meetily has been run at least once to create the database.", file=sys.stderr)
+        print("Make sure Recall has been run at least once to create the database.", file=sys.stderr)
         sys.exit(1)
 
     # Resolve CSV path
@@ -344,7 +366,7 @@ Example usage:
     except Exception as e:
         print(f"Warning: Verification failed: {e}", file=sys.stderr)
 
-    print("\nThe meeting should now appear in the Meetily sidebar.")
+    print("\nThe meeting should now appear in the Recall sidebar.")
 
 
 if __name__ == "__main__":
