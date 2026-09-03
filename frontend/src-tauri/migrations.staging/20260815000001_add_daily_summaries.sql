@@ -1,5 +1,5 @@
 -- Daily Brief storage — binding schema, contract §5.1
--- (docs/MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md)
+-- (docs/RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md)
 --
 -- Derived data only: a Daily Brief is synthesized from source meetings but never
 -- duplicates or modifies them. `date` is the USER-LOCAL "YYYY-MM-DD" aggregation

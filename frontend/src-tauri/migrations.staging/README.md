@@ -1,6 +1,6 @@
 # Migration Staging — Database & Rust Persistence Engineer
 
-Per the binding contract (`docs/MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md` §11 and
+Per the binding contract (`docs/RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md` §11 and
 §12), migration files are owned by the Integration Owner and feature agents "MUST NOT add
 additional migration files in their branches." The Database & Rust Persistence Engineer
 therefore stages the exact migration content here instead of editing the live

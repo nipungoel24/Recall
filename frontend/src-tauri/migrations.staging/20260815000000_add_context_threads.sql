@@ -1,5 +1,5 @@
 -- Context Threads — binding schema, contract §6
--- (docs/MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md)
+-- (docs/RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md)
 --
 -- Replaces the in-flight 20260815000000_add_context_threads.sql. The opaque
 -- `context_memory` JSON table is retired: compact memory lives on
