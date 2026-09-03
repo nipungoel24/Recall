@@ -38,9 +38,11 @@ pub fn set_custom_templates_dir_override(path: Option<PathBuf>) {
 /// Get the user's custom templates directory path
 ///
 /// Returns the platform-specific application data directory for custom templates:
-/// - macOS: ~/Library/Application Support/Meetily/templates/
-/// - Windows: %APPDATA%\Meetily\templates\
-/// - Linux: ~/.config/Meetily/templates/
+/// - macOS: ~/Library/Application Support/Recall/templates/
+/// - Windows: %APPDATA%\Recall\templates\
+/// - Linux: ~/.config/Recall/templates/
+/// (Pre-rename `Meetily` locations are used when they already exist, so
+/// custom templates survive the Meetily → Recall upgrade.)
 pub(crate) fn custom_templates_dir() -> Option<PathBuf> {
     if let Ok(override_dir) = CUSTOM_TEMPLATES_DIR_OVERRIDE.read() {
         if let Some(path) = override_dir.as_ref() {
@@ -48,10 +50,7 @@ pub(crate) fn custom_templates_dir() -> Option<PathBuf> {
         }
     }
 
-    let mut path = dirs::data_dir()?;
-    path.push("Meetily");
-    path.push("templates");
-    Some(path)
+    crate::brand_paths::branded_data_subdir("templates")
 }
 
 /// Load a template from the bundled resources directory

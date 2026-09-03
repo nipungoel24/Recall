@@ -40,39 +40,43 @@ impl Default for RecordingPreferences {
 }
 
 /// Get the default recordings folder based on platform
+///
+/// Fresh installs use `recall-recordings`. Pre-rename installs that already
+/// have a `meetily-recordings` folder keep using it (see
+/// `crate::brand_paths`) so existing recordings stay discoverable.
 pub fn get_default_recordings_folder() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
-        // Windows: %USERPROFILE%\Music\meetily-recordings
+        // Windows: %USERPROFILE%\Music\recall-recordings
         if let Some(music_dir) = dirs::audio_dir() {
-            music_dir.join("meetily-recordings")
+            crate::brand_paths::default_recordings_folder_under(music_dir)
         } else {
             // Fallback to Documents if Music folder is not available
-            dirs::document_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+            crate::brand_paths::default_recordings_folder_under(
+                dirs::document_dir().unwrap_or_else(|| PathBuf::from(".")),
+            )
         }
     }
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: ~/Movies/meetily-recordings
+        // macOS: ~/Movies/recall-recordings
         if let Some(movies_dir) = dirs::video_dir() {
-            movies_dir.join("meetily-recordings")
+            crate::brand_paths::default_recordings_folder_under(movies_dir)
         } else {
             // Fallback to Documents if Movies folder is not available
-            dirs::document_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+            crate::brand_paths::default_recordings_folder_under(
+                dirs::document_dir().unwrap_or_else(|| PathBuf::from(".")),
+            )
         }
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        // Linux/Others: ~/Documents/meetily-recordings
-        dirs::document_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("meetily-recordings")
+        // Linux/Others: ~/Documents/recall-recordings
+        crate::brand_paths::default_recordings_folder_under(
+            dirs::document_dir().unwrap_or_else(|| PathBuf::from(".")),
+        )
     }
 }
 

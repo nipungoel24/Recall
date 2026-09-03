@@ -143,13 +143,12 @@ impl ModelManager {
                 // Development mode
                 current_dir.join("models").join("summary")
             } else {
-                // Production mode fallback (caller should provide path)
+                // Production mode fallback (caller should provide path).
+                // Fresh installs: Recall; upgrades reuse an existing Meetily
+                // folder — see crate::brand_paths.
                 log::warn!("ModelManager: No models directory provided, using fallback path");
-                dirs::data_dir()
-                    .or_else(|| dirs::home_dir())
+                crate::brand_paths::branded_data_subdir("models")
                     .ok_or_else(|| anyhow!("Could not find system data directory"))?
-                    .join("Meetily")
-                    .join("models")
                     .join("summary")
             }
         };

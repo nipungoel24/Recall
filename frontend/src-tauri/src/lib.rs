@@ -39,6 +39,7 @@ pub mod analytics;
 pub mod anthropic;
 pub mod api;
 pub mod audio;
+pub mod brand_paths;
 pub mod config;
 pub mod console_utils;
 pub mod context;

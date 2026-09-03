@@ -125,13 +125,12 @@ impl WhisperEngine {
                     current_dir.join("models")
                 }
             } else {
-                // Production mode fallback (shouldn't reach here, caller should provide path)
+                // Production mode fallback (shouldn't reach here, caller should provide path).
+                // Fresh installs use the Recall folder; pre-rename Meetily model
+                // folders are reused when present (see crate::brand_paths).
                 log::warn!("WhisperEngine: No models directory provided, using fallback path");
-                dirs::data_dir()
-                    .or_else(|| dirs::home_dir())
+                crate::brand_paths::branded_data_subdir("models")
                     .ok_or_else(|| anyhow!("Could not find system data directory"))?
-                    .join("Meetily")
-                    .join("models")
             }
         };
 

@@ -1,10 +1,10 @@
 [package]
-name = "meetily"
+name = "recall"
 version = "0.4.0"
-description = "A Tauri App for meeting minutes"
+description = "Recall - a privacy-first desktop meeting intelligence app (record, transcribe, summarize, remember)"
 authors = ["Sujith S"]
 license = "MIT"
-repository = "https://github.com/Zackriya-Solutions/meeting-minutes"
+repository = "https://github.com/nipungoel24/Recall"
 edition = "2021"
 rust-version = "1.77"
 

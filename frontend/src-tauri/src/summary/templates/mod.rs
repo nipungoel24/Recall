@@ -31,9 +31,12 @@
 //! # Custom Templates
 //!
 //! Users can add custom templates to:
-//! - macOS: `~/Library/Application Support/Meetily/templates/`
-//! - Windows: `%APPDATA%\Meetily\templates\`
-//! - Linux: `~/.config/Meetily/templates/`
+//! - macOS: `~/Library/Application Support/Recall/templates/`
+//! - Windows: `%APPDATA%\Recall\templates\`
+//! - Linux: `~/.config/Recall/templates/`
+//!
+//! (Upgrades with templates in the pre-rename `Meetily` locations keep using
+//! those locations; see `crate::brand_paths`.)
 //!
 //! Custom templates must follow the JSON schema defined in `types::Template`.
 

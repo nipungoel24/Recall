@@ -106,13 +106,22 @@ impl SidecarManager {
 
     /// Resolve the path to llama-helper binary
     fn resolve_helper_binary() -> Result<PathBuf> {
-        // 1. Check environment variable (dev mode or manual override)
-        if let Ok(env_path) = std::env::var("MEETILY_LLAMA_HELPER") {
+        // 1. Check environment variable (dev mode or manual override).
+        // RECALL_LLAMA_HELPER is current; MEETILY_LLAMA_HELPER is honored as
+        // a legacy fallback so existing setups keep working after the rebrand.
+        if let Some(env_path) =
+            crate::brand_paths::resolve_env("RECALL_LLAMA_HELPER", "MEETILY_LLAMA_HELPER")
+        {
             if !env_path.is_empty() {
                 let path = PathBuf::from(env_path);
                 if path.exists() {
                     log::info!(
-                        "Using llama-helper from MEETILY_LLAMA_HELPER: {}",
+                        "Using llama-helper from {}: {}",
+                        if std::env::var("RECALL_LLAMA_HELPER").is_ok() {
+                            "RECALL_LLAMA_HELPER"
+                        } else {
+                            "MEETILY_LLAMA_HELPER"
+                        },
                         path.display()
                     );
                     return Ok(path);
@@ -314,7 +323,7 @@ impl SidecarManager {
         }
 
         Err(anyhow!(
-            "llama-helper binary not found. Build with 'cd llama-helper && cargo build --release' or set MEETILY_LLAMA_HELPER env var."
+            "llama-helper binary not found. Build with 'cd llama-helper && cargo build --release' or set RECALL_LLAMA_HELPER env var (MEETILY_LLAMA_HELPER also works)."
         ))
     }
 

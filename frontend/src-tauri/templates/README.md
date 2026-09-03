@@ -47,9 +47,12 @@ Each template JSON file follows this schema:
 
 Users can add custom templates to the application data directory:
 
-- **macOS**: `~/Library/Application Support/Meetily/templates/`
-- **Windows**: `%APPDATA%\Meetily\templates\`
-- **Linux**: `~/.config/Meetily/templates/`
+- **macOS**: `~/Library/Application Support/Recall/templates/`
+- **Windows**: `%APPDATA%\Recall\templates\`
+- **Linux**: `~/.config/Recall/templates/`
+
+(Upgrades with custom templates in the pre-rename `Meetily` locations keep
+using those locations — see `brand_paths` in the Rust sources.)
 
 Custom templates override built-in templates with the same filename.
 

@@ -1,7 +1,7 @@
 //! Data structures for continuous meeting context memory.
 //!
 //! Mirrors the binding schema from
-//! `docs/MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md` §6/§7:
+//! `docs/RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md` §6/§7:
 //! - `context_memory_items`: relational per-context working set with kinds
 //!   `fact | decision | action | question | note`, per-item provenance
 //!   (`source_meeting_id`), free-form `status`, and timestamps.
