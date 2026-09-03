@@ -1,4 +1,4 @@
-# Meetily — Migration Upgrade Safety Guide
+# Recall — Migration Upgrade Safety Guide
 
 **Status:** LIVE release procedure
 **Audience:** release engineers, support, anyone shipping DB-affecting changes.
@@ -7,7 +7,7 @@
 
 ## 1. The problem
 
-Meetily applies SQLite schema changes through `sqlx` migrations
+Recall applies SQLite schema changes through `sqlx` migrations
 (`frontend/src-tauri/migrations/*.sql`). sqlx stores the SHA-384 of every
 applied migration file in the user's database (`_sqlx_migrations.checksum`).
 
@@ -73,7 +73,9 @@ silently or loudly.
 
 1. **Back up first** (mandatory):
    copy `%APPDATA%\com.meetily.ai\meeting_minutes.sqlite` to
-   `meeting_minutes.sqlite.bak-<date>`.
+   `meeting_minutes.sqlite.bak-<date>`. (The Tauri identifier — and therefore
+   this path — is intentionally preserved across the Meetily → Recall
+   rebrand.)
 2. **List applied migrations and compare checksums** against the current
    files (SHA-384 of each `.sql` file vs `_sqlx_migrations.checksum` blob).
 3. **Verify structural equivalence** for every mismatched migration:

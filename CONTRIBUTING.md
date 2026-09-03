@@ -1,6 +1,6 @@
 # Contributing to Meeting Minutes Updates
 
-Thank you for your interest in contributing to Meetily! This document provides guidelines and instructions for contributing to this project.
+Thank you for your interest in contributing to Recall! This document provides guidelines and instructions for contributing to this project.
 
 ## Development Workflow
 
@@ -15,9 +15,9 @@ Thank you for your interest in contributing to Meetily! This document provides g
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/meeting-minutes.git
+   git clone https://github.com/YOUR_USERNAME/Recall.git
    ```
-3. Add the original repository as upstream:
+3. Add the repositories as remotes:
    ```bash
    git remote add upstream https://github.com/Zackriya-Solutions/meeting-minutes.git
    ```

@@ -1,8 +1,8 @@
-# Meetily Intelligence — Parallel Implementation Contract
+# Recall Intelligence — Parallel Implementation Contract
 
 **Status:** BINDING
 **Version:** 1.0
-**Applies to:** Meetily v0.4.x Tauri desktop application
+**Applies to:** Recall v0.4.x Tauri desktop application (renamed from Meetily; Tauri identifier `com.meetily.ai` preserved for data compatibility)
 **Audience:** feature agents working in parallel branches; the Integration Owner cherry-picks their commits.
 
 This document is the interface contract between parallel feature agents. Every agent MUST
@@ -17,7 +17,7 @@ These were verified by reading the code on 2026-08-15. Do not re-derive them.
 
 | Fact | Where | Detail |
 |---|---|---|
-| Cargo workspace | root `Cargo.toml` | members: `frontend/src-tauri` (package `meetily`, lib `app_lib`), `llama-helper` |
+| Cargo workspace | root `Cargo.toml` | members: `frontend/src-tauri` (package `recall`, lib `app_lib`), `llama-helper` |
 | Tauri command registration | `frontend/src-tauri/src/lib.rs` | ONE central `tauri::generate_handler![...]` list. New commands are **not** live until registered there. |
 | Tauri command convention | whole repo | `#[tauri::command] pub async fn api_xxx<R: Runtime>(_app: AppHandle<R>, state: tauri::State<'_, AppState>, ...) -> Result<T, String>`. JS calls `invoke('api_xxx', { camelCaseArgs })`; Tauri v2 auto-maps camelCase→snake_case args. |
 | DB access | `src-tauri/src/database/manager.rs` | `DatabaseManager` wraps `SqlitePool`; `AppState { db_manager }` managed in `lib.rs`; commands take `tauri::State<'_, AppState>`. |
@@ -34,7 +34,7 @@ These were verified by reading the code on 2026-08-15. Do not re-derive them.
 | Summary result storage | `summary/service.rs` | `summary_processes.result` = JSON `{ "markdown": "...", "english_cache": { markdown, source, output_language } }`. `SummaryCacheSource` fingerprints transcript, custom prompt, template id, template fingerprint, model, endpoint, etc. |
 | SummaryService entry | `summary/service.rs::process_transcript_background(app, pool, meeting_id, text, model_provider, model_name, custom_prompt, template_id, summary_language)` | Loads template via `templates::get_template`, resolves provider via `LLMProvider::from_str`, resolves API keys via `SettingsRepository`, calls `processor::generate_meeting_summary`. |
 | Provider config | `database/repositories/setting.rs` | `get_model_config`, `get_api_key`, `get_custom_openai_config`; providers: ollama, openai, anthropic, groq, openrouter, builtin-ai, custom-openai. |
-| Templates | `summary/templates/*` | File-based JSON, NOT DB. Sources (priority in `loader::get_template`): user custom dir → bundled resource dir → embedded (`defaults.rs`: only `daily_standup`, `standard_meeting`). Custom dir = `dirs::data_dir()/Meetily/templates` (`%APPDATA%\Meetily\templates` on Windows). Schema: `Template { name, description, sections: [{ title, instruction, format: "paragraph"|"list"|"string", item_format?, example_item_format? }] }`. `Template::validate()` enforces rules. |
+| Templates | `summary/templates/*` | File-based JSON, NOT DB. Sources (priority in `loader::get_template`): user custom dir → bundled resource dir → embedded (`defaults.rs`: only `daily_standup`, `standard_meeting`). Custom dir = `Recall/templates` under `dirs::data_dir()` (`%APPDATA%\Recall\templates` on Windows for fresh installs; pre-rename `Meetily` folders are reused when present — see `brand_paths`). Schema: `Template { name, description, sections: [{ title, instruction, format: "paragraph"|"list"|"string", item_format?, example_item_format? }] }`. `Template::validate()` enforces rules. |
 | Existing template commands | `summary/template_commands.rs` | `api_list_templates → Vec<TemplateInfo { id, name, description }>`, `api_get_template_details → TemplateDetails { id, name, description, sections: Vec<String> }`, `api_validate_template(json) → Result<String,String>`. NO create/update/delete/duplicate. |
 | Bundled templates | `src-tauri/templates/*.json` | `daily_standup, project_sync, psychatric_session, retrospective, sales_marketing_client_call, standard_meeting` (copied to app resources at build; embedded only for the 2). |
 | Frontend services | `frontend/src/services/*.ts` | Thin wrappers over `invoke()` (configService, recordingService, transcriptService, ...). |
@@ -161,7 +161,7 @@ one wide range (with local padding, §10) and groups client-side.
 
 ## 4. B — Custom Templates
 
-Templates remain file-based. Custom templates live ONLY in `dirs::data_dir()/Meetily/templates/<id>.json`. Built-in (embedded) and bundled (resource-dir) templates are read-only.
+Templates remain file-based. Custom templates live ONLY in the branded data templates dir (`Recall/templates` under `dirs::data_dir()` for fresh installs; a pre-rename `Meetily/templates` folder is reused when present — see `brand_paths`) as `<id>.json`. Built-in (embedded) and bundled (resource-dir) templates are read-only.
 
 ### 4.1 TemplateInfo extension (owner edits `summary/template_commands.rs`)
 
@@ -675,9 +675,9 @@ Flow in the command:
 | `node tests/lib/onboarding-summary-model.test.mjs` | **FAILS** `ERR_MODULE_NOT_FOUND 'typescript'` | missing environment dependency: `node_modules/` not installed. Run `pnpm install` first. NOT a regression. |
 | `pnpm lint` / `pnpm build` | NOT RUN | blocked by missing `node_modules` |
 | `cargo --version` → 1.90.0 | OK | — |
-| `cargo check -p meetily` | **FAILS**: whisper-rs build script `bindgen` → `Unable to find libclang: clang.dll` | missing environment dependency: LLVM/libclang not installed on this machine. Install LLVM and set `LIBCLANG_PATH`, or check on a machine with LLVM. NOT a code regression (dependency build script failure). Workspace `target/` at repo root is gitignored; deps partially cached. |
+| `cargo check -p recall` | **FAILS**: whisper-rs build script `bindgen` → `Unable to find libclang: clang.dll` | missing environment dependency: LLVM/libclang not installed on this machine. Install LLVM and set `LIBCLANG_PATH`, or check on a machine with LLVM. NOT a code regression (dependency build script failure). Workspace `target/` at repo root is gitignored; deps partially cached. |
 
-Agents: run `cargo fmt --all -- --check`, `cargo check -p meetily`, `cargo test -p meetily`,
+Agents: run `cargo fmt --all -- --check`, `cargo check -p recall`, `cargo test -p recall`,
 `pnpm lint`, `pnpm build`, and `node tests/lib/*.test.mjs` in their environment, and report each
 as PASS / FAIL / ENV-MISSING with the exact error. Never claim a test passes without running it.
 
@@ -715,7 +715,7 @@ state. The owner re-verifies the baseline after `pnpm install`.
 5. Do NOT commit migrations. Do NOT modify `backend/`. Do NOT add dependencies without
    Integration Owner approval. Do NOT add a vector DB.
 6. Register nothing in `lib.rs` — the owner does it at integration time.
-7. Rust: `cargo fmt`, compile-check your module (`cargo check -p meetily` where the environment
+7. Rust: `cargo fmt`, compile-check your module (`cargo check -p recall` where the environment
    permits), unit-test pure logic (`#[cfg(test)]`).
 8. Frontend: typecheck/build when `node_modules` is available; keep new tests alongside existing
    `frontend/tests/lib/` style if you add logic worth testing.

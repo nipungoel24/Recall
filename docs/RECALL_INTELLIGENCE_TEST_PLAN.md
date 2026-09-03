@@ -1,8 +1,8 @@
-# Meetily Intelligence — QA Test Plan & Regression Baseline
+# Recall Intelligence — QA Test Plan & Regression Baseline
 
 **Status:** LIVE — this document tracks a parallel-integration effort and is updated as agents land work.
 **Audience:** Integration Owner, feature agents, QA.
-**Binding reference:** `docs/MEETILY_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md` (v1.0).
+**Binding reference:** `docs/RECALL_INTELLIGENCE_IMPLEMENTATION_CONTRACT.md` (v1.0).
 **Environment recorded:** Windows x64, cargo 1.90.0, node v22.20.0, pnpm 10.28.2, bun 1.3.14 (installed via `node install.js` after pnpm ignored the postinstall), VS 2022 Build Tools, LLVM 22.
 
 ---
@@ -12,8 +12,8 @@
 | Command | Result | Classification |
 |---|---|---|
 | `cargo fmt --all -- --check` | FAIL (exit 1) — pre-existing formatting drift in `whisper_engine/*`, `llama-helper`, `main.rs`, `system_monitor.rs` and others | Pre-existing debt. NOT fixed by QA (would create huge diffs conflicting with feature branches). |
-| `cargo check -p meetily` | FAIL — needs `LIBCLANG_PATH` (libclang 22 installed), `cmake` (VS-bundled cmake works via PATH), and `binaries/llama-helper-x86_64-pc-windows-msvc.exe` (built by `dev-gpu.bat`/`build-gpu.bat`). With all three provided, `whisper-rs 0.13.2` fails to compile against `whisper-rs-sys 0.11.1` (bindgen produced opaque `whisper_full_params` — libclang 22 is too new for bindgen 0.69.5; winget will not downgrade LLVM). | ENV-MISSING / toolchain incompatibility. NOT an app regression. |
-| `cargo test -p meetily` | NOT RUNNABLE (same whisper-rs-sys blocker). Rust unit tests shipped by feature agents are compile-checked by review only on this machine; they run in CI/other machines. | ENV-MISSING |
+| `cargo check -p recall` | FAIL — needs `LIBCLANG_PATH` (libclang 22 installed), `cmake` (VS-bundled cmake works via PATH), and `binaries/llama-helper-x86_64-pc-windows-msvc.exe` (built by `dev-gpu.bat`/`build-gpu.bat`). With all three provided, `whisper-rs 0.13.2` fails to compile against `whisper-rs-sys 0.11.1` (bindgen produced opaque `whisper_full_params` — libclang 22 is too new for bindgen 0.69.5; winget will not downgrade LLVM). | ENV-MISSING / toolchain incompatibility. NOT an app regression. |
+| `cargo test -p recall` | NOT RUNNABLE (same whisper-rs-sys blocker). Rust unit tests shipped by feature agents are compile-checked by review only on this machine; they run in CI/other machines. | ENV-MISSING |
 | `pnpm lint` | FAIL — `next lint` prompts interactively (no ESLint config wired for Next 14 flat config); eslint is not a devDependency at baseline. | Tooling gap, pre-existing. |
 | `pnpm build` | Initially FAIL (exit 1): `/context/[id]` missing `generateStaticParams()` under `output: 'export'`. After QA fix (server wrapper + client split) compilation, typechecking and page-data collection pass; the export step is flaky while feature agents run `next dev` against the same `.next` directory (ENOENT `.next/server/pages-manifest.json`). | First failure was a REAL regression (Context agent); the remainder is shared-checkout concurrency. |
 | `bun test tests/lib` | PASS — 47/47 (baseline). Bun not installed initially; the `bun` npm package's postinstall is skipped by pnpm 10 → `node install.js` in the package dir fixes it. | OK after env fix |

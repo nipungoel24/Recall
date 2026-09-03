@@ -1,4 +1,4 @@
-# Meetily Intelligence — Current State (verified baseline)
+# Recall Intelligence — Current State (verified baseline)
 
 **Date:** 2026-08-18 · **Branch:** `master` (working tree, not pushed)
 
@@ -10,8 +10,8 @@ anything below regresses, restore from here.
 | Gate | Result |
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
-| `cargo check -p meetily` | PASS |
-| `cargo test -p meetily` | **333 passed, 0 failed, 2 ignored** |
+| `cargo check -p recall` | PASS |
+| `cargo test -p recall` | **333 passed, 0 failed, 2 ignored** |
 | `cargo check -p llama-helper` | PASS |
 | `cargo test -p llama-helper` | **2 passed** |
 | `corepack pnpm install --frozen-lockfile` | PASS |
@@ -39,5 +39,5 @@ anything below regresses, restore from here.
 
 - Legacy ESLint debt on pre-existing lines (`no-explicit-any`, unused vars) in older files; new files are lint-clean
 - One non-reproducible observation: app exited cleanly once during a Settings full reload in testing (see product polish phase)
-- `docs/MEETILY_MIGRATION_UPGRADE_GUIDE.md` documents the checksum-drift repair procedure; `migrations/checksums.json` + audit guard prevent future drift
+- `docs/RECALL_MIGRATION_UPGRADE_GUIDE.md` documents the checksum-drift repair procedure; `migrations/checksums.json` + audit guard prevent future drift
 - Notes pages are legacy demo content (`/notes?id=`) with no list experience

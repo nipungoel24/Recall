@@ -1,4 +1,4 @@
-# Meetily — Product & Privacy Notes
+# Recall — Product & Privacy Notes
 
 ## What each screen is for
 
@@ -36,7 +36,7 @@ extract there.
 ## Contexts & Continuous Context
 
 A Context is a thread of related meetings (a project, client, initiative).
-After each meeting in a Context is summarized, Meetily extracts durable
+After each meeting in a Context is summarized, Recall extracts durable
 knowledge — decisions, actions, open questions, facts — into the Context's
 memory. When you summarize a LATER meeting in the same Context, that compact
 memory is included as background (the current meeting is always primary).
@@ -55,13 +55,14 @@ Policy notes:
 ## Privacy
 
 - Recording and local transcription (Parakeet / Whisper CPU) happen on device;
-  audio and transcripts are stored locally (`%APPDATA%\com.meetily.ai` and
-  your recordings folder).
+  audio and transcripts are stored locally (your app-data folder —
+  `%APPDATA%\com.meetily.ai` on Windows, identifier intentionally preserved
+  across the Meetily → Recall rebrand — and your recordings folder).
 - Local summary models (builtin-ai via the llama-helper sidecar) run fully
   offline. If you configure a CLOUD provider (OpenAI/Claude/Groq/OpenRouter or
   a custom endpoint), the meeting text you ask to summarize is sent to that
   provider — exactly as in the original Meetily behavior.
 - Daily Brief and Continuous Context use the SAME provider you configured for
   summaries; they never introduce hidden network calls.
-- Meetily sends no telemetry. No analytics data leaves the machine unless a
+- Recall sends no telemetry. No analytics data leaves the machine unless a
   cloud provider is configured and used.

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Meetily** is a privacy-first AI meeting assistant that captures, transcribes, and summarizes meetings entirely on local infrastructure. The supported application is the Tauri desktop app with a Rust core.
+**Recall** is a privacy-first AI meeting intelligence application that records, transcribes, summarizes, organizes, and remembers context across meetings, entirely on local infrastructure. (Renamed from Meetily; see the rebrand notes below.) The supported application is the Tauri desktop app with a Rust core.
 
 1. **Frontend**: Tauri-based desktop application (Rust + Next.js + TypeScript)
 2. **Rust Backend**: Tauri commands, audio capture, transcription, storage, and summarization orchestration
@@ -174,8 +174,8 @@ await listen<TranscriptUpdate>('transcript-update', (event) => {
 
 **Model Storage Locations**:
 - **Development**: `frontend/models/`
-- **Production (macOS)**: `~/Library/Application Support/Meetily/models/`
-- **Production (Windows)**: `%APPDATA%\Meetily\models\`
+- **Production (macOS)**: `~/Library/Application Support/Recall/models/` (fresh installs; pre-rename `Meetily` folders are reused when present)
+- **Production (Windows)**: `%APPDATA%\Recall\models\` (fresh installs; pre-rename `Meetily` folders are reused when present)
 
 **Model Loading** (frontend/src-tauri/src/whisper_engine/whisper_engine.rs):
 ```rust
@@ -377,6 +377,8 @@ $env:RUST_LOG="debug"; ./clean_run_windows.bat
 6. **File Paths**: Use Tauri's path APIs (`downloadDir`, etc.) for cross-platform compatibility. Never hardcode paths.
 
 7. **Audio Permissions**: Request permissions early. macOS requires both microphone AND screen recording for system audio.
+
+8. **Meetily → Recall rebrand**: user-facing name is **Recall** (`recall` lowercase, `RECALL_*` constants). The Tauri identifier `com.meetily.ai` is INTENTIONALLY preserved so existing user data (SQLite DB, models, stores) keeps working — never rename it without a tested migration. Hardcoded brand folders go through `brand_paths` (fresh installs: `Recall`/`recall`/`recall-recordings`; upgrades reuse existing `Meetily` locations). The updater endpoint still targets upstream Meetily releases until Recall release infrastructure exists. `frontend/tests/lib/branding-regression.test.ts` enforces this policy.
 
 ## Repository-Specific Conventions
 

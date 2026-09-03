@@ -1,4 +1,4 @@
-# Meetily Product Polish Audit
+# Recall Product Polish Audit
 
 **Date:** 2026-08-18 · Method: live Tauri app inspection (DOM text/structure per
 page, real data), plus source review of user-facing copy.

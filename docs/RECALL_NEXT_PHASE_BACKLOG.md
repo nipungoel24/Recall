@@ -1,4 +1,4 @@
-# Meetily — Next Phase Backlog
+# Recall — Next Phase Backlog
 
 Prioritized candidate investments. NOT implemented in this phase. Evaluate
 each on real user need before starting.
@@ -42,5 +42,5 @@ each on real user need before starting.
   explicitly NOT now (no vector DB in the current architecture).
 - Calendar integrations (external calendars) — significant scope.
 - Notification/reminder features beyond current recording notifications.
-- Advanced analytics dashboards — Meetily is a meeting tool, not a BI tool.
+- Advanced analytics dashboards — Recall is a meeting tool, not a BI tool.
 - Context export/import (share a Context between machines).
