@@ -60,6 +60,7 @@ Recall is a single self-contained **Tauri 2 desktop application** (v0.4.0). No s
 
 - **ffmpeg** — downloaded at build time (cached in `src-tauri/binaries/`), bundled via `externalBin`, used for audio muxing.
 - **llama-helper** — workspace member binary (llama-cpp-2) speaking JSON over stdin/stdout; spawned/health-checked/kept-alive by the summary sidecar manager.
+- Full external asset/supply-chain inventory (models, binaries, git deps, integrity checks, classifications): [docs/RECALL_EXTERNAL_ASSETS.md](docs/RECALL_EXTERNAL_ASSETS.md). Upstream-controlled hosts (Parakeet v3 CDN, ffmpeg binary releases) are classified MUST MIGRATE BEFORE RELEASE.
 
 ### Data Flow
 
