@@ -20,9 +20,9 @@ Recall is a single self-contained **Tauri 2 desktop application** (v0.4.0). No s
 │ Rust core (`frontend/src-tauri`, lib name `app_lib`)         │
 │   ~200 Tauri commands across:                                │
 │   audio/ · whisper_engine/ · parakeet_engine/ · summary/     │
-│   context/ · contexts/ · database/ · analytics/ ·            │
-│   notifications/ · api/ · ollama|openai|anthropic|groq|      │
-│   openrouter/ · console_utils/ · tray · onboarding           │
+│   context/ · contexts/ · database/ · notifications/ ·        │
+│   api/ · ollama|openai|anthropic|groq|openrouter/ ·          │
+│   console_utils/ · tray · onboarding                         │
 └──────────┬──────────────────────────────┬────────────────────┘
            │ sqlx (SQLite, WAL, 15        │ filesystem + sidecars
            │  migrations, checksums)      │
@@ -38,7 +38,7 @@ Recall is a single self-contained **Tauri 2 desktop application** (v0.4.0). No s
 
 - Routes (query-param based, static-export safe via `src/lib/routes.ts`): `/` (home + live recording), `/meeting-details`, `/daily`, `/calendar`, `/context`(+`?id=`), `/templates`, `/settings`, `/notes` (legacy demo stub).
 - Global state: `ConfigContext`, `RecordingStateContext`, `TranscriptContext`, `OnboardingContext`, `SidebarProvider`, plus `AnalyticsProvider`, `RecordingPostProcessingProvider`, `OllamaDownloadContext`, `ImportDialogContext`, `UpdateCheckProvider`.
-- Persistence: SQLite via Tauri commands is the source of truth; IndexedDB `RecallRecoveryDB` for crash scratch; localStorage for UI prefs; `@tauri-apps/plugin-store` for `analytics.json`, `preferences.json`.
+- Persistence: SQLite via Tauri commands is the source of truth; IndexedDB `RecallRecoveryDB` for crash scratch; localStorage for UI prefs; `@tauri-apps/plugin-store` for `preferences.json`.
 - UI stack: shadcn/Radix (`src/components/ui/`, 24 components), Tailwind 3 CSS-var tokens, lucide-react icons, framer-motion, sonner toasts, BlockNote editor for summaries, react-hook-form, @tanstack/react-virtual.
 
 ### Rust / Tauri core (`frontend/src-tauri/src/`)
@@ -51,10 +51,14 @@ Recall is a single self-contained **Tauri 2 desktop application** (v0.4.0). No s
 | Templates | `summary/templates/` | file-based JSON (bundled resources + user dir), embedded fallbacks, validated schema, secure id sanitization |
 | Context memory | `context/`, `contexts/` | extraction, deterministic dedup, bounded budget, provenance, render guards |
 | Database | `database/`, `database/repositories/` | sqlx SQLite, migrations with checksums, legacy DB copy/import, 12 repositories |
-| Analytics | `analytics/` | posthog-rs client, sanitization, session tracking (opt-in from frontend) |
 | Notifications | `notifications/` | consent lifecycle, DND detection, settings |
 | Providers | `ollama/`, `openai/`, `anthropic/`, `groq/`, `openrouter/` | per-provider model listing HTTP clients |
 | Glue | `lib.rs`, `brand_paths.rs`, `tray.rs`, `onboarding.rs`, `config.rs`, `state.rs` | command registration, brand-compatible paths, tray |
+
+Removed in Phase 1: updater plugin + release-feed config, analytics module
+(posthog-rs, 26 telemetry commands), dead `lib_old_complex.rs`,
+`audio_v2/` prototypes, FastAPI-era profile/licensing HTTP stubs.
+Updating is fail-closed and telemetry-free; both are regression-gated.
 
 ### External binaries
 
@@ -96,7 +100,7 @@ src/
 
 ### Rust boundaries
 
-Keep a clean separation between: Tauri command boundary (thin, typed) → domain/services → persistence (repositories) → infrastructure (audio, engines, providers). No complex business logic directly inside commands. Dead code (`lib_old_complex.rs`, `audio_v2/`, `*-old.rs`, undeclared files) removed in reviewed cleanups.
+Keep a clean separation between: Tauri command boundary (thin, typed) → domain/services → persistence (repositories) → infrastructure (audio, engines, providers). No complex business logic directly inside commands.
 
 ### Database
 
@@ -110,8 +114,8 @@ Evolve toward validated structures (`MeetingIntelligence` with topics/decisions/
 
 Typed/contextual errors from Rust (`Result` with context, no panic/unwrap in normal paths); recoverable errors surfaced in UI with useful language; technical context in logs only.
 
-### Updater / analytics / identity (Phase 1 foundations)
+### Updater / analytics / identity (Phase 1 state)
 
-- Updater: disabled or migrated to Recall-owned release infra + signing keys before any Recall auto-update ships.
-- Analytics: opt-in default OFF, Recall-owned PostHog key (or removal), sanitized payloads, consent tests.
+- Updater: disabled and fail-closed (plugin, config, UI, and tray entry removed). Recall-owned release infra, signing keys, and verified upgrade testing are prerequisites (Phase 10).
+- Analytics: no product telemetry exists (PostHog client, key, commands, facade, and consent UI removed). Local logs only. Privacy invariants in Rules.md.
 - Identity: Tauri identifier stays `com.meetily.ai` until a tested data migration exists; visible branding is Recall.

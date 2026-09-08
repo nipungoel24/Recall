@@ -45,6 +45,18 @@
 
 Before adding a dependency: (1) check existing dependencies solve it, (2) maintenance status, (3) bundle impact, (4) licensing, (5) justify. No major framework upgrades bundled into unrelated feature work.
 
+## External Assets & Supply Chain
+
+- Every external download URL, binary, model source, or git dependency must be recorded in `docs/RECALL_EXTERNAL_ASSETS.md` with source, integrity check, license, and classification.
+- Hosts controlled by the historical upstream project are PROHIBITED for new dependencies; existing ones (Parakeet v3 CDN, ffmpeg binary releases) are classified MUST MIGRATE BEFORE RELEASE.
+- Downloaded binaries/models must eventually carry checksum/signature verification; none may be trusted on filename alone.
+
+## Telemetry & Updater Invariants
+
+- Recall ships no product analytics telemetry. If telemetry is ever reconsidered, it must be opt-in, sanitized, Recall-owned, and approved as a deliberate product change.
+- The app must never contact the historical upstream release feed; automatic updating stays fail-closed until Recall-owned release infrastructure, signing keys, and verified upgrade testing exist.
+- Regression gates exist in `frontend/tests/lib/updater-regression.test.mjs` and `frontend/tests/lib/analytics-regression.test.mjs`; removing or weakening them requires explicit product approval.
+
 ## UI
 
 - Use shadcn/Radix primitives; reuse existing components before creating duplicates.

@@ -56,8 +56,8 @@ CAPTURE → UNDERSTAND → REMEMBER → ACT → REVISIT
 | Legacy DB import | Implemented | FastAPI-era + Homebrew install detection and import |
 | Audio import + retranscription | Implemented (beta) | Gated by beta flag |
 | Notifications | Implemented | Consent lifecycle, DND detection, tray |
-| Analytics | Implemented (opt-in) | Off by default; consent switch; payload sanitization |
-| Updater | Partial | UI + plugin wired, but endpoint targets upstream Meetily release channel (see Risks) |
+| Analytics | Removed (Phase 1) | No product telemetry exists; regression-gated |
+| Updater | Disabled (Phase 1) | Fail-closed; UI removed; regression-gated until Recall release infra exists |
 
 ## Target Features (approved future state, phased)
 
@@ -90,7 +90,7 @@ Home · Record · Meetings · Daily · Calendar · Tasks · Contexts · Search �
 - **Contexts:** CRUD; membership; memory; rebuild.
 - **Search:** lexical across all content types; filters; results link to meetings.
 - **Templates:** built-in + custom CRUD; default selection; structure preview.
-- **Settings:** all existing tabs; analytics consent; storage locations; model management; beta flags.
+- **Settings:** all existing tabs; storage locations; model management; beta flags.
 
 ## Nonfunctional Requirements
 
@@ -123,9 +123,9 @@ Home · Record · Meetings · Daily · Calendar · Tasks · Contexts · Search �
 - Plugin ecosystem
 - Vector database (until lexical + structured search proves insufficient)
 
-## Risks & Open Items (see Phase 0 report)
+## Risks & Open Items (see Phase 0/1 reports)
 
-- Updater endpoint targets upstream Meetily releases — must be disabled or migrated before Recall releases updates.
-- Analytics PostHog key is inherited from upstream — data goes to upstream's project when a user opts in.
-- Parakeet v3 model and ffmpeg binaries download from upstream-hosted infrastructure.
+- Automatic updating is disabled until Recall-owned release infrastructure, signing keys, and verified upgrade testing exist (Phase 10). Regression-gated.
+- Parakeet v3 model and ffmpeg binaries download from upstream-hosted infrastructure — classified MUST MIGRATE BEFORE RELEASE in `docs/RECALL_EXTERNAL_ASSETS.md`.
 - Tauri identifier intentionally remains `com.meetily.ai` until a tested migration exists.
+- No product analytics telemetry exists; local logs only. If telemetry is ever reconsidered, the privacy invariants in Rules.md remain binding.

@@ -378,7 +378,7 @@ $env:RUST_LOG="debug"; ./clean_run_windows.bat
 
 7. **Audio Permissions**: Request permissions early. macOS requires both microphone AND screen recording for system audio.
 
-8. **Meetily → Recall rebrand**: user-facing name is **Recall** (`recall` lowercase, `RECALL_*` constants). The Tauri identifier `com.meetily.ai` is INTENTIONALLY preserved so existing user data (SQLite DB, models, stores) keeps working — never rename it without a tested migration. Hardcoded brand folders go through `brand_paths` (fresh installs: `Recall`/`recall`/`recall-recordings`; upgrades reuse existing `Meetily` locations). The updater endpoint still targets upstream Meetily releases until Recall release infrastructure exists. `frontend/tests/lib/branding-regression.test.ts` enforces this policy.
+8. **Meetily → Recall rebrand**: user-facing name is **Recall** (`recall` lowercase, `RECALL_*` constants). The Tauri identifier `com.meetily.ai` is INTENTIONALLY preserved so existing user data (SQLite DB, models, stores) keeps working — never rename it without a tested migration. Hardcoded brand folders go through `brand_paths` (fresh installs: `Recall`/`recall`/`recall-recordings`; upgrades reuse existing `Meetily` locations). Automatic updating is disabled fail-closed until Recall release infrastructure exists, and Recall ships no product analytics telemetry — both are regression-gated (`tests/lib/updater-regression.test.mjs`, `tests/lib/analytics-regression.test.mjs`). `frontend/tests/lib/branding-regression.test.ts` enforces the branding policy.
 
 ## Repository-Specific Conventions
 
@@ -389,7 +389,7 @@ $env:RUST_LOG="debug"; ./clean_run_windows.bat
   - `main`: Stable releases
   - `fix/*`: Bug fixes
   - `enhance/*`: Feature enhancements
-  - Current: `fix/audio-mixing` (working on audio pipeline improvements)
+  - `phase/*`: Approved phased work (e.g. `phase/1-foundation`)
 
 ## Key Files Reference
 

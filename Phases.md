@@ -9,23 +9,19 @@ Each phase requires user approval before starting. Never begin the next phase au
 - Done: forensics (local ahead by 6, clean), baseline verification, full code audit, branding/privacy/updater/upstream audits, PRD/Architecture/Rules/Phases/Design created.
 - Deliverables: Phase 0 report + these five documents. Memory.md intentionally not created yet.
 
-## PHASE 1 — Recall Identity, Legacy Cleanup, Privacy/Updater Foundation
+## PHASE 1 — Recall Identity, Legacy Cleanup, Privacy/Updater Foundation ✅ (complete)
 
 - Goal: finish the rebrand safely; close privacy/integrity gaps; clean verified dead code.
-- Current state: rebrand commits exist on `rebrand/recall` (6 ahead of origin/main); branding regression test green; updater still targets upstream Meetily releases; analytics uses upstream PostHog key; dead code and stale HTTP stubs present.
-- Scope:
-  - Merge/publish the `rebrand/recall` work (fast-forward `main` after approval — no history rewrite).
-  - Updater: disable auto-update safely until Recall release infra + signing keys exist (remove/neutralize upstream endpoint; keep manual UI path inert and clearly labeled).
-  - Analytics: keep opt-in default OFF; decide Recall-owned PostHog key vs removal; add consent behavior tests.
-  - Clippy: fix the 2 deny-by-default errors.
-  - Dead code removal (reviewed, separate commits): `lib_old_complex.rs`, `audio_v2/`, `*-old.rs` undeclared files, `src-tauri/scripts` empties.
-  - Stale HTTP surface: remove/neutralize localhost:5167 profile/licensing stubs in `api.rs` and frontend `serverAddress` constants.
-  - Repo hygiene: remove tracked `frontend/vs_buildtools.exe`, duplicate tailwind config, stale `electron` main field.
-  - External asset dependencies (Parakeet v3 URL, ffmpeg binaries from upstream infra): inventory and decide mirror/replace strategy (documented compatibility debt until then).
-- Non-scope: design system, features, migrations of identifier.
-- Acceptance criteria: updater cannot pull upstream releases; telemetry off by default verified by test; clippy clean; build+tests green; dead code gone without behavior change; working tree clean; docs updated.
-- Tests: branding-regression, contract audit, cargo test/clippy, frontend build/tests, consent tests.
-- Definition of done: PRs reviewed; gates green; Memory.md created and maintained from this phase onward.
+- Done:
+  - Phase 0 closure: docs committed (`accd7ca`); `origin/rebrand/recall` safety copy; `main` fast-forwarded to `accd7ca`; all refs synchronized.
+  - Updater disabled fail-closed: plugin, upstream release-feed config, frontend update UI, tray entry, and update scripts removed; user-facing links repointed at the Recall repo; `tests/lib/updater-regression.test.mjs` guards reintroduction.
+  - Analytics removed: posthog-rs client + key, 26 telemetry commands, frontend facade/provider/consent UI, and all call sites removed; `tests/lib/analytics-regression.test.mjs` guards reintroduction; PRIVACY_POLICY.md updated.
+  - Clippy: 2 deny errors fixed (`AudioCaptureBackend::as_str`, vacuous `len() >= 0`); `cargo clippy --workspace --all-targets` passes.
+  - External assets inventoried + classified: `docs/RECALL_EXTERNAL_ASSETS.md` (Parakeet v3 CDN + ffmpeg binaries = MUST MIGRATE BEFORE RELEASE).
+  - Dead code removed with evidence: `lib_old_complex.rs`, `audio_v2/`, `*-old.rs`/`.backup`, FastAPI-era HTTP stubs, tracked `vs_buildtools.exe`, stale tailwind config, duplicate metadata files, dead deps (@remirror, @tiptap/react+starter-kit, lodash, zod).
+  - eslint: ignores for generated `.next/`/`out/`; source-only baseline 128 errors / 153 warnings (pre-existing; zero new errors from Phase 1 edits).
+- Deferred (documented): frontend `serverAddress` vestigial gate (functional, low risk), archived `backend/` removal (separate review), `MEETILY_RSA_PUBLIC_KEY` secret rotation, identifier migration, global lint debt (later quality phase).
+- Acceptance criteria: all met (see Phase 1 report).
 
 ## PHASE 2 — Design System + Icon/Motion System
 
