@@ -266,7 +266,7 @@ pub async fn get_available_audio_backends() -> Result<Vec<String>, String> {
     #[cfg(target_os = "macos")]
     {
         let backends = crate::audio::capture::get_available_backends();
-        Ok(backends.iter().map(|b| b.to_string()).collect())
+        Ok(backends.iter().map(|b| b.as_str().to_string()).collect())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -282,7 +282,7 @@ pub async fn get_current_audio_backend() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
         let backend = crate::audio::capture::get_current_backend();
-        Ok(backend.to_string())
+        Ok(backend.as_str().to_string())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -364,14 +364,14 @@ pub async fn get_audio_backend_info() -> Result<Vec<BackendInfo>, String> {
 
         let backends = vec![
             BackendInfo {
-                id: AudioCaptureBackend::ScreenCaptureKit.to_string(),
+                id: AudioCaptureBackend::ScreenCaptureKit.as_str().to_string(),
                 name: AudioCaptureBackend::ScreenCaptureKit.name().to_string(),
                 description: AudioCaptureBackend::ScreenCaptureKit
                     .description()
                     .to_string(),
             },
             BackendInfo {
-                id: AudioCaptureBackend::CoreAudio.to_string(),
+                id: AudioCaptureBackend::CoreAudio.as_str().to_string(),
                 name: AudioCaptureBackend::CoreAudio.name().to_string(),
                 description: AudioCaptureBackend::CoreAudio.description().to_string(),
             },

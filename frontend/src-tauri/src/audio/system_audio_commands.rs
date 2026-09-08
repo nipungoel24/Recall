@@ -120,7 +120,9 @@ mod tests {
         match devices {
             Ok(device_list) => {
                 println!("System audio devices: {:?}", device_list);
-                assert!(device_list.len() >= 0); // Should at least not crash
+                // Smoke test only: the command must complete without panicking.
+                // An empty list is a legitimate result on systems without
+                // capturable audio devices, so no length is asserted.
             }
             Err(e) => {
                 println!("Error listing devices: {}", e);
