@@ -36,6 +36,9 @@ whisper-server-package/
 .DS_Store
 *.pem
 
+# local machine tooling (do not commit installers)
+vs_buildtools.exe
+
 # debug
 npm-debug.log*
 yarn-debug.log*
