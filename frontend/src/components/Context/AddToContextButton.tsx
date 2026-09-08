@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import Analytics from '@/lib/analytics';
 import { contextService } from '@/services/contextService';
 import { ContextThreadSummary, meetingIdsOf } from '@/types/context';
 import { routes } from '@/lib/routes';
@@ -96,11 +95,9 @@ export function AddToContextButton({
     try {
       if (currentlyLinked) {
         await contextService.removeMeetingFromContext(contextId, meetingId);
-        Analytics.trackButtonClick('remove_meeting_from_context', 'meeting_details');
         toast.success('Removed from Context');
       } else {
         await contextService.addMeetingToContext(contextId, meetingId);
-        Analytics.trackButtonClick('add_meeting_to_context', 'meeting_details');
         toast.success('Added to Context');
       }
     } catch (err) {
@@ -128,7 +125,6 @@ export function AddToContextButton({
     try {
       const created = await contextService.createContextThread(name);
       await contextService.addMeetingToContext(created.id, meetingId);
-      Analytics.trackButtonClick('create_context_inline', 'meeting_details');
       toast.success(`Added to new Context "${created.name}"`);
       setNewContextName('');
       await load();
@@ -167,7 +163,6 @@ export function AddToContextButton({
         size="sm"
         title="Add to Context"
         onClick={() => {
-          Analytics.trackButtonClick('add_to_context', 'meeting_details');
           setOpen(true);
         }}
         className="cursor-pointer"

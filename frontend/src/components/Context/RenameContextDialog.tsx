@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import Analytics from '@/lib/analytics';
 
 interface RenameContextDialogProps {
   open: boolean;
@@ -56,8 +55,7 @@ export function RenameContextDialog({
     try {
       const ok = await onSubmit(trimmedName, description.trim() || undefined);
       if (ok) {
-        Analytics.trackButtonClick('rename_context', 'context_detail');
-        toast.success(`Context renamed to "${trimmedName}"`);
+            toast.success(`Context renamed to "${trimmedName}"`);
         onOpenChange(false);
       }
     } catch (err) {

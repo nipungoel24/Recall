@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import Analytics from '@/lib/analytics';
 
 interface DeleteContextDialogProps {
   open: boolean;
@@ -35,8 +34,7 @@ export function DeleteContextDialog({
     try {
       const ok = await onConfirm();
       if (ok) {
-        Analytics.trackButtonClick('delete_context', 'context_detail');
-        onOpenChange(false);
+            onOpenChange(false);
       }
     } finally {
       setIsDeleting(false);

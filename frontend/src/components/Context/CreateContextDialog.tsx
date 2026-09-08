@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import Analytics from '@/lib/analytics';
 import { ContextThreadDetail } from '@/types/context';
 import { contextService } from '@/services/contextService';
 
@@ -53,8 +52,7 @@ export function CreateContextDialog({ open, onOpenChange, onCreated }: CreateCon
         trimmedName,
         description.trim() || undefined,
       );
-      Analytics.trackButtonClick('create_context', 'contexts');
-      toast.success(`Context "${created.name}" created`);
+        toast.success(`Context "${created.name}" created`);
       reset();
       onOpenChange(false);
       onCreated?.(created);

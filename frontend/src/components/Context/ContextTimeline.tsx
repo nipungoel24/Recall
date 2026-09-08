@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Trash2 } from 'lucide-react';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
-import Analytics from '@/lib/analytics';
 import {
   buildMeetingDetailsHref,
   ContextMeetingInfo,
@@ -32,7 +31,6 @@ export function ContextTimeline({ meetings, onRemoveMeeting }: ContextTimelinePr
 
   const handleRemove = async (meeting: ContextMeetingInfo) => {
     if (!onRemoveMeeting) return;
-    Analytics.trackButtonClick('remove_meeting_from_context', 'context_detail');
     const removed = await onRemoveMeeting(meeting.id);
     if (removed) {
       toast.success('Meeting removed from Context', {

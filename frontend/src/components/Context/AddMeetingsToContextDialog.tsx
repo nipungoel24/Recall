@@ -14,7 +14,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
-import Analytics from '@/lib/analytics';
 import { toggleSelectedId } from '@/types/context';
 import { cn } from '@/lib/utils';
 
@@ -59,8 +58,7 @@ export function AddMeetingsToContextDialog({
     try {
       const added = await onAddMeetings(selectedIds);
       if (added > 0) {
-        Analytics.trackButtonClick('add_meetings_to_context', 'context_detail');
-        toast.success(
+            toast.success(
           added === 1
             ? 'Meeting added to this Context'
             : `${added} meetings added to this Context`,

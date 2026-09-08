@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FolderPlus, Layers, LoaderIcon, Plus } from 'lucide-react';
-import Analytics from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -28,10 +27,6 @@ function ContextsListPage() {
   const router = useRouter();
   const { contexts, isLoading, error } = useContexts();
   const [createOpen, setCreateOpen] = useState(false);
-
-  useEffect(() => {
-    Analytics.trackPageView('contexts');
-  }, []);
 
   return (
     <motion.div

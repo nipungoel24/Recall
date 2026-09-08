@@ -64,5 +64,7 @@ Policy notes:
   provider — exactly as in the original Meetily behavior.
 - Daily Brief and Continuous Context use the SAME provider you configured for
   summaries; they never introduce hidden network calls.
-- Recall sends no telemetry. No analytics data leaves the machine unless a
-  cloud provider is configured and used.
+- Recall sends no telemetry. No analytics data leaves the machine, period —
+  there is no product analytics implementation. The only network calls are
+  those a user explicitly initiates (model downloads, and cloud LLM
+  providers when configured).

@@ -14,7 +14,6 @@ import {
 } from '@/lib/daily/timeline';
 import { useDailyMeetings } from '@/hooks/daily/useDailyMeetings';
 import { useDailyBrief } from '@/hooks/daily/useDailyBrief';
-import Analytics from '@/lib/analytics';
 import { routes } from '@/lib/routes';
 import { Button } from '@/components/ui/button';
 import { MeetingCard } from './MeetingCard';
@@ -70,10 +69,6 @@ export function DailyMeetingView({
     dateKey: isSingleDay ? dateKey : null,
     meetings,
   });
-
-  useEffect(() => {
-    Analytics.trackPageView('daily_meetings');
-  }, []);
 
   const openMeeting = useCallback(
     (meetingId: string) => {

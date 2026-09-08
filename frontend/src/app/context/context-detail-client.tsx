@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import Analytics from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -39,10 +38,6 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [isRebuilding, setIsRebuilding] = useState(false);
-
-  useEffect(() => {
-    Analytics.trackPageView('context_detail');
-  }, [contextId]);
 
   const detail = context.detail;
 
@@ -83,7 +78,6 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
     setIsRebuilding(true);
     try {
       const report = await contextService.rebuildContextMemory(contextId);
-      Analytics.trackFeatureUsed('context_memory_rebuilt');
       toast.success('Context memory rebuilt', {
         description: `Processed ${report.meetingsProcessed} meeting${report.meetingsProcessed === 1 ? '' : 's'} and saved ${report.itemsAdded} item${report.itemsAdded === 1 ? '' : 's'}.`,
       });

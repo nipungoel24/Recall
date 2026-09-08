@@ -3,7 +3,6 @@
 import { useCallback, useState } from 'react';
 import { Copy, FileText, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import Analytics from '@/lib/analytics';
 import { useTemplates } from '@/hooks/useTemplates';
 import { isCustomTemplate, type TemplateDefinition, type TemplateInfo } from '@/lib/template-schema';
 import {
@@ -67,7 +66,6 @@ export function SummaryTemplateManager() {
     async (template: TemplateInfo) => {
       try {
         const duplicated = await duplicateTemplate(template.id, `${template.id}_copy`);
-        Analytics.trackFeatureUsed('template_duplicated');
         toast.success('Template duplicated', {
           description: `"${duplicated.name}" is ready to use.`,
         });
@@ -88,7 +86,6 @@ export function SummaryTemplateManager() {
     async (template: TemplateInfo) => {
       try {
         await setDefaultTemplate(template.id);
-        Analytics.trackFeatureUsed('template_set_default');
         toast.success('Default template updated', {
           description: `New meeting summaries will use "${template.name}" by default.`,
         });
@@ -106,7 +103,6 @@ export function SummaryTemplateManager() {
     async (templateId: string, templateJson: string) => {
       const isEditing = editorTarget?.mode === 'edit';
       await saveTemplate(templateId, templateJson);
-      Analytics.trackFeatureUsed(isEditing ? 'template_updated' : 'template_created');
       toast.success(isEditing ? 'Template updated' : 'Template created', {
         description: `"${templateId}" is ready to use for summary generation`,
       });
@@ -120,7 +116,6 @@ export function SummaryTemplateManager() {
     setIsDeleting(true);
     try {
       await deleteTemplate(templateToDelete.id);
-      Analytics.trackFeatureUsed('template_deleted');
       toast.success('Template deleted', {
         description: `"${templateToDelete.name}" was removed`,
       });
