@@ -48,9 +48,8 @@ const ALLOWLIST: AllowRule[] = [
   { fileContains: 'summary/summary_engine/sidecar.rs', lineContains: 'MEETILY_LLAMA_HELPER', classification: 'MIGRATION_COMPAT', reason: 'legacy env var fallback' },
   // External model-download host: third-party contract, not our brand
   { fileContains: 'parakeet_engine/parakeet_engine.rs', lineContains: 'meetily.towardsgeneralintelligence.com', classification: 'MIGRATION_COMPAT', reason: 'external model URL (third-party host)' },
-  // Tauri identifier + updater endpoint deliberately preserved (no Recall infra yet)
+  // Tauri identifier deliberately preserved (no Recall data migration yet)
   { fileContains: 'src-tauri/tauri.conf.json', lineContains: 'com.meetily.ai', classification: 'MIGRATION_COMPAT', reason: 'preserved app-data identifier (user data safety)' },
-  { fileContains: 'src-tauri/tauri.conf.json', lineContains: 'Zackriya-Solutions/meeting-minutes', classification: 'UPSTREAM_HISTORY', reason: 'updater still targets upstream releases; migrate when Recall infra exists' },
   // Secrets must not be renamed casually
   { fileContains: '.github/workflows/', lineContains: 'MEETILY_RSA_PUBLIC_KEY', classification: 'MIGRATION_COMPAT', reason: 'existing secret name; rotate deliberately, not by rename' },
   // Signing-key filename referenced in build help text
