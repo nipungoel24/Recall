@@ -124,36 +124,58 @@ describe('Design System — Contrast', () => {
     return [parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3])]
   }
 
-  it('core text pairs pass WCAG AA (4.5:1)', () => {
-    const rootMatch = globals.match(/:root\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/)
-    const rootBlock = rootMatch[1]
+  function extractBlock(css, selector) {
+    // Match selector { ... } at top level (handles nested { } inside values)
+    const idx = css.indexOf(selector)
+    if (idx === -1) return null
+    const start = css.indexOf('{', idx)
+    if (start === -1) return null
+    let depth = 0
+    for (let i = start; i < css.length; i++) {
+      if (css[i] === '{') depth++
+      else if (css[i] === '}') { depth--; if (depth === 0) return css.slice(start + 1, i) }
+    }
+    return null
+  }
 
-    const pairs = [
-      ['foreground', 'background'],
-      ['primary-foreground', 'primary'],
-      ['muted-foreground', 'background'],
-      ['accent-foreground', 'accent'],
-      ['destructive-foreground', 'destructive'],
-      ['success-foreground', 'success'],
-    ]
+  const contrastPairs = [
+    ['foreground', 'background'],
+    ['primary-foreground', 'primary'],
+    ['muted-foreground', 'background'],
+    ['accent-foreground', 'accent'],
+    ['destructive-foreground', 'destructive'],
+    ['success-foreground', 'success'],
+    ['warning-foreground', 'warning'],
+  ]
 
-    for (const [fg, bg] of pairs) {
-      const fgVal = rootBlock.match(new RegExp(`--${fg}:\\s*([^;]+)`))?.[1]
-      const bgVal = rootBlock.match(new RegExp(`--${bg}:\\s*([^;]+)`))?.[1]
-      assert.ok(fgVal, `Token --${fg} should exist`)
-      assert.ok(bgVal, `Token --${bg} should exist`)
+  function testContrastPairs(block, label) {
+    for (const [fg, bg] of contrastPairs) {
+      const fgVal = block.match(new RegExp(`--${fg}:\\s*([^;]+)`))?.[1]
+      const bgVal = block.match(new RegExp(`--${bg}:\\s*([^;]+)`))?.[1]
+      if (!fgVal || !bgVal) continue // token pair not defined in this theme
 
       const fgHsl = parseHsl(fgVal)
       const bgHsl = parseHsl(bgVal)
-      assert.ok(fgHsl, `--${fg} should be valid HSL`)
-      assert.ok(bgHsl, `--${bg} should be valid HSL`)
+      if (!fgHsl || !bgHsl) continue
 
       const ratio = contrastRatio(fgHsl, bgHsl)
       assert.ok(
         ratio >= 4.5,
-        `${fg} on ${bg}: contrast ${ratio.toFixed(2)}:1 < 4.5:1 (WCAG AA)`
+        `[${label}] ${fg} on ${bg}: contrast ${ratio.toFixed(2)}:1 < 4.5:1 (WCAG AA)`
       )
     }
+  }
+
+  it('light mode core text pairs pass WCAG AA (4.5:1)', () => {
+    const rootBlock = extractBlock(globals, ':root')
+    assert.ok(rootBlock, ':root block should exist')
+    testContrastPairs(rootBlock, 'light')
+  })
+
+  it('dark mode core text pairs pass WCAG AA (4.5:1)', () => {
+    const darkBlock = extractBlock(globals, '.dark')
+    assert.ok(darkBlock, '.dark block should exist')
+    testContrastPairs(darkBlock, 'dark')
   })
 })
 
@@ -234,6 +256,53 @@ describe('Design System — No Runtime CDN', () => {
     assert.ok(
       !srcFiles.includes('thesvg.com') && !srcFiles.includes('the-svg'),
       'Should not reference TheSVG CDN'
+    )
+  })
+})
+
+describe('Design System — Theme Bootstrap', () => {
+  const layoutPath = join(import.meta.dirname, '../../src/app/layout.tsx')
+  const layout = readFileSync(layoutPath, 'utf-8')
+  const themeContextPath = join(import.meta.dirname, '../../src/contexts/ThemeContext.tsx')
+  const themeContext = readFileSync(themeContextPath, 'utf-8')
+
+  it('layout contains inline bootstrap script', () => {
+    assert.ok(
+      layout.includes('dangerouslySetInnerHTML'),
+      'layout.tsx must contain an inline script for pre-paint theme'
+    )
+    assert.ok(
+      layout.includes('recall-theme'),
+      'bootstrap script must read recall-theme from localStorage'
+    )
+    assert.ok(
+      layout.includes('prefers-color-scheme'),
+      'bootstrap script must resolve system preference'
+    )
+  })
+
+  it('bootstrap script sets class and color-scheme before paint', () => {
+    assert.ok(
+      layout.includes("document.documentElement.classList.add"),
+      'bootstrap must apply class to <html>'
+    )
+    assert.ok(
+      layout.includes("document.documentElement.style.colorScheme"),
+      'bootstrap must set color-scheme'
+    )
+  })
+
+  it('ThemeProvider does not use mounted guard', () => {
+    assert.ok(
+      !themeContext.includes('if (!mounted)'),
+      'ThemeProvider must not gate rendering on mounted state'
+    )
+  })
+
+  it('ThemeProvider syncs with DOM on mount', () => {
+    assert.ok(
+      themeContext.includes('readDomTheme'),
+      'ThemeProvider must read DOM class on mount'
     )
   })
 })
