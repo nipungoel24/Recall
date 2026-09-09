@@ -5,6 +5,7 @@ import { Switch } from "./ui/switch"
 import { FolderOpen } from "lucide-react"
 import { invoke } from "@tauri-apps/api/core"
 import { useConfig, NotificationSettings } from "@/contexts/ConfigContext"
+import { useTheme } from "@/contexts/ThemeContext"
 
 export function PreferenceSettings() {
   const {
@@ -15,19 +16,18 @@ export function PreferenceSettings() {
     updateNotificationSettings
   } = useConfig();
 
+  const { theme, setTheme } = useTheme();
+
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [previousNotificationsEnabled, setPreviousNotificationsEnabled] = useState<boolean | null>(null);
 
-  // Lazy load preferences on mount (only loads if not already cached)
   useEffect(() => {
     loadPreferences();
   }, [loadPreferences]);
 
-  // Update notificationsEnabled when notificationSettings are loaded from global state
   useEffect(() => {
     if (notificationSettings) {
-      // Notification enabled means both started and stopped notifications are enabled
       const enabled =
         notificationSettings.notification_preferences.show_recording_started &&
         notificationSettings.notification_preferences.show_recording_stopped;
@@ -37,7 +37,6 @@ export function PreferenceSettings() {
         setIsInitialLoad(false);
       }
     } else if (!isLoadingPreferences) {
-      // If not loading and no settings, use default
       setNotificationsEnabled(true);
       if (isInitialLoad) {
         setPreviousNotificationsEnabled(true);
@@ -47,15 +46,11 @@ export function PreferenceSettings() {
   }, [notificationSettings, isLoadingPreferences, isInitialLoad])
 
   useEffect(() => {
-    // Skip update on initial load or if value hasn't actually changed
     if (isInitialLoad || notificationsEnabled === null || notificationsEnabled === previousNotificationsEnabled) return;
     if (!notificationSettings) return;
 
     const handleUpdateNotificationSettings = async () => {
-      console.log("Updating notification settings to:", notificationsEnabled);
-
       try {
-        // Update the notification preferences
         const updatedSettings: NotificationSettings = {
           ...notificationSettings,
           notification_preferences: {
@@ -64,11 +59,8 @@ export function PreferenceSettings() {
             show_recording_stopped: notificationsEnabled,
           }
         };
-
-        console.log("Calling updateNotificationSettings with:", updatedSettings);
         await updateNotificationSettings(updatedSettings);
         setPreviousNotificationsEnabled(notificationsEnabled);
-        console.log("Successfully updated notification settings to:", notificationsEnabled);
       } catch (error) {
         console.error('Failed to update notification settings:', error);
       }
@@ -95,79 +87,72 @@ export function PreferenceSettings() {
     }
   };
 
-  // Show loading only if we're actually loading and don't have cached data
   if (isLoadingPreferences && !notificationSettings && !storageLocations) {
     return <div className="max-w-2xl mx-auto p-6">Loading Preferences...</div>
   }
 
-  // Show loading if notificationsEnabled hasn't been determined yet
   if (notificationsEnabled === null && !isLoadingPreferences) {
     return <div className="max-w-2xl mx-auto p-6">Loading Preferences...</div>
   }
 
-  // Ensure we have a boolean value for the Switch component
   const notificationsEnabledValue = notificationsEnabled ?? false;
+
+  const themeOptions = [
+    { value: 'system' as const, label: 'System', description: 'Follow OS setting' },
+    { value: 'light' as const, label: 'Light', description: 'Always light' },
+    { value: 'dark' as const, label: 'Dark', description: 'Always dark' },
+  ];
 
   return (
     <div className="space-y-6">
+      {/* Appearance Section */}
+      <div className="bg-surface rounded-lg border border-border p-6 shadow-sm">
+        <h3 className="text-section-title text-foreground mb-4">Appearance</h3>
+        <div className="flex items-center gap-2">
+          {themeOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setTheme(opt.value)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                theme === opt.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              title={opt.description}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Notifications Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+      <div className="bg-surface rounded-lg border border-border p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Notifications</h3>
-            <p className="text-sm text-gray-600">Enable or disable notifications of start and end of meeting</p>
+            <h3 className="text-section-title text-foreground mb-2">Notifications</h3>
+            <p className="text-small text-muted-foreground">Enable or disable notifications of start and end of meeting</p>
           </div>
           <Switch checked={notificationsEnabledValue} onCheckedChange={setNotificationsEnabled} />
         </div>
       </div>
 
       {/* Data Storage Locations Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Storage Locations</h3>
-        <p className="text-sm text-gray-600 mb-6">
+      <div className="bg-surface rounded-lg border border-border p-6 shadow-sm">
+        <h3 className="text-section-title text-foreground mb-4">Data Storage Locations</h3>
+        <p className="text-small text-muted-foreground mb-6">
           View and access where Recall stores your data
         </p>
 
         <div className="space-y-4">
-          {/* Database Location */}
-          {/* <div className="p-4 border rounded-lg bg-gray-50">
-            <div className="font-medium mb-2">Database</div>
-            <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
-              {storageLocations?.database || 'Loading...'}
-            </div>
-            <button
-              onClick={() => handleOpenFolder('database')}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Open Folder
-            </button>
-          </div> */}
-
-          {/* Models Location */}
-          {/* <div className="p-4 border rounded-lg bg-gray-50">
-            <div className="font-medium mb-2">Whisper Models</div>
-            <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
-              {storageLocations?.models || 'Loading...'}
-            </div>
-            <button
-              onClick={() => handleOpenFolder('models')}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Open Folder
-            </button>
-          </div> */}
-
-          {/* Recordings Location */}
-          <div className="p-4 border rounded-lg bg-gray-50">
-            <div className="font-medium mb-2">Meeting Recordings</div>
-            <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
+          <div className="p-4 border rounded-lg bg-muted/30">
+            <div className="font-medium mb-2 text-foreground">Meeting Recordings</div>
+            <div className="text-small text-muted-foreground mb-3 break-all font-mono text-xs">
               {storageLocations?.recordings || 'Loading...'}
             </div>
             <button
               onClick={() => handleOpenFolder('recordings')}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-md hover:bg-muted transition-colors"
             >
               <FolderOpen className="w-4 h-4" />
               Open Folder
@@ -175,8 +160,8 @@ export function PreferenceSettings() {
           </div>
         </div>
 
-        <div className="mt-4 p-3 bg-blue-50 rounded-md">
-          <p className="text-xs text-blue-800">
+        <div className="mt-4 p-3 bg-primary/5 rounded-md border border-primary/10">
+          <p className="text-xs text-primary/80">
             <strong>Note:</strong> Database and models are stored together in your application data directory for unified management.
           </p>
         </div>
