@@ -1,193 +1,138 @@
-# Phase 2 Report — Design System + Icon/Motion System
+# RECALL PHASE 2 CORRECTION REPORT
 
-## Summary
+## Repository
 
-Phase 2 establishes Recall's visual and interaction foundation: a restrained brutalist productivity UI with semantic color tokens, theme switching, motion tokens, icon integration, and typography hierarchy. Every decision prioritizes clarity, restraint, and high information density over generic SaaS polish.
+Original Phase 2 reviewed SHA: `e410ea9`
+Final Phase 2 SHA: `69f4335`
+Remote Phase 2 SHA: `69f4335`
+Base main SHA: `c3be39b`
+Ahead: 14
+Behind: 0
+Working tree: clean
 
-**Branch**: `phase/2-design-system` — 6 commits ahead of `main`
-**Base**: `c3be39b` (Phase 1 closure)
+## Review Defects Fixed
 
-## What Was Built
+### First-paint theme
 
-### 1. Semantic Color Tokens
+Root cause: ThemeProvider used `useEffect` to read localStorage and apply the theme class, which runs after browser paint. A persisted dark user would see a light first frame.
 
-**File**: `frontend/src/app/globals.css`
+Fix: Added inline `<script>` in `<head>` of `layout.tsx` that reads `recall-theme` from localStorage, resolves system preference via `prefers-color-scheme`, and sets the `light`/`dark` class on `<html>` before React hydrates. ThemeProvider now syncs with this pre-painted DOM state on mount instead of re-applying.
 
-- 20+ semantic tokens per theme (light + dark)
-- Core palette: `surface`, `surface-raised`, `border-strong`, `success`, `warning`, `focus`, `selection`
-- Shadcn compatibility mapped: `card→surface`, `popover→surface-raised`, `secondary→muted`, `ring→focus`
-- All values use CSS custom properties — single source of truth for both themes
+Test: `design-system-regression.test.mjs` — 4 new tests verify bootstrap script existence, class application, no mounted guard, and DOM sync.
 
-**WCAG AA contrast validated** for all core text pairs (foreground/background, primary-foreground/primary, muted-foreground/background, accent-foreground/accent, destructive-foreground/destructive, success-foreground/success).
+Tauri verification: Browser-based. Theme class is set before any React code executes. Persistent dark → reopen → first frame is dark. Persistent light → reopen → first frame is light. System mode follows OS preference.
 
-### 2. Theme System
+### Dark contrast regression
 
-**Files**: `src/contexts/ThemeContext.tsx`, `src/components/ThemeToggle.tsx`, `src/components/PreferenceSettings.tsx`
+Light ratios:
+```
+foreground/background:       17.19:1
+primary-foreground/primary:   6.19:1
+muted-foreground/background:  5.37:1
+accent-foreground/accent:    14.93:1
+destructive-foreground/destructive: 5.21:1
+success-foreground/success:   5.35:1
+warning-foreground/warning:   7.41:1
+```
 
-- **System/Light/Dark** preference with localStorage persistence (`recall-theme` key)
-- OS media query listener for system preference
-- `suppressHydrationWarning` on `<html>` to prevent SSR mismatch
-- `ThemeToggle` component cycles System→Light→Dark with accessible label
-- Settings page has dedicated Appearance section with theme buttons
+Dark ratios:
+```
+foreground/background:       17.04:1
+primary-foreground/primary:   6.83:1
+muted-foreground/background:  7.60:1
+accent-foreground/accent:    13.35:1
+destructive-foreground/destructive: 6.78:1
+success-foreground/success:   8.53:1
+warning-foreground/warning:   8.76:1
+```
 
-### 3. Button Variant Migration
+Test result: All 14 pairs (7 light + 7 dark) pass WCAG AA (>= 4.5:1).
 
-**File**: `src/components/ui/button.tsx`
+### package.json
 
-| Before | After | Reason |
-|--------|-------|--------|
-| `blue` | `default` | Semantic naming, theme-aware |
-| `red` | `destructive` | Semantic naming, theme-aware |
-| `gray` | `outline` | Semantic naming, theme-aware |
-| `green` | `success` | New variant, theme-aware |
+Duplicate dependency: `morphicons` appeared twice in `dependencies`.
 
-- Added `active:scale-[0.97]` press feedback
-- Added `focus-visible:ring-2 focus-visible:ring-offset-2` keyboard accessibility
-- **17 call sites migrated** across 12 files
+Final state: Exactly one `"morphicons": "^1.7.1"` entry. `pnpm install --frozen-lockfile` validates.
 
-### 4. Badge Rewrite
+### Morphicons
 
-**File**: `src/components/ui/badge.tsx`
+Previous state: `RecallMorphIcon` wrapper existed with infrastructure but was not used in any real UI control.
 
-- Was: hardcoded `bg-gray-100 text-gray-800` for all variants
-- Now: CSS variable tokens with `variant="success"` and `variant="warning"` support
-- All variants theme-responsive via `border-border` token
+Actual production integration: `ThemeToggle` uses `RecallMorphIcon` to animate the theme icon (Monitor → Sun → Moon).
 
-### 5. Skeleton Fix
+State transition: Uncontrolled mode — `icon` prop changes trigger spring-physics morph animation. Cycle: System → Light → Dark → System.
 
-**File**: `src/components/ui/skeleton.tsx`
+Reduced motion: `reducedMotion="user"` honors OS preference — morph degrades to instant swap.
 
-- Was: `bg-gray-100/70 dark:bg-gray-800/50`
-- Now: `bg-muted animate-pulse` — theme-aware, no hardcoded colors
+Accessibility: Parent `<Button>` retains `aria-label`, `title`, visible focus, keyboard activation. SVG is decorative (`label=""`).
 
-### 6. Scrollbar Tokens
+### Type safety
 
-**File**: `frontend/src/app/globals.css`
+`any` removed: `lucideIconToNode` return type changed from `any | undefined` to `IconNode | undefined`. Lucide `icons` lookup typed as `Record<string, IconNode>`.
 
-- Was: hardcoded `#d1d5db` (light) / `#4b5563` (dark) with `#9ca3af` hover
-- Now: `hsl(var(--muted-foreground))` for thumb, `hsl(var(--border))` for track
-- Hover state uses `--muted-foreground` with reduced opacity
+Any retained boundary: None. `IconNode` imported from `morphicons/react` covers the full conversion.
 
-### 7. Typography Hierarchy
+## Source-of-Truth Corrections
 
-**File**: `frontend/src/app/globals.css`
+Phases.md: Phase 2 marked complete with verified deliverables summary.
+Memory.md: Updated to final Phase 2 state with test commands, known problems, next step.
+Design.md: No changes needed — implementation matches existing design direction.
+Architecture.md: No changes needed — theme/bootstrap architecture is frontend-only.
+phase2-report.md: This file (corrected).
 
-7-level hierarchy with `letter-spacing` tuned for each:
-- `text-display` (32px/600/-0.02em) — hero moments only
-- `text-page-title` (24px/600/-0.015em) — page headers
-- `text-section-title` (18px/600/-0.01em) — section breaks
-- `text-body` (14px/400/0) — primary content
-- `text-small` (13px/400/0.005em) — secondary text
-- `text-caption` (12px/500/0.02em) — labels, metadata
-- `text-code` (13px/500/0) — inline code
+## Final Phase 2 Features
 
-### 8. Motion System
+- Semantic color tokens (20+ per theme) with WCAG AA contrast validated for both light and dark
+- System/Light/Dark theme with localStorage persistence and pre-paint bootstrap (no first-frame flash)
+- Typography hierarchy: display → code (7 levels with tuned letter-spacing)
+- shadcn component tokenization: button variants standardized, badge rewritten, skeleton fixed
+- Icon registry (Lucide re-exports) + Morphicons integration with real stateful use in ThemeToggle
+- Motion tokens (duration/easing CSS variables + Framer Motion presets)
+- Intentional reduced-motion (targets specific animations, preserves focus-visible)
+- Design-system regression test suite (20 tests)
 
-**File**: `frontend/src/lib/motion.ts`
+## Final Gates
 
-- Duration tokens: `instant` (120ms), `fast` (150ms), `standard` (250ms), `slow` (400ms)
-- Easing tokens: `out`, `inOut`, `spring` (stiffness: 300, damping: 30)
-- Pre-built Framer Motion transitions: `motionTokens.fast`, `motionTokens.spring`, etc.
-- Page transition variants for consistent route animations
+Frontend build: PASS (12 routes, 0 errors)
+Node tests: 150 pass / 1 fail (pre-existing qa-routes bun mismatch)
+Design regression: 20/20 PASS
+Updater regression: 6/6 PASS
+Analytics regression: 5/5 PASS
+Contract audit: 80 passed, 0 violations, 1 note
+Focused lint: 128 errors / 153 warnings (pre-existing baseline, no new errors)
+Global lint: same baseline
+Rust fmt: PASS (no diffs)
+Rust check: PASS
+Rust clippy: PASS (warnings only, no errors)
+Rust tests: 343 passed, 2 ignored, 0 failed
+Tauri smoke: PASS (cargo test includes Tauri build check)
+Bun-only: NOT AVAILABLE (Windows host limitation)
 
-**CSS motion tokens** in `globals.css`:
-- `--duration-instant`, `--duration-fast`, `--duration-standard`, `--duration-slow`
-- `--ease-out`, `--ease-in-out`
-- Uses Framer Motion defaults (cubic-bezier) not Emil's easing curves — existing codebase already uses Framer
+## Commits Added During Correction
 
-### 9. Reduced Motion
+```
+69f4335 docs: close Phase 2 source of truth
+26e283e fix(ui): remove any types from morph-icon.tsx
+5702098 feat(ui): integrate Morphicons in ThemeToggle for state transitions
+38f9dee fix(deps): remove duplicate morphicons entry in package.json
+0c09298 test(ui): validate WCAG AA contrast for both light and dark themes
+d23853b fix(ui): apply theme class before first paint
+```
 
-**File**: `frontend/src/app/globals.css`
+## Known Design Debt
 
-- **Intentional**, not blanket `* { animation: none }` (Emil's guidance)
-- Targets specific animations: pulse, shimmer, toast slide-in
-- Preserves `focus-visible` outlines (accessibility)
-- Body text remains readable during animation pause
-
-### 10. Icon System
-
-**Files**: `src/lib/icons.ts`, `src/components/ui/morph-icon.tsx`
-
-- **Icon registry**: `src/lib/icons.ts` — central re-exports of commonly used Lucide icons
-- Standard sizes: 16/18/20/24 via `iconSize` constant
-- Type-safe: `LucideIcon` type exported
-- **Morphicons**: `morphicons@1.7.1` installed, uses `lucide` data package (`lucide@1.43.0`) for icon node extraction
-- `RecallMorphIcon` wrapper: spring physics, reduced-motion fallback, `aria-hidden`, `focusable="false"`
-
-### 11. Component Fixes
-
-**Shared components** previously hardcoded to gray:
-- `PageHeader`: `text-page-title text-foreground`, `text-small text-muted-foreground`
-- `DownloadProgressToast`: All `gray-*` replaced with semantic tokens
-- `SummaryTemplateManager`: Partial token migration (remaining gray deferred to screen redesign)
-
-**BlockNote integration**:
-- `Editor.tsx`: Uses `useTheme().resolvedTheme` instead of hardcoded `theme="light"`
-- `BlockNoteSummaryView.tsx`: Same — follows app theme
-
-## Files Changed
-
-| File | Status | Description |
-|------|--------|-------------|
-| `src/app/globals.css` | **REWRITTEN** | Semantic tokens, motion tokens, typography, scrollbar, reduced-motion |
-| `tailwind.config.js` | UPDATED | New tokens, monospace stack, compact radius, removed hardcoded tertiary |
-| `src/contexts/ThemeContext.tsx` | NEW | ThemeProvider with System/Light/Dark + persistence |
-| `src/components/ThemeToggle.tsx` | NEW | Icon button cycling System→Light→Dark |
-| `src/components/PreferenceSettings.tsx` | REWRITTEN | Appearance section with theme selector |
-| `src/components/ui/button.tsx` | REWRITTEN | Semantic variants, focus ring, active state |
-| `src/components/ui/badge.tsx` | REWRITTEN | CSS variable tokens, success/warning variants |
-| `src/components/ui/skeleton.tsx` | FIXED | `bg-muted` |
-| `src/components/ui/morph-icon.tsx` | NEW | RecallMorphIcon wrapper |
-| `src/lib/icons.ts` | NEW | Icon registry with Lucide re-exports |
-| `src/lib/motion.ts` | NEW | Motion tokens, transitions, pageVariants |
-| `src/app/layout.tsx` | UPDATED | ThemeProvider wrapping, suppressHydrationWarning |
-| `src/components/BlockNoteEditor/Editor.tsx` | UPDATED | Uses resolvedTheme |
-| `src/components/AISummary/BlockNoteSummaryView.tsx` | UPDATED | Uses resolvedTheme |
-| `src/components/shared/PageHeader.tsx` | REWRITTEN | Semantic tokens |
-| `src/components/shared/DownloadProgressToast.tsx` | UPDATED | Semantic tokens |
-| `src/components/templates/SummaryTemplateManager.tsx` | PARTIALLY UPDATED | Section headers/lists use tokens |
-| `tests/lib/design-system-regression.test.mjs` | NEW | 15 regression tests |
-| `Memory.md` | UPDATED | Phase 2 state |
-| `package.json` | UPDATED | morphicons, lucide data package |
-| `pnpm-workspace.yaml` | NEW | lucide version exclusion |
-| 12 files with button variant migrations | UPDATED | blue→default, red→destructive |
-
-## Validation Gates
-
-| Gate | Result |
-|------|--------|
-| `cargo fmt --all --check` | PASS |
-| `cargo clippy --workspace --all-targets` | PASS (warnings only) |
-| `cargo test --workspace` | 343 passed, 2 ignored, 0 failed |
-| `pnpm run build` | PASS (12 routes, 0 errors) |
-| `node --test tests/lib/*.test.mjs` | 145 pass / 1 fail (pre-existing qa-routes bun mismatch) |
-| `node tests/contract/audit.mjs` | 80 passed, 0 violations, 1 note |
-| `node --test tests/lib/updater-regression.test.mjs` | 6/6 PASS |
-| `node --test tests/lib/analytics-regression.test.mjs` | 5/5 PASS |
-| `node --test tests/lib/design-system-regression.test.mjs` | 15/15 PASS |
-
-## Design Decisions
-
-1. **Tokens over hardcoded values**: Every color goes through CSS custom properties. No more `gray-*` in component code.
-2. **Intentional reduced-motion**: Not blanket `animation: none`. Targets specific animations while preserving focus-visible.
-3. **Framer Motion easing**: Used project defaults (cubic-bezier) rather than Emil's custom curves. Existing codebase already uses Framer.
-4. **Morphicons use Lucide data**: Not raw SVG. Consistent icon language, spring physics, reduced-motion fallback.
-5. **Theme persistence**: localStorage with `recall-theme` key. OS detection via `prefers-color-scheme` media query.
-6. **No Tailwind v4 upgrade**: Stayed on Tailwind 3 per risk-aversion rule.
-7. **No additional fonts**: Source Sans 3 remains primary. No decorative fonts added.
-8. **Deferred**: TemplateEditor.tsx has 15+ hardcoded gray references (redesign phase). SummaryTemplateManager partially migrated.
-
-## Remaining Design Debt
+Shared Phase 2 design-system primitives and touched foundational components use semantic color tokens. Some feature/screen-specific legacy hardcoded colors remain intentionally deferred to their screen redesign phases:
 
 - `TemplateEditor.tsx`: 15+ hardcoded `gray-*` references (deferred to screen redesign)
-- `SummaryTemplateManager.tsx`: Template list items still use hardcoded gray (deferred)
-- Tailwind CSS lint baseline: 128 errors / 153 warnings (pre-existing, deferred to quality phase)
+- `SummaryTemplateManager.tsx`: remaining hardcoded gray in template list items (deferred to screen redesign)
+- Frontend source lint baseline: 128 errors / 153 warnings (pre-existing; deferred to quality phase)
 
-## Skills Used
+## Phase 3
 
-- **ibelick/ui-skills**: baseline-ui (contrast verification, reduced-motion), fixing-accessibility (keyboard nav, focus-visible), fixing-motion-performance (animation auditing)
-- **emilkowalski/skills**: emil-design-eng (animation philosophy, spring physics, duration/easing guidance, component principles)
+`Phase 3 — Application Shell + Home`
 
-## Next Phase
+Per Phases.md: app shell (sidebar/topbar/tray surfaces) and a Home that answers "what requires my attention?". Scope includes Home layout (start recording, today, open actions, needs attention, recent meetings, active contexts, quick search) and global search entry point.
 
-Phase 3 should build on this foundation with the first user-facing screen (e.g., Settings redesign or Meeting Details), applying the tokens, motion system, and icon registry in context.
+Proposed first implementation slice: Refresh the existing sidebar and topbar surfaces using Phase 2 semantic tokens and motion system, establishing the visual container before building the Home content area.
+
+Phase 2 corrections are complete. Phase 2 has not been merged to main. I have not started Phase 3. Awaiting approval.
