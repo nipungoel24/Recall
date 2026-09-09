@@ -23,12 +23,21 @@ Each phase requires user approval before starting. Never begin the next phase au
 - Deferred (documented): frontend `serverAddress` vestigial gate (functional, low risk), archived `backend/` removal (separate review), `MEETILY_RSA_PUBLIC_KEY` secret rotation, identifier migration, global lint debt (later quality phase).
 - Acceptance criteria: all met (see Phase 1 report).
 
-## PHASE 2 — Design System + Icon/Motion System
+## PHASE 2 — Design System + Icon/Motion System ✅ (complete)
 
 - Goal: restrained brutalist productivity UI foundation.
-- Scope: semantic light/dark tokens (per Design.md), typography hierarchy, component tokenization (shadcn variants), icon registry (lucide base + Morphicons for state transitions), motion tokens, reduced-motion support, contrast validation.
-- Non-scope: screen redesigns.
-- Acceptance: token coverage; light/dark audit; components consistent; tests pass.
+- Done:
+  - Semantic color tokens (20+ per theme) with WCAG AA contrast validated for both light and dark.
+  - System/Light/Dark preference with localStorage persistence and pre-paint bootstrap (no first-frame flash).
+  - Typography hierarchy: display → code (7 levels with tuned letter-spacing).
+  - shadcn component tokenization: button variants standardized, badge rewritten, skeleton fixed, shared components migrated from hardcoded gray.
+  - Icon registry (Lucide re-exports) + Morphicons integration (spring physics, reduced-motion) with real stateful use in ThemeToggle.
+  - Motion tokens (duration/easing CSS variables + Framer Motion presets).
+  - Intentional reduced-motion (targets specific animations, preserves focus-visible).
+  - Contrast validation for both light and dark themes (programmatic WCAG AA test).
+  - Design-system regression test suite (24 tests).
+- Deferred (documented): TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray (deferred to their screen redesign phases).
+- Acceptance: all met (see Phase 2 correction report).
 
 ## PHASE 3 — Application Shell + Home
 
