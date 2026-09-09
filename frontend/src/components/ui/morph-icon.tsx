@@ -12,7 +12,7 @@
  */
 
 import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react'
-import { MorphIcon, type MorphIconProps, type MorphHandle, type SpringPreset } from 'morphicons/react'
+import { MorphIcon, type MorphIconProps, type MorphHandle, type SpringPreset, type IconNode } from 'morphicons/react'
 import { icons } from 'lucide'
 import type { LucideIcon } from 'lucide-react'
 
@@ -29,13 +29,19 @@ export interface RecallMorphIconProps extends Omit<MorphIconProps, 'from' | 'to'
   reducedMotion?: 'never' | 'user' | 'always'
 }
 
-function lucideIconToNode(icon: LucideIcon): any | undefined {
-  // Look up the icon name in the lucide data package
+/**
+ * Convert a Lucide React icon component to a MorphIcon-compatible IconNode.
+ *
+ * The lucide data package exports icons as IconNode-compatible structures
+ * ([tag, attrs] lists). We look up by PascalCase name.
+ */
+function lucideIconToNode(icon: LucideIcon): IconNode | undefined {
   const iconName = icon.displayName || icon.name
   if (!iconName) return undefined
-  // Lucide data package uses PascalCase keys
+  // Lucide data package uses PascalCase keys (e.g. "Sun", "Moon", "Monitor")
   const key = iconName.replace(/-/g, '')
-  return (icons as Record<string, any>)[key]
+  const node = (icons as Record<string, IconNode>)[key]
+  return node
 }
 
 /**
