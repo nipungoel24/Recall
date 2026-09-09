@@ -2,7 +2,11 @@
 
 import { useTheme } from '@/contexts/ThemeContext'
 import { Sun, Moon, Monitor } from 'lucide-react'
+import { RecallMorphIcon } from '@/components/ui/morph-icon'
 import { Button } from '@/components/ui/button'
+
+const themeIcons = { system: Monitor, light: Sun, dark: Moon } as const
+const themeLabels = { system: 'System', light: 'Light', dark: 'Dark' } as const
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
@@ -13,17 +17,23 @@ export function ThemeToggle() {
     else setTheme('system')
   }
 
+  const Icon = themeIcons[theme]
+
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={cycle}
-      aria-label={`Theme: ${theme}. Click to cycle.`}
-      title={`Theme: ${theme}`}
+      aria-label={`Theme: ${themeLabels[theme]}. Click to cycle.`}
+      title={`Theme: ${themeLabels[theme]}`}
     >
-      {theme === 'system' && <Monitor className="h-4 w-4" />}
-      {theme === 'light' && <Sun className="h-4 w-4" />}
-      {theme === 'dark' && <Moon className="h-4 w-4" />}
+      <RecallMorphIcon
+        icon={Icon}
+        size={16}
+        spring="snappy"
+        reducedMotion="user"
+        label=""
+      />
     </Button>
   )
 }
