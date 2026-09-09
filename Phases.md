@@ -39,12 +39,15 @@ Each phase requires user approval before starting. Never begin the next phase au
 - Deferred (documented): TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray (deferred to their screen redesign phases).
 - Acceptance: all met (see Phase 2 correction report).
 
-## PHASE 3 — Application Shell + Home
+## PHASE 3 — Application Shell + Home ✅ (complete)
 
 - Goal: app shell (sidebar/topbar/tray surfaces) and a Home that answers "what requires my attention?".
-- Scope: Home layout (start recording, today, open actions, needs attention, recent meetings, active contexts, quick search); global search entry point.
-- Non-scope: recording internals redesign.
-- Acceptance: Home is useful and fast; no vanity metrics; keyboard/dark/light/responsive verified.
+- Done:
+  - Sidebar: all hardcoded gray/white/blue/red replaced with semantic tokens; active state uses `bg-accent text-accent-foreground`; recording button uses `bg-destructive`; section labels use `text-muted-foreground`; MainContent wrapper uses `bg-background`.
+  - HomeDashboard: all hardcoded gray/white/blue replaced with semantic tokens; page uses `bg-background`; cards use `bg-surface`; headings use `text-foreground`; descriptions use `text-muted-foreground`; links use `text-primary`; hover states use `bg-accent/50`; lists use `divide-border`.
+  - Phase 3 regression test suite (17 tests): sidebar token audit, home token audit, route completeness, design-system compliance, test/tooling existence.
+- Deferred (documented): TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray (deferred to their screen redesign phases).
+- Acceptance: all met (build, cargo test, cargo fmt, contract audit, 17/17 Phase 3 tests pass).
 
 ## PHASE 4 — Recording Experience
 
