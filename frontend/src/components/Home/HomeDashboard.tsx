@@ -147,31 +147,31 @@ export function HomeDashboard() {
   const briefReady = brief?.status === 'completed' && Boolean(brief.markdown);
 
   return (
-    <div className="h-screen overflow-y-auto custom-scrollbar bg-gray-50">
+    <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
       <div className="max-w-[1080px] mx-auto px-8 py-8 pb-12">
         {/* ── Hero ─────────────────────────────────────────────── */}
-        <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <section className="rounded-2xl border border-border bg-surface shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center gap-6 p-8">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-500">
+              <p className="text-sm font-medium text-muted-foreground">
                 {greetingForHour(now.getHours())}
               </p>
-              <h1 className="mt-1 text-2xl font-bold text-gray-900">
+              <h1 className="mt-1 text-2xl font-bold text-foreground">
                 {hasMeetings ? 'Ready for your next meeting?' : 'Start your first meeting'}
               </h1>
-              <p className="mt-2 max-w-md text-sm text-gray-500">
+              <p className="mt-2 max-w-md text-sm text-muted-foreground">
                 Capture a meeting and Recall will transcribe, summarize, and remember the
                 important context.
               </p>
               {!hasMeetings && (
-                <ol className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
+                <ol className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
                   {[
                     ['1', 'Record a meeting'],
                     ['2', 'Get transcript & summary'],
                     ['3', 'Build context over time'],
                   ].map(([num, label]) => (
                     <li key={num} className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                         {num}
                       </span>
                       {label}
@@ -191,7 +191,7 @@ export function HomeDashboard() {
                 Start Recording
               </Button>
               <Button variant="outline" size="lg" onClick={() => router.push(routes.calendar())}>
-                <CalendarDays className="h-4 w-4 text-gray-500" />
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
                 Calendar
               </Button>
             </div>
@@ -203,13 +203,13 @@ export function HomeDashboard() {
           {/* Left column: today + recent */}
           <div className="space-y-6 lg:col-span-2">
             {/* Today */}
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-900">Today&apos;s Meetings</h2>
+                <h2 className="text-sm font-semibold text-foreground">Today&apos;s Meetings</h2>
                 <button
                   type="button"
                   onClick={() => router.push(routes.daily())}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
                 >
                   Open Daily View
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -223,27 +223,27 @@ export function HomeDashboard() {
                     <Skeleton className="h-10 w-full" />
                   </div>
                 ) : todayError ? (
-                  <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                    <p className="text-sm text-gray-500">Couldn&apos;t load today&apos;s meetings.</p>
+                  <div className="flex items-center justify-between rounded-lg border border-border bg-muted px-4 py-3">
+                    <p className="text-sm text-muted-foreground">Couldn&apos;t load today&apos;s meetings.</p>
                     <Button variant="outline" size="sm" onClick={() => void loadToday()}>
                       <RefreshCw className="h-3.5 w-3.5" />
                       Retry
                     </Button>
                   </div>
                 ) : todayMeetings && todayMeetings.length > 0 ? (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-border">
                     {todayMeetings.map((meeting) => (
                       <li key={meeting.id}>
                         <button
                           type="button"
                           onClick={() => openMeeting(meeting.id)}
-                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-gray-50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-accent/50 transition-colors"
                         >
-                          <span className="flex w-16 flex-shrink-0 items-center gap-1.5 text-sm font-medium text-gray-600 tabular-nums">
-                            <Clock className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="flex w-16 flex-shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground tabular-nums">
+                            <Clock className="h-3.5 w-3.5" />
                             {formatMeetingTime(meeting.created_at)}
                           </span>
-                          <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-900 group-hover:text-blue-700">
+                          <span className="flex-1 min-w-0 truncate text-sm font-medium text-foreground group-hover:text-primary">
                             {meeting.title}
                           </span>
                           {typeof meeting.duration_seconds === 'number' &&
@@ -252,13 +252,13 @@ export function HomeDashboard() {
                                 {Math.round(meeting.duration_seconds / 60)} min
                               </Badge>
                             )}
-                          <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-300 group-hover:text-blue-500" />
+                          <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-primary" />
                         </button>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     No meetings recorded today yet. Your next recording will show up here.
                   </p>
                 )}
@@ -266,14 +266,14 @@ export function HomeDashboard() {
             </section>
 
             {/* Recent */}
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-900">Recent Meetings</h2>
+                <h2 className="text-sm font-semibold text-foreground">Recent Meetings</h2>
                 {recentMeetings.length > 0 && (
                   <button
                     type="button"
                     onClick={() => router.push(routes.calendar())}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
                   >
                     View all
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -289,7 +289,7 @@ export function HomeDashboard() {
                     description="Recorded meetings will appear here for quick access."
                   />
                 ) : (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-border">
                     {recentMeetings.map((meeting) => {
                       const created = new Date(meeting.created_at ?? '');
                       const dayLabel = isNaN(created.getTime())
@@ -300,17 +300,17 @@ export function HomeDashboard() {
                           <button
                             type="button"
                             onClick={() => openMeeting(meeting.id)}
-                            className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-gray-50 transition-colors"
+                            className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-accent/50 transition-colors"
                           >
-                            <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-900 group-hover:text-blue-700">
+                            <span className="flex-1 min-w-0 truncate text-sm font-medium text-foreground group-hover:text-primary">
                               {meeting.title}
                             </span>
-                            <span className="flex-shrink-0 text-xs text-gray-400">
+                            <span className="flex-shrink-0 text-xs text-muted-foreground">
                               {dayLabel === 'Today' || dayLabel === 'Yesterday'
                                 ? `${dayLabel}, ${formatMeetingTime(meeting.created_at ?? '')}`
                                 : `${dayLabel}`}
                             </span>
-                            <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-300 group-hover:text-blue-500" />
+                            <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-primary" />
                           </button>
                         </li>
                       );
@@ -324,23 +324,23 @@ export function HomeDashboard() {
           {/* Right column: brief + contexts */}
           <div className="space-y-6">
             {/* Daily Brief */}
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-blue-500" />
-                <h2 className="text-sm font-semibold text-gray-900">Daily Brief</h2>
+                <Sparkles className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Daily Brief</h2>
               </div>
 
               <div className="mt-4">
                 {todayMeetings === null ? (
                   <Skeleton className="h-20 w-full" />
                 ) : todayMeetings.length === 0 ? (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     No meetings today yet — the Daily Brief becomes available once a day has
                     meetings.
                   </p>
                 ) : briefReady ? (
                   <div>
-                    <p className="line-clamp-3 text-sm text-gray-600 whitespace-pre-wrap">
+                    <p className="line-clamp-3 text-sm text-muted-foreground whitespace-pre-wrap">
                       {brief?.markdown}
                     </p>
                     <Button
@@ -355,7 +355,7 @@ export function HomeDashboard() {
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                       {meetingCountLabel(todayMeetings.length)} recorded today. Combine them
                       into one polished brief.
                     </p>
@@ -374,17 +374,17 @@ export function HomeDashboard() {
             </section>
 
             {/* Contexts */}
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-blue-500" />
-                  <h2 className="text-sm font-semibold text-gray-900">Contexts</h2>
+                  <Layers className="h-4 w-4 text-primary" />
+                  <h2 className="text-sm font-semibold text-foreground">Contexts</h2>
                 </div>
                 {contextsState.contexts.length > 0 && (
                   <button
                     type="button"
                     onClick={() => router.push(routes.contexts())}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
                   >
                     View contexts
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -410,29 +410,29 @@ export function HomeDashboard() {
                     }
                   />
                 ) : (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-border">
                     {recentContexts.map((context) => (
                       <li key={context.id}>
                         <button
                           type="button"
                           onClick={() => router.push(routes.context(context.id))}
-                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-gray-50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-accent/50 transition-colors"
                         >
-                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-50">
-                            <Layers className="h-4 w-4 text-blue-600" />
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <Layers className="h-4 w-4 text-primary" />
                           </span>
                           <span className="flex-1 min-w-0">
-                            <span className="block truncate text-sm font-medium text-gray-900 group-hover:text-blue-700">
+                            <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
                               {context.name}
                             </span>
-                            <span className="block text-xs text-gray-400">
+                            <span className="block text-xs text-muted-foreground">
                               {meetingCountLabel(context.meetingCount)}
                               {relativeUpdatedLabel(context.updatedAt, now)
                                 ? ` · ${relativeUpdatedLabel(context.updatedAt, now)}`
                                 : ''}
                             </span>
                           </span>
-                          <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-300 group-hover:text-blue-500" />
+                          <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-primary" />
                         </button>
                       </li>
                     ))}
