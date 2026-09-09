@@ -11,7 +11,7 @@
  *   Sun ↔ Moon, Search ↔ Close, Panel open ↔ Panel closed
  */
 
-import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { MorphIcon, type MorphIconProps, type MorphHandle, type SpringPreset, type IconNode } from 'morphicons/react'
 import { icons } from 'lucide'
 import type { LucideIcon } from 'lucide-react'

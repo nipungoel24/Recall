@@ -35,7 +35,7 @@ Each phase requires user approval before starting. Never begin the next phase au
   - Motion tokens (duration/easing CSS variables + Framer Motion presets).
   - Intentional reduced-motion (targets specific animations, preserves focus-visible).
   - Contrast validation for both light and dark themes (programmatic WCAG AA test).
-  - Design-system regression test suite (24 tests).
+  - Design-system regression test suite (20 tests).
 - Deferred (documented): TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray (deferred to their screen redesign phases).
 - Acceptance: all met (see Phase 2 correction report).
 

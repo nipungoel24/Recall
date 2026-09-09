@@ -18,6 +18,8 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Pre-paint theme bootstrap (inline script in <head>, no first-frame flash)
   - Morphicons real integration (ThemeToggle morphs Monitor/Sun/Moon)
   - WCAG AA contrast validated for both light and dark themes
+- Phase 2 closure: `4931b92` + 2 closure corrections (`Phases.md` test-count fix, unused import removal)
+- Native Tauri smoke: app compiles and runs on Windows; visual theme verification requires manual inspection
 
 # Decisions
 
