@@ -526,12 +526,12 @@ const Sidebar: React.FC = () => {
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
                 aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
-                className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-full transition-colors duration-150 shadow-sm`}
+                className={`p-2 ${isRecording ? 'bg-destructive cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-full transition-colors duration-150 shadow-sm`}
               >
                 {isRecording ? (
-                  <Square className="w-5 h-5 text-white" />
+                  <Square className="w-5 h-5 text-primary-foreground" />
                 ) : (
-                  <Mic className="w-5 h-5 text-white" />
+                  <Mic className="w-5 h-5 text-primary-foreground" />
                 )}
               </button>
             </TooltipTrigger>
@@ -971,7 +971,7 @@ const Sidebar: React.FC = () => {
             <button
               onClick={handleRecordingToggle}
               disabled={isRecording}
-              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white ${isRecording ? 'bg-destructive/50 cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-lg transition-colors shadow-sm`}
+              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-primary-foreground ${isRecording ? 'bg-destructive/50 cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-lg transition-colors shadow-sm`}
             >
               {isRecording ? (
                 <>
