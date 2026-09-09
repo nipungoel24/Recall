@@ -35,47 +35,52 @@ function applyTheme(resolved: 'light' | 'dark') {
   root.style.colorScheme = resolved
 }
 
+function readDomTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light'
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system')
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light')
-  const [mounted, setMounted] = useState(false)
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => readDomTheme())
 
-  // Resolve and apply theme
-  const resolveAndApply = useCallback((t: Theme) => {
-    const resolved = t === 'system' ? getSystemTheme() : t
-    setResolvedTheme(resolved)
-    applyTheme(resolved)
-  }, [])
-
-  // Initialize from storage
+  // Sync with pre-painted bootstrap state and set up listeners
   useEffect(() => {
     const stored = getStoredTheme()
+    const domTheme = readDomTheme()
+
     setThemeState(stored)
-    resolveAndApply(stored)
-    setMounted(true)
-  }, [resolveAndApply])
+    setResolvedTheme(domTheme)
+
+    // Ensure DOM matches stored preference (bootstrap may have used OS default
+    // when stored theme is 'system' — resolveAndApply handles this)
+    const resolved = stored === 'system' ? getSystemTheme() : stored
+    applyTheme(resolved)
+    setResolvedTheme(resolved)
+  }, [])
 
   // Listen for OS theme changes when in system mode
   useEffect(() => {
     if (theme !== 'system') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => resolveAndApply('system')
+    const handler = () => {
+      const resolved = getSystemTheme()
+      setResolvedTheme(resolved)
+      applyTheme(resolved)
+    }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
-  }, [theme, resolveAndApply])
+  }, [theme])
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t)
     try {
       localStorage.setItem(STORAGE_KEY, t)
     } catch {}
-    resolveAndApply(t)
-  }, [resolveAndApply])
-
-  // Prevent flash: render nothing until mounted
-  if (!mounted) {
-    return <>{children}</>
-  }
+    const resolved = t === 'system' ? getSystemTheme() : t
+    setResolvedTheme(resolved)
+    applyTheme(resolved)
+  }, [])
 
   return (
     <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>
@@ -87,10 +92,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme() {
   const ctx = useContext(ThemeContext)
   if (!ctx) {
-    // Fallback for components rendered outside provider
     return {
       theme: 'system' as Theme,
-      resolvedTheme: 'light' as 'light' | 'dark',
+      resolvedTheme: readDomTheme(),
       setTheme: () => {},
     }
   }

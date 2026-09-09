@@ -234,6 +234,13 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('recall-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;var c=t==='dark'||(t!=='light'&&d)?'dark':'light';document.documentElement.classList.add(c);document.documentElement.style.colorScheme=c}catch(e){document.documentElement.classList.add('light');document.documentElement.style.colorScheme='light'}})()`,
+          }}
+        />
+      </head>
       <body className={`${sourceSans3.variable} font-sans antialiased`}>
         <ThemeProvider>
           <RecordingStateProvider>
