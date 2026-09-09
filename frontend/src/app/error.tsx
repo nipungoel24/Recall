@@ -39,7 +39,7 @@ export default function GlobalError({
             <Home className="h-4 w-4" />
             Go to Home
           </Button>
-          <Button variant="blue" onClick={reset}>
+          <Button variant="default" onClick={reset}>
             <RefreshCw className="h-4 w-4" />
             Try again
           </Button>

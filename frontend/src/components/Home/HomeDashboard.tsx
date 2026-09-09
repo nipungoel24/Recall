@@ -182,7 +182,7 @@ export function HomeDashboard() {
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               <Button
-                variant="red"
+                variant="destructive"
                 size="lg"
                 className="rounded-full px-6 shadow-sm"
                 onClick={startRecording}
@@ -360,7 +360,7 @@ export function HomeDashboard() {
                       into one polished brief.
                     </p>
                     <Button
-                      variant="blue"
+                      variant="default"
                       size="sm"
                       className="mt-3 w-full"
                       onClick={() => router.push(routes.daily())}

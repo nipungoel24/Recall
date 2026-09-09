@@ -40,7 +40,7 @@ function ContextsListPage() {
           title="Contexts"
           description="Group related meetings — like a project, client, or initiative — and see what carries over across them."
           actions={
-            <Button variant="blue" onClick={() => setCreateOpen(true)} className="cursor-pointer">
+            <Button variant="default" onClick={() => setCreateOpen(true)} className="cursor-pointer">
               <Plus />
               New Context
             </Button>
@@ -70,7 +70,7 @@ function ContextsListPage() {
               Create a Context to group related meetings — like a project, client, or ongoing
               initiative — and keep their decisions, action items, and questions together.
             </p>
-            <Button variant="blue" onClick={() => setCreateOpen(true)} className="cursor-pointer">
+            <Button variant="default" onClick={() => setCreateOpen(true)} className="cursor-pointer">
               <Plus />
               Create your first Context
             </Button>

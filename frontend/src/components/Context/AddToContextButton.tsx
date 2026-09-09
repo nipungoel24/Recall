@@ -245,7 +245,7 @@ export function AddToContextButton({
                   maxLength={120}
                 />
                 <Button
-                  variant="blue"
+                  variant="default"
                   size="sm"
                   onClick={() => void handleInlineCreate()}
                   disabled={isCreating || !newContextName.trim()}

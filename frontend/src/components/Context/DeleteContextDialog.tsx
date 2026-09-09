@@ -61,7 +61,7 @@ export function DeleteContextDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeleting}>
             Cancel
           </Button>
-          <Button variant="red" onClick={handleConfirm} disabled={isDeleting}>
+          <Button variant="destructive" onClick={handleConfirm} disabled={isDeleting}>
             {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
             Delete Context
           </Button>

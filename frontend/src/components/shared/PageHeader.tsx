@@ -8,18 +8,13 @@ interface PageHeaderProps {
   actions?: React.ReactNode;
 }
 
-/**
- * Consistent page header: title (largest), muted description, and right-side
- * actions. Used by Calendar, Daily, Contexts, Templates, and Settings-style
- * pages so every route shares the same hierarchy.
- */
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between gap-4 mb-6">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+        <h1 className="text-page-title text-foreground">{title}</h1>
         {description ? (
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
+          <p className="text-small text-muted-foreground mt-1">{description}</p>
         ) : null}
       </div>
       {actions ? (
@@ -37,19 +32,15 @@ interface EmptyStateProps {
   className?: string;
 }
 
-/**
- * Intentional empty state for a section: quiet icon, short title, one line of
- * guidance, and an optional action. Never a loud full-page takeover.
- */
 export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/60 px-6 py-8 text-center ${className ?? ''}`}
+      className={`flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-6 py-8 text-center ${className ?? ''}`}
     >
-      {icon ? <div className="mb-3 text-gray-300">{icon}</div> : null}
-      <p className="text-sm font-medium text-gray-700">{title}</p>
+      {icon ? <div className="mb-3 text-muted-foreground/40">{icon}</div> : null}
+      <p className="text-sm font-medium text-foreground">{title}</p>
       {description ? (
-        <p className="mt-1 max-w-sm text-xs text-gray-500">{description}</p>
+        <p className="mt-1 max-w-sm text-xs text-muted-foreground">{description}</p>
       ) : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>

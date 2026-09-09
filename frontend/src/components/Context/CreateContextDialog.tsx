@@ -112,7 +112,7 @@ export function CreateContextDialog({ open, onOpenChange, onCreated }: CreateCon
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button variant="blue" onClick={handleSubmit} disabled={isSubmitting || !name.trim()}>
+          <Button variant="default" onClick={handleSubmit} disabled={isSubmitting || !name.trim()}>
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Plus />}
             Create Context
           </Button>

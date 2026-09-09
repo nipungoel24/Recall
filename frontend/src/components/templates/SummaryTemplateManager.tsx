@@ -131,16 +131,16 @@ export function SummaryTemplateManager() {
   }, [deleteTemplate, templateToDelete]);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-6">
+    <div className="bg-surface rounded-xl border border-border shadow-sm">
+      <div className="flex items-start justify-between gap-4 border-b border-border p-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Summary Templates</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-lg font-semibold text-foreground">Summary Templates</h2>
+          <p className="text-sm text-muted-foreground mt-1">
             Built-in templates are read-only. Your templates can be edited, duplicated, or
             deleted.
           </p>
         </div>
-        <Button variant="blue" onClick={openCreateEditor}>
+        <Button variant="default" onClick={openCreateEditor}>
           <Plus /> New Template
         </Button>
       </div>
@@ -153,36 +153,36 @@ export function SummaryTemplateManager() {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             {error}
           </div>
         ) : (
           <div className="space-y-8">
             <section>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              <h3 className="text-sm font-semibold text-foreground mb-3">
                 My Templates
-                <span className="ml-2 text-xs font-normal text-gray-400">
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
                   {customTemplates.length}
                 </span>
               </h3>
               {customTemplates.length === 0 ? (
-                <div className="rounded-md border border-dashed border-gray-300 p-6 text-center">
-                  <FileText className="mx-auto h-8 w-8 text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-600">
+                <div className="rounded-md border border-dashed border-border p-6 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">
                     No custom templates yet. Create one to tailor summaries to your workflow.
                   </p>
                 </div>
               ) : (
-                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                <ul className="divide-y divide-border rounded-lg border border-border">
                   {customTemplates.map((template) => (
                     <li key={template.id} className="flex items-center justify-between gap-4 p-4">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">{template.name}</span>
-                          <Badge variant="blue">Custom</Badge>
-                          {defaultTemplateId === template.id && <Badge variant="green">Default</Badge>}
+                          <span className="font-medium text-foreground">{template.name}</span>
+                          <Badge variant="secondary">Custom</Badge>
+                          {defaultTemplateId === template.id && <Badge variant="success">Default</Badge>}
                         </div>
-                        <p className="text-sm text-gray-500 truncate mt-0.5" title={template.description}>
+                        <p className="text-sm text-muted-foreground truncate mt-0.5" title={template.description}>
                           {template.description}
                         </p>
                       </div>
@@ -235,22 +235,22 @@ export function SummaryTemplateManager() {
 
             {readOnlyTemplates.length > 0 && (
               <section>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                <h3 className="text-sm font-semibold text-foreground mb-3">
                   Built-in Templates
-                  <span className="ml-2 text-xs font-normal text-gray-400">
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
                     {readOnlyTemplates.length}
                   </span>
                 </h3>
-                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                <ul className="divide-y divide-border rounded-lg border border-border">
                   {readOnlyTemplates.map((template) => (
                     <li key={template.id} className="flex items-center justify-between gap-4 p-4">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">{template.name}</span>
+                          <span className="font-medium text-foreground">{template.name}</span>
                           <Badge variant="default">Built-in</Badge>
-                          {defaultTemplateId === template.id && <Badge variant="green">Default</Badge>}
+                          {defaultTemplateId === template.id && <Badge variant="success">Default</Badge>}
                         </div>
-                        <p className="text-sm text-gray-500 truncate mt-0.5" title={template.description}>
+                        <p className="text-sm text-muted-foreground truncate mt-0.5" title={template.description}>
                           {template.description}
                         </p>
                       </div>

@@ -158,7 +158,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
             ) : null}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 pt-1">
-            <Button variant="blue" size="sm" onClick={() => setAddMeetingsOpen(true)}>
+            <Button variant="default" size="sm" onClick={() => setAddMeetingsOpen(true)}>
               <Plus />
               <span className="hidden sm:inline">Add Meetings</span>
             </Button>
@@ -176,7 +176,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
               <Pencil />
               <span className="hidden sm:inline">Rename</span>
             </Button>
-            <Button variant="red" size="sm" onClick={() => setDeleteOpen(true)} title="Delete Context">
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} title="Delete Context">
               <Trash2 />
             </Button>
           </div>
@@ -246,7 +246,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
             >
               Cancel
             </Button>
-            <Button variant="blue" size="sm" onClick={() => void handleRebuildConfirm()} disabled={isRebuilding}>
+            <Button variant="default" size="sm" onClick={() => void handleRebuildConfirm()} disabled={isRebuilding}>
               {isRebuilding ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
               {isRebuilding ? 'Rebuilding…' : 'Rebuild Memory'}
             </Button>

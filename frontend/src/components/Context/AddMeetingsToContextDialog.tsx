@@ -130,7 +130,7 @@ export function AddMeetingsToContextDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button variant="blue" onClick={handleSubmit} disabled={isSubmitting || selectedIds.length === 0}>
+          <Button variant="default" onClick={handleSubmit} disabled={isSubmitting || selectedIds.length === 0}>
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Plus />}
             Add {selectedIds.length > 0 ? `(${selectedIds.length})` : ''}
           </Button>
