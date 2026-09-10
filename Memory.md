@@ -7,16 +7,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 - Current phase: Phase 3 COMPLETE
 - Branch: `phase/3-shell-home`
 - Base: `a8a386b` (Phase 2 merged to main)
-- Latest commit: `0908dd2`
-
-# Phase 3 Audit Findings
-
-- Routes: `/` Home, `/calendar`, `/daily`, `/context`, `/meeting-details`, `/settings` = REAL+FUNCTIONAL. `/notes` = STALE/DEMO. `/templates` = duplicate of Settings tab.
-- Sidebar: Dual-mode (collapsed/expanded), search via `api_search_transcripts`, recording state via RecordingStateContext. Active state uses `bg-accent text-accent-foreground`.
-- HomeDashboard: Today's meetings (api_get_meetings_by_range), Daily Brief (api_get_daily_summary), Recent (sidebar meetings), Contexts (useContexts). 2 own API calls + 2 pre-loaded.
-- Recording: RecordingStateContext provides isRecording/isPaused/status. Sidebar button dispatches events to Home.
-- Window: Native decorations, 1100x700, close-to-tray. No custom titlebar.
-- No new Rust commands needed for Phase 3.
+- Latest commit: `7098ecd`
 
 # Completed
 
@@ -29,11 +20,12 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Morphicons real integration (ThemeToggle morphs Monitor/Sun/Moon)
   - WCAG AA contrast validated for both light and dark themes
 - Phase 2 closure: `4931b92` + 2 closure corrections (`Phases.md` test-count fix, unused import removal)
-- Native Tauri smoke: app compiles and runs on Windows; visual theme verification requires manual inspection
-- Phase 3: application shell + home (sidebar tokens, HomeDashboard tokens, 17 regression tests)
-  - Sidebar: bg-destructive recording, bg-accent active, text-primary-foreground icons, bg-background MainContent
-  - HomeDashboard: bg-background page, bg-surface cards, text-foreground headings, text-muted-foreground descriptions, divide-border lists
-  - 3 commits: `2a03af9`, `e97092f`, `0908dd2`
+- Phase 3: application shell + home (7 commits on phase/3-shell-home)
+  - Commits: `2a03af9`, `e97092f`, `0908dd2`, `a7b7cdf`, `7479d6e`, `f105d2c`, `57697a7`, `7098ecd`
+  - Sidebar: semantic tokens, button semantics (div→button), aria-current, focus-visible, Ctrl+K, search aria-label
+  - Home: semantic tokens, brutalist hierarchy (no shadows, no rounded-xl, uppercase headers, border separators)
+  - Home failure states: daily brief error + contexts error surfaced with AlertTriangle + retry
+  - 27 regression tests covering accessibility, hierarchy, failure states, tokens, routes
 
 # Decisions
 
@@ -45,21 +37,30 @@ Concise, factual working memory. Updated after every completed task, major decis
 - BlockNote theme follows app theme (was hardcoded "light")
 - Reduced motion: intentional, not blanket `* { animation: none }`
 - Theme bootstrap: inline script in <head> sets class before React hydrates; ThemeProvider syncs on mount
-- Phase 3 sidebar: bg-red-500 → bg-destructive (not bg-red-500 which would bypass token system)
+- Phase 3 sidebar: bg-red-500 → bg-destructive (semantic, theme-aware)
 - Phase 3 sidebar: text-white → text-primary-foreground (semantic, theme-aware)
-- Phase 3 home: bg-white → bg-surface (raised surface), bg-gray-50 → bg-background (page)
+- Phase 3 home: bg-white → bg-surface, bg-gray-50 → bg-background
+- Phase 3 home: brutalist hierarchy — no shadows, no rounded-xl, 1px borders, uppercase tracking headers
+- Phase 3 keyboard: Ctrl+K focuses sidebar search; Escape blurs it
+- Phase 3 failure states: daily brief failure + contexts error now surface honest error messages with retry
+- Phase 3 attention: per-meeting summary failures NOT surfaced (requires new bulk query API on summary_processes table — deferred)
 
 # Phase 3 Test Commands
 
-- cargo fmt --all --check → PASS
-- cargo test --workspace → 343 passed, 0 failed
+- pnpm install --frozen-lockfile → PASS
 - pnpm run build → PASS (Compiled successfully)
-- node tests/contract/audit.mjs → 80 passed, 0 violations, 1 note
-- node --test tests/lib/phase3-shell-home.test.mjs → 17/17 PASS
+- node --test tests/lib/phase3-shell-home.test.mjs → 27/27 PASS
 - node --test tests/lib/design-system-regression.test.mjs → 20/20 PASS
 - node --test tests/lib/updater-regression.test.mjs → PASS
 - node --test tests/lib/analytics-regression.test.mjs → PASS
-- node --test tests/lib/*.test.mjs → 167 pass / 1 fail (pre-existing bun issue on Windows)
+- node tests/contract/audit.mjs → 80 passed, 0 violations, 1 note
+- node --test tests/lib/*.test.mjs → 177 pass / 1 fail (pre-existing bun issue on Windows)
+- cargo fmt --all --check → PASS
+- cargo check --workspace → PASS
+- cargo test --workspace → 343 passed, 0 failed (2 + 340 + 0 + 1)
+- cargo tauri build --debug --no-bundle → PASS (recall.exe built)
+- focused lint → 128 errors / 153 warnings (pre-existing baseline, no new)
+- bun test → NOT AVAILABLE on Windows
 
 # Known Problems
 
@@ -70,12 +71,12 @@ Concise, factual working memory. Updated after every completed task, major decis
 - Main branch protection: recommended but not enabled (direct push succeeded)
 - TemplateEditor.tsx: 15+ hardcoded gray references (deferred to screen redesign)
 - SummaryTemplateManager.tsx: remaining hardcoded gray (deferred to screen redesign)
+- Per-meeting summary failure attention signals require new bulk query API (Phase 4+ territory)
 
 # Next Exact Step
 
-1. Publish `phase/3-shell-home` branch to origin.
-2. Fast-forward main to phase/3-shell-home after review.
-3. Begin Phase 4 — Recording Experience per Phases.md.
+1. Fast-forward main to phase/3-shell-home after review.
+2. Begin Phase 4 — Recording Experience per Phases.md.
 
 # Blockers
 

@@ -43,11 +43,15 @@ Each phase requires user approval before starting. Never begin the next phase au
 
 - Goal: app shell (sidebar/topbar/tray surfaces) and a Home that answers "what requires my attention?".
 - Done:
-  - Sidebar: all hardcoded gray/white/blue/red replaced with semantic tokens; active state uses `bg-accent text-accent-foreground`; recording button uses `bg-destructive`; section labels use `text-muted-foreground`; MainContent wrapper uses `bg-background`.
-  - HomeDashboard: all hardcoded gray/white/blue replaced with semantic tokens; page uses `bg-background`; cards use `bg-surface`; headings use `text-foreground`; descriptions use `text-muted-foreground`; links use `text-primary`; hover states use `bg-accent/50`; lists use `divide-border`.
-  - Phase 3 regression test suite (17 tests): sidebar token audit, home token audit, route completeness, design-system compliance, test/tooling existence.
-- Deferred (documented): TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray (deferred to their screen redesign phases).
-- Acceptance: all met (build, cargo test, cargo fmt, contract audit, 17/17 Phase 3 tests pass).
+  - Sidebar: semantic tokens (bg-destructive recording, bg-accent active, text-primary-foreground icons, bg-background MainContent).
+  - Sidebar accessibility: expanded nav items converted from `<div>` to `<button>` elements; `aria-current="page"` on all active nav items (expanded + collapsed); `focus-visible:ring-2 focus-visible:ring-ring` on all interactive elements; `aria-label` on search input.
+  - Keyboard: global Ctrl+K / Cmd+K shortcut focuses sidebar search (auto-expands if collapsed); Escape blurs search input.
+  - HomeDashboard: semantic tokens throughout (bg-background page, bg-surface sections, text-foreground headings, text-muted-foreground descriptions, text-primary links, divide-border lists, border-border sections).
+  - Home hierarchy: brutalist redesign — no shadows, no rounded-xl/2xl, 1px borders, uppercase tracking-wider section headers, border-b separators, information-dense layout.
+  - Home failure states: daily brief failure rendered with AlertTriangle + error message + Retry button (was silently swallowed); contexts error rendered with AlertTriangle + error message + Retry via refetch (was not rendered).
+  - Phase 3 regression test suite (27 tests): shell tokens, sidebar accessibility (aria-current, button semantics, focus-visible, Ctrl+K), home tokens, home hierarchy (brutalist), home failure states, routes, design-system compliance, test/tooling existence.
+- Deferred (documented): per-meeting summary failure attention signals require new bulk query API (summary_processes.status not exposed on MeetingMetadata); TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray deferred to their screen redesign phases.
+- Acceptance: all met (build, cargo test 343, cargo fmt, contract audit, 27/27 Phase 3 tests pass).
 
 ## PHASE 4 — Recording Experience
 
