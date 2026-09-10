@@ -313,14 +313,7 @@ export function HomeDashboard() {
               </div>
 
               <div className="p-5">
-                {todayMeetings === null ? (
-                  <Skeleton className="h-20 w-full" />
-                ) : todayMeetings.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No meetings today yet — the Daily Brief becomes available once a day has
-                    meetings.
-                  </p>
-                ) : briefLoadError ? (
+                {briefLoadError ? (
                   <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/5 p-3">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
                     <div className="flex-1 min-w-0">
@@ -370,6 +363,35 @@ export function HomeDashboard() {
                       View Daily Brief
                     </Button>
                   </div>
+                ) : todayMeetings === null ? (
+                  todayError ? (
+                    <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/5 p-3">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">Daily Brief unavailable</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Couldn&apos;t determine Daily Brief availability because today&apos;s meetings
+                          couldn&apos;t be loaded.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => void loadToday()}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Skeleton className="h-20 w-full" />
+                  )
+                ) : todayMeetings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No meetings today yet — the Daily Brief becomes available once a day has
+                    meetings.
+                  </p>
                 ) : (
                   <div>
                     <p className="text-sm text-muted-foreground">

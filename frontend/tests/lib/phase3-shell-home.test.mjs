@@ -297,6 +297,53 @@ describe('Phase 3 — home failure states', () => {
       'HomeDashboard must have retry (refetch) for contexts error',
     )
   })
+
+  it('Daily Brief section checks brief states before today dependency', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    // The render order must check briefLoadError, briefFailed, briefReady
+    // BEFORE the todayMeetings === null skeleton fallback.
+    const briefLoadIdx = src.indexOf('briefLoadError ?')
+    const briefFailedIdx = src.indexOf('briefFailed ?')
+    const briefReadyIdx = src.indexOf('briefReady ?')
+    const skeletonIdx = src.indexOf('todayMeetings === null ?')
+
+    assert.ok(briefLoadIdx > 0, 'briefLoadError must be checked in render')
+    assert.ok(briefFailedIdx > briefLoadIdx, 'briefFailed must come after briefLoadError')
+    assert.ok(briefReadyIdx > briefFailedIdx, 'briefReady must come after briefFailed')
+    assert.ok(
+      skeletonIdx > briefReadyIdx,
+      'todayMeetings === null skeleton must come AFTER brief-specific states',
+    )
+  })
+
+  it('Today failure does not cause infinite Daily Brief skeleton', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    // When todayMeetings === null AND todayError is set, the component must
+    // show an error state, not a skeleton.
+    assert.ok(
+      src.includes('todayError') && src.includes('Daily Brief unavailable'),
+      'Home must show "Daily Brief unavailable" when todayError is set',
+    )
+    assert.ok(
+      src.includes("Couldn") && src.includes("today"),
+      'Home must explain that today failure prevents brief availability',
+    )
+    assert.ok(
+      src.includes('loadToday'),
+      'Home must have retry for today failure in brief section',
+    )
+  })
+
+  it('Brief completed displays even when today list fails', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    // If brief is completed (briefReady), it must render before any todayMeetings check.
+    const briefReadyIdx = src.indexOf('briefReady ?')
+    const skeletonIdx = src.indexOf('todayMeetings === null ?')
+    assert.ok(
+      briefReadyIdx > 0 && briefReadyIdx < skeletonIdx,
+      'briefReady must be checked before todayMeetings === null to show completed brief even when today fails',
+    )
+  })
 })
 
 // ── Routes ────────────────────────────────────────────────
