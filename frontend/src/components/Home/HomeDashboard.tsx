@@ -152,48 +152,28 @@ export function HomeDashboard() {
     <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
       <div className="max-w-[1080px] mx-auto px-8 py-8 pb-12">
         {/* ── Hero ─────────────────────────────────────────────── */}
-        <section className="rounded-2xl border border-border bg-surface shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center gap-6 p-8">
+        <section className="border border-border">
+          <div className="flex flex-col md:flex-row md:items-center gap-6 p-6">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {greetingForHour(now.getHours())}
               </p>
-              <h1 className="mt-1 text-2xl font-bold text-foreground">
-                {hasMeetings ? 'Ready for your next meeting?' : 'Start your first meeting'}
+              <h1 className="mt-2 text-xl font-bold text-foreground tracking-tight">
+                {hasMeetings ? 'What requires your attention?' : 'Start your first meeting'}
               </h1>
-              <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                Capture a meeting and Recall will transcribe, summarize, and remember the
-                important context.
-              </p>
-              {!hasMeetings && (
-                <ol className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                  {[
-                    ['1', 'Record a meeting'],
-                    ['2', 'Get transcript & summary'],
-                    ['3', 'Build context over time'],
-                  ].map(([num, label]) => (
-                    <li key={num} className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                        {num}
-                      </span>
-                      {label}
-                    </li>
-                  ))}
-                </ol>
-              )}
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
                 variant="destructive"
-                size="lg"
-                className="rounded-full px-6 shadow-sm"
+                size="default"
+                className="px-5"
                 onClick={startRecording}
               >
                 <Mic className="h-4 w-4" />
                 Start Recording
               </Button>
-              <Button variant="outline" size="lg" onClick={() => router.push(routes.calendar())}>
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <Button variant="outline" size="default" onClick={() => router.push(routes.calendar())}>
+                <CalendarDays className="h-4 w-4" />
                 Calendar
               </Button>
             </div>
@@ -201,31 +181,31 @@ export function HomeDashboard() {
         </section>
 
         {/* ── Main grid ────────────────────────────────────────── */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {/* Left column: today + recent */}
-          <div className="space-y-6 lg:col-span-2">
+          <div className="space-y-4 lg:col-span-2">
             {/* Today */}
-            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground">Today&apos;s Meetings</h2>
+            <section className="border border-border">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Today</h2>
                 <button
                   type="button"
                   onClick={() => router.push(routes.daily())}
                   className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
                 >
-                  Open Daily View
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  Daily View
+                  <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
 
-              <div className="mt-4">
+              <div className="p-5">
                 {todayMeetings === null && !todayError ? (
                   <div className="space-y-2.5">
                     <Skeleton className="h-10 w-full" />
                     <Skeleton className="h-10 w-full" />
                   </div>
                 ) : todayError ? (
-                  <div className="flex items-center justify-between rounded-lg border border-border bg-muted px-4 py-3">
+                  <div className="flex items-center justify-between border border-border bg-muted px-4 py-3">
                     <p className="text-sm text-muted-foreground">Couldn&apos;t load today&apos;s meetings.</p>
                     <Button variant="outline" size="sm" onClick={() => void loadToday()}>
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -268,22 +248,22 @@ export function HomeDashboard() {
             </section>
 
             {/* Recent */}
-            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground">Recent Meetings</h2>
+            <section className="border border-border">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent</h2>
                 {recentMeetings.length > 0 && (
                   <button
                     type="button"
                     onClick={() => router.push(routes.calendar())}
                     className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
                   >
-                    View all
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    All meetings
+                    <ArrowRight className="h-3 w-3" />
                   </button>
                 )}
               </div>
 
-              <div className="mt-4">
+              <div className="p-5">
                 {recentMeetings.length === 0 ? (
                   <EmptyState
                     icon={<FileText className="h-8 w-8" />}
@@ -302,7 +282,7 @@ export function HomeDashboard() {
                           <button
                             type="button"
                             onClick={() => openMeeting(meeting.id)}
-                            className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-accent/50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left hover:bg-accent/50 transition-colors"
                           >
                             <span className="flex-1 min-w-0 truncate text-sm font-medium text-foreground group-hover:text-primary">
                               {meeting.title}
@@ -324,15 +304,15 @@ export function HomeDashboard() {
           </div>
 
           {/* Right column: brief + contexts */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Daily Brief */}
-            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold text-foreground">Daily Brief</h2>
+            <section className="border border-border">
+              <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daily Brief</h2>
               </div>
 
-              <div className="mt-4">
+              <div className="p-5">
                 {todayMeetings === null ? (
                   <Skeleton className="h-20 w-full" />
                 ) : todayMeetings.length === 0 ? (
@@ -341,7 +321,7 @@ export function HomeDashboard() {
                     meetings.
                   </p>
                 ) : briefFailed ? (
-                  <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                  <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/5 p-3">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">Brief generation failed</p>
@@ -394,11 +374,11 @@ export function HomeDashboard() {
             </section>
 
             {/* Contexts */}
-            <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-              <div className="flex items-center justify-between">
+            <section className="border border-border">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border">
                 <div className="flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground">Contexts</h2>
+                  <Layers className="h-3.5 w-3.5 text-primary" />
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contexts</h2>
                 </div>
                 {contextsState.contexts.length > 0 && (
                   <button
@@ -412,14 +392,14 @@ export function HomeDashboard() {
                 )}
               </div>
 
-              <div className="mt-4">
+              <div className="p-5">
                 {contextsState.isLoading ? (
                   <div className="space-y-2.5">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
                   </div>
                 ) : contextsState.error ? (
-                  <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                  <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/5 p-3">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">Couldn&apos;t load contexts</p>
@@ -453,7 +433,7 @@ export function HomeDashboard() {
                         <button
                           type="button"
                           onClick={() => router.push(routes.context(context.id))}
-                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-accent/50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left hover:bg-accent/50 transition-colors"
                         >
                           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
                             <Layers className="h-4 w-4 text-primary" />
