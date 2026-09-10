@@ -102,6 +102,7 @@ const Sidebar: React.FC = () => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
@@ -497,10 +498,12 @@ const Sidebar: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
-        // If sidebar is collapsed, expand it first so search is visible
         if (isCollapsed) {
+          // Search input not mounted yet — expand first, focus after mount
+          setPendingSearchFocus(true);
           toggleCollapse();
+        } else {
+          searchInputRef.current?.focus();
         }
       }
       // Escape blurs search input
@@ -511,6 +514,14 @@ const Sidebar: React.FC = () => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isCollapsed, toggleCollapse]);
+
+  // Focus search input after deferred expansion (Ctrl+K from collapsed state)
+  useEffect(() => {
+    if (pendingSearchFocus && !isCollapsed && searchInputRef.current) {
+      searchInputRef.current.focus();
+      setPendingSearchFocus(false);
+    }
+  }, [pendingSearchFocus, isCollapsed]);
 
   const renderCollapsedIcons = () => {
     if (!isCollapsed) return null;
@@ -635,7 +646,8 @@ const Sidebar: React.FC = () => {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => openImportDialog()}
-                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-accent bg-accent/50 text-accent-foreground"
+                  aria-label="Import Audio"
+                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-accent bg-accent/50 text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Upload className="w-5 h-5" />
                 </button>
@@ -648,15 +660,15 @@ const Sidebar: React.FC = () => {
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                onClick={() => {
-                  if (isCollapsed) toggleCollapse();
-                  toggleFolder('meetings');
-                }}
-                aria-label="Meeting Notes"
-                className={`p-2 rounded-lg transition-colors duration-150 ${isMeetingPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
-                  }`}
-              >
+                <button
+                  onClick={() => {
+                    if (isCollapsed) toggleCollapse();
+                    toggleFolder('meetings');
+                  }}
+                  aria-label="Meeting Notes"
+                  className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isMeetingPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                    }`}
+                >
                 <NotebookPen className="w-5 h-5" />
               </button>
             </TooltipTrigger>
@@ -810,7 +822,7 @@ const Sidebar: React.FC = () => {
       <button
         onClick={toggleCollapse}
         aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="absolute -right-6 top-20 z-50 p-1 bg-surface hover:bg-accent rounded-full shadow-lg border border-border"
+        className="absolute -right-6 top-20 z-50 p-1 bg-surface hover:bg-accent rounded-full shadow-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ transform: 'translateX(50%)' }}
       >
         {isCollapsed ? (

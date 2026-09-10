@@ -79,6 +79,21 @@ export function HomeDashboard() {
   const [todayMeetings, setTodayMeetings] = useState<MeetingMetadata[] | null>(null);
   const [todayError, setTodayError] = useState<string | null>(null);
   const [brief, setBrief] = useState<{ status: string; markdown?: string; error?: string } | null>(null);
+  const [briefLoadError, setBriefLoadError] = useState<string | null>(null);
+
+  const loadBriefStatus = useCallback(async () => {
+    setBriefLoadError(null);
+    try {
+      const status = await getDailyBriefStatus(todayKey);
+      const markdown =
+        status.data && typeof status.data.markdown === 'string'
+          ? status.data.markdown
+          : undefined;
+      setBrief({ status: status.status, markdown, error: status.error ?? undefined });
+    } catch (err) {
+      setBriefLoadError(err instanceof Error ? err.message : String(err));
+    }
+  }, [todayKey]);
 
   const loadToday = useCallback(async () => {
     setTodayError(null);
@@ -107,23 +122,8 @@ export function HomeDashboard() {
   }, [meetingsSignature, loadToday]);
 
   useEffect(() => {
-    let cancelled = false;
-    getDailyBriefStatus(todayKey)
-      .then((status) => {
-        if (cancelled) return;
-        const markdown =
-          status.data && typeof status.data.markdown === 'string'
-            ? status.data.markdown
-            : undefined;
-        setBrief({ status: status.status, markdown });
-      })
-      .catch((err) => {
-        if (!cancelled) setBrief({ status: 'failed', error: err instanceof Error ? err.message : String(err) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [todayKey]);
+    void loadBriefStatus();
+  }, [loadBriefStatus]);
 
   const recentMeetings = useMemo(() => meetings.slice(0, MAX_RECENT), [meetings]);
   const recentContexts = useMemo(
@@ -320,6 +320,23 @@ export function HomeDashboard() {
                     No meetings today yet — the Daily Brief becomes available once a day has
                     meetings.
                   </p>
+                ) : briefLoadError ? (
+                  <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/5 p-3">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Couldn&apos;t load Daily Brief</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{briefLoadError}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => void loadBriefStatus()}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
                 ) : briefFailed ? (
                   <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/5 p-3">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
@@ -334,7 +351,7 @@ export function HomeDashboard() {
                         className="mt-2"
                         onClick={() => router.push(routes.daily())}
                       >
-                        Retry
+                        Open Daily to Retry
                       </Button>
                     </div>
                   </div>
