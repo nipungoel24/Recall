@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
+  AlertTriangle,
   CalendarDays,
   ChevronRight,
   Clock,
@@ -77,7 +78,7 @@ export function HomeDashboard() {
 
   const [todayMeetings, setTodayMeetings] = useState<MeetingMetadata[] | null>(null);
   const [todayError, setTodayError] = useState<string | null>(null);
-  const [brief, setBrief] = useState<{ status: string; markdown?: string } | null>(null);
+  const [brief, setBrief] = useState<{ status: string; markdown?: string; error?: string } | null>(null);
 
   const loadToday = useCallback(async () => {
     setTodayError(null);
@@ -116,8 +117,8 @@ export function HomeDashboard() {
             : undefined;
         setBrief({ status: status.status, markdown });
       })
-      .catch(() => {
-        if (!cancelled) setBrief(null);
+      .catch((err) => {
+        if (!cancelled) setBrief({ status: 'failed', error: err instanceof Error ? err.message : String(err) });
       });
     return () => {
       cancelled = true;
@@ -145,6 +146,7 @@ export function HomeDashboard() {
   );
 
   const briefReady = brief?.status === 'completed' && Boolean(brief.markdown);
+  const briefFailed = brief?.status === 'failed' || brief?.status === 'cancelled';
 
   return (
     <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
@@ -338,6 +340,24 @@ export function HomeDashboard() {
                     No meetings today yet — the Daily Brief becomes available once a day has
                     meetings.
                   </p>
+                ) : briefFailed ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Brief generation failed</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {brief?.error || 'The daily brief could not be generated.'}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => router.push(routes.daily())}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
                 ) : briefReady ? (
                   <div>
                     <p className="line-clamp-3 text-sm text-muted-foreground whitespace-pre-wrap">
@@ -397,6 +417,23 @@ export function HomeDashboard() {
                   <div className="space-y-2.5">
                     <Skeleton className="h-12 w-full" />
                     <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : contextsState.error ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Couldn&apos;t load contexts</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{contextsState.error}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => contextsState.refetch()}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Retry
+                      </Button>
+                    </div>
                   </div>
                 ) : recentContexts.length === 0 ? (
                   <EmptyState
