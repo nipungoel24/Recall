@@ -98,8 +98,9 @@ describe('Phase 3 — sidebar accessibility', () => {
     )
   })
 
-  it('sidebar has Ctrl+K keyboard shortcut handler', () => {
+  it('sidebar has Ctrl+K keyboard shortcut with deferred focus for collapsed state', () => {
     const src = read('components/Sidebar/index.tsx')
+    // Must have the shortcut handler
     assert.ok(
       src.includes("metaKey") || src.includes("ctrlKey"),
       'sidebar must have Ctrl+K / Cmd+K handler',
@@ -108,6 +109,27 @@ describe('Phase 3 — sidebar accessibility', () => {
       src.includes("'k'") || src.includes('"k"'),
       'sidebar must check for k key in shortcut handler',
     )
+    // Must use deferred focus pattern: pendingSearchFocus state for collapsed→expanded transition
+    assert.ok(
+      src.includes('pendingSearchFocus'),
+      'sidebar must use pendingSearchFocus for deferred focus after expand',
+    )
+    // Must NOT focus input directly when collapsed (the bug)
+    // The handler should set pendingSearchFocus + toggleCollapse when collapsed,
+    // and only focus directly when already expanded
+    const handlerBlock = src.slice(
+      src.indexOf('metaKey') !== -1 ? src.indexOf('metaKey') : src.indexOf('ctrlKey'),
+      src.indexOf('metaKey') !== -1 ? src.indexOf('metaKey') + 500 : src.indexOf('ctrlKey') + 500,
+    )
+    assert.ok(
+      handlerBlock.includes('setPendingSearchFocus(true)'),
+      'collapsed Ctrl+K must set pendingSearchFocus instead of focusing directly',
+    )
+    // Must have a post-expansion effect that focuses after isCollapsed becomes false
+    assert.ok(
+      src.includes('pendingSearchFocus && !isCollapsed'),
+      'must have effect that focuses search after expansion completes',
+    )
   })
 
   it('sidebar search input has aria-label', () => {
@@ -115,6 +137,26 @@ describe('Phase 3 — sidebar accessibility', () => {
     assert.ok(
       src.includes('aria-label="Search'),
       'sidebar search input must have aria-label',
+    )
+  })
+
+  it('Import Audio button has aria-label', () => {
+    const src = read('components/Sidebar/index.tsx')
+    assert.ok(
+      src.includes('aria-label="Import Audio"'),
+      'Import Audio button must have aria-label',
+    )
+  })
+
+  it('sidebar collapse/expand button has focus-visible ring', () => {
+    const src = read('components/Sidebar/index.tsx')
+    // Find the collapse toggle button (has toggleCollapse onClick + aria-label containing "sidebar")
+    const collapseIdx = src.indexOf("isCollapsed ? 'Expand sidebar'")
+    assert.ok(collapseIdx > 0, 'collapse button with aria-label must exist')
+    const surroundingCode = src.slice(collapseIdx, collapseIdx + 400)
+    assert.ok(
+      surroundingCode.includes('focus-visible:ring'),
+      'collapse/expand button must have focus-visible ring',
     )
   })
 })
@@ -207,15 +249,32 @@ describe('Phase 3 — home failure states', () => {
     )
   })
 
-  it('HomeDashboard shows daily brief failure state', () => {
+  it('HomeDashboard distinguishes brief load error from generation failure', () => {
     const src = read('components/Home/HomeDashboard.tsx')
+    // Must have separate briefLoadError state for status-fetch failures
     assert.ok(
-      src.includes('briefFailed') || src.includes('brief?.status'),
-      'HomeDashboard must handle brief failure status',
+      src.includes('briefLoadError'),
+      'HomeDashboard must have briefLoadError state for status-fetch failures',
     )
+    // Must show "Couldn't load Daily Brief" for load errors (not "generation failed")
     assert.ok(
-      src.includes('Brief generation failed') || src.includes('failed'),
-      'HomeDashboard must show brief failure message',
+      src.includes("Couldn") && src.includes('load Daily Brief'),
+      'HomeDashboard must show "Couldn\'t load Daily Brief" for status-fetch failures',
+    )
+    // Must show "Brief generation failed" for actual generation failures
+    assert.ok(
+      src.includes('Brief generation failed'),
+      'HomeDashboard must show "Brief generation failed" for generation failures',
+    )
+    // Load error retry must call loadBriefStatus (not navigate)
+    assert.ok(
+      src.includes('loadBriefStatus'),
+      'HomeDashboard must have loadBriefStatus callback for retry',
+    )
+    // Generation failure action must say "Open Daily to Retry" (not just "Retry")
+    assert.ok(
+      src.includes('Open Daily to Retry'),
+      'generation failure action must say "Open Daily to Retry"',
     )
   })
 
