@@ -13,7 +13,7 @@ Recall captures your meetings, transcribes them on-device, generates summaries, 
 | Version | 0.4.0 |
 | Platforms | Windows, macOS, Linux |
 | Public binary release | **Not published yet** |
-| Installer signing | **Not configured** |
+| Installer signing | **Not operational for Recall releases** |
 | Updater | **Intentionally disabled** |
 | Stability | **Developer Preview / active development** |
 
@@ -21,14 +21,14 @@ There are currently **no official GitHub Release assets**. The supported way to 
 
 ## What Recall Does
 
-- **Meeting recording** — captures microphone and system audio simultaneously, with professional mixing and noise suppression.
+- **Meeting recording** — captures microphone and system audio simultaneously, with RMS-based mixing and RNNoise noise suppression.
 - **On-device transcription** — uses Whisper or Parakeet models running entirely on your hardware. GPU-accelerated when available.
 - **Meeting summaries** — generates structured summaries from transcripts using local LLMs or optional cloud providers.
 - **Custom templates** — create and use your own summary templates with section-level instructions.
 - **Calendar view** — browse meetings by date range.
 - **Daily Brief** — a synthesized overview of your day's meetings.
-- **Context Memory** — automatically extracts and deduplicates recurring topics, decisions, and entities across meetings.
-- **Meeting search** — find content across your meeting history.
+- **Context Memory** — extracts and deduplicates durable facts, decisions, actions, and questions across meetings.
+- **Meeting search** — search transcript content across your meeting history.
 - **Import & retranscription** — import audio/video files and transcribe them as meetings.
 - **Crash recovery** — automatic recovery of in-progress recordings after unexpected shutdowns.
 - **Light / Dark / System theme** — with accessible contrast and reduced-motion support.
@@ -39,15 +39,21 @@ Recall is **local-first, not network-free**.
 
 ### What stays on your device
 
-All meeting data is stored locally in SQLite:
+Recall keeps all structured application data and generated assets locally.
 
-- Audio recordings
+**Structured data (SQLite):**
+
+- Meeting metadata
 - Transcripts
 - Summaries and templates
-- Context Memory
+- Context Memory (facts, decisions, actions, questions)
 - Application settings
 
-Recordings are saved to `~/Music/recall-recordings` (or the legacy `meetily-recordings` path on upgraded installations).
+**Filesystem data:**
+
+- Audio recordings (`~/Music/recall-recordings` or legacy `meetily-recordings`)
+- Downloaded transcription models
+- Native sidecar/model files
 
 ### Telemetry
 
@@ -57,11 +63,17 @@ Automatic updating is disabled until Recall-controlled release infrastructure ex
 
 ### Cloud AI (optional)
 
-If you configure an optional cloud summarization provider (Anthropic Claude, Groq, OpenRouter, or OpenAI), the transcript content required for that summary request will be sent to that provider. Cloud providers are entirely user-configured and can be left unused.
+If you configure an optional cloud summarization provider, the transcript content required for that summary request will be sent to that provider. Cloud providers are entirely user-configured and can be left unused. Supported providers:
+
+- Anthropic Claude
+- Groq
+- OpenRouter
+- OpenAI
+- OpenAI-compatible endpoints (user-configured base URL + API key)
 
 ### Model downloads
 
-Transcription and summarization models are downloaded on first use from public registries (HuggingFace). These downloads require an internet connection, but after download all processing happens locally. See [docs/RECALL_EXTERNAL_ASSETS.md](docs/RECALL_EXTERNAL_ASSETS.md) for a full supply-chain inventory.
+Local models are downloaded on first use from external model hosts. Most current model assets use Hugging Face, while some remaining historical upstream-hosted assets are scheduled for migration before the first supported public release. These downloads require an internet connection. Once downloaded, local transcription and local-summary workflows run entirely on-device. If you explicitly configure a cloud summary provider, the transcript content required for that request is sent to that provider. See [docs/RECALL_EXTERNAL_ASSETS.md](docs/RECALL_EXTERNAL_ASSETS.md) for a full supply-chain inventory.
 
 ## Installation
 
@@ -82,17 +94,19 @@ Do not download Recall installers from unofficial mirrors.
 #### Prerequisites
 
 - **Git**
-- **Node.js 22+** (with corepack for pnpm)
+- **Node.js 22 LTS** (currently verified; with corepack for pnpm)
 - **pnpm** (via corepack)
 - **Rust stable** (MSVC toolchain on Windows)
 - **CMake**
 - **Tauri platform dependencies** — see platform-specific instructions below
 
-#### Clone
+#### Clone and install
 
 ```bash
 git clone --recurse-submodules https://github.com/nipungoel24/Recall.git
-cd Recall
+cd Recall/frontend
+corepack enable
+corepack pnpm install --frozen-lockfile
 ```
 
 If you already cloned without `--recurse-submodules`:
@@ -113,7 +127,7 @@ Windows is the primary development and testing platform.
 - [Rust](https://rustup.rs/) (MSVC toolchain)
 - [CMake](https://cmake.org/download/)
 - [LLVM/Clang](https://releases.llvm.org/) — the helper scripts assume installation at `C:\Program Files\LLVM\bin`
-- [Node.js 22+](https://nodejs.org/)
+- [Node.js 22 LTS](https://nodejs.org/) (currently verified environment; with corepack for pnpm)
 
 #### Run (development)
 
@@ -146,26 +160,27 @@ Locally produced packages are **unsigned**. Windows SmartScreen may warn about a
 
 #### Manual alternative
 
-If you prefer not to use the helper scripts:
+If you prefer not to use the helper scripts, you must install dependencies, build the sidecar, and copy it before starting Tauri:
 
 ```powershell
 cd frontend
 corepack pnpm install --frozen-lockfile
-corepack pnpm build
-cargo tauri dev
+cargo build -p llama-helper
+copy ..\target\debug\llama-helper.exe src-tauri\binaries\llama-helper-x86_64-pc-windows-msvc.exe
+corepack pnpm run tauri:dev
 ```
 
-Note: `cargo tauri dev` will fail if the llama-helper sidecar has not been built and copied to `src-tauri/binaries/`. Use the helper scripts for a complete development setup.
+Note: The sidecar binary must exist in `src-tauri/binaries/` before `tauri dev` will succeed. The helper scripts handle this automatically.
 
 ### macOS
 
 #### Prerequisites
 
-- macOS 13+ (ScreenCaptureKit requires macOS 13 for system audio capture)
+- macOS 14.2+ (deployment target; ScreenCaptureKit for system audio capture requires macOS 13+)
 - Xcode Command Line Tools: `xcode-select --install`
 - [Homebrew](https://brew.sh/)
 - [CMake](https://cmake.org/download/): `brew install cmake`
-- Node.js 22+: `brew install node`
+- Node.js 22 LTS: `brew install node`
 - [Rust](https://rustup.rs/)
 
 #### Run (development)
@@ -239,7 +254,7 @@ See [docs/GPU_ACCELERATION.md](docs/GPU_ACCELERATION.md) for details.
 2. Complete the onboarding flow.
 3. Grant audio permissions when prompted (microphone required; screen recording required on macOS for system audio).
 4. Select and download a transcription model (Parakeet v3 is the default; larger Whisper models produce better results but require more memory and disk space).
-5. Optionally configure a summary provider (Anthropic, Groq, OpenRouter, OpenAI) or use the built-in local summarization.
+5. Optionally configure a summary provider (Anthropic, Groq, OpenRouter, OpenAI, or Ollama) or use the built-in local summarization.
 6. Start a recording. Speak naturally.
 7. Stop the recording. Recall processes the audio automatically.
 8. Open the meeting to view the transcript, summary, and extracted context.
@@ -261,6 +276,7 @@ If you choose to enable a cloud provider, Recall will send the transcript text r
 - Groq
 - OpenRouter
 - OpenAI
+- OpenAI-compatible endpoints (user-configured base URL + API key)
 
 Cloud summarization is always described as **optional / user-configured** in the UI.
 
@@ -268,9 +284,7 @@ Cloud summarization is always described as **optional / user-configured** in the
 
 Recall evolved from [Meetily](https://github.com/Zackriya-Solutions/meetily). The Tauri application identifier remains `com.meetily.ai` — this is intentional.
 
-> This identifier is retained so existing Meetily data does not appear to disappear after the Recall rebrand. Do not manually rename or delete the app-data directory as an upgrade step.
-
-Existing Meetily recordings, transcripts, and database files are compatible with Recall without migration.
+> This identifier is retained so existing Meetily data does not appear to disappear after the Recall rebrand. Recall intentionally preserves legacy data directories so existing recordings, transcripts, and database files can continue to be discovered. Do not manually rename or delete the existing application-data directory as an upgrade step.
 
 ## Data Locations
 
@@ -299,6 +313,8 @@ Fresh installs use `recall-recordings`. Pre-rename installs continue using `meet
 | App data / DB / models | `~/.config/com.meetily.ai/` |
 | Default recordings | `~/Music/recall-recordings` |
 
+> Platform-specific application-data paths follow the Tauri app-data location for the `com.meetily.ai` identifier. macOS and Linux paths are conventional Tauri defaults; Windows paths are verified from application behavior.
+
 ## Developer Commands
 
 ### Install and build
@@ -317,10 +333,10 @@ corepack pnpm build
 ./dev-gpu.sh           # macOS / Linux
 
 # Or manually by GPU type
-corepack pnpm tauri:dev:cpu
-corepack pnpm tauri:dev:cuda
-corepack pnpm tauri:dev:vulkan
-corepack pnpm tauri:dev:metal
+corepack pnpm run tauri:dev:cpu
+corepack pnpm run tauri:dev:cuda
+corepack pnpm run tauri:dev:vulkan
+corepack pnpm run tauri:dev:metal
 ```
 
 ### Rust validation
