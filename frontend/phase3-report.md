@@ -6,7 +6,7 @@
 
 ## Summary
 
-Completed the full Phase 3 scope: application shell with accessible navigation, Ctrl+K search with deferred post-expansion focus, brutalist Home hierarchy, honest failure state semantics, and 29 regression tests. The Phase 3 branch contains the four original commits, four correction implementation/test commits, the previous report-finalization commit, and the final closure commits listed below.
+Completed the full Phase 3 scope: application shell with accessible navigation, Ctrl+K search with deferred post-expansion focus, brutalist Home hierarchy, honest failure state semantics, and regression tests. The Phase 3 branch contains the original implementation commits, correction commits, closure implementation/test commits, and documentation finalization commits listed below.
 
 ## Commits
 
@@ -62,9 +62,10 @@ b1cbfe4 test(ui): harden Phase 3 interaction contracts
 
 **Today:** `api_get_meetings_by_dateRange`. Loading: Skeleton. Error: AlertTriangle + Retry. Empty: "No meetings recorded today yet."
 
-**Daily Brief:** Two distinct failure modes:
+**Daily Brief:** Rendered independently of Today status. Precedence: (1) brief load error, (2) brief generation failure, (3) brief completed, (4) today loading, (5) today failed, (6) today empty, (7) generate button. Two distinct failure modes:
 - **Load error** (`briefLoadError`): "Couldn't load Daily Brief" with `loadBriefStatus` retry (re-fetches status only, no AI)
 - **Generation failure** (`briefFailed`): "Brief generation failed" with backend error message, "Open Daily to Retry" action
+- **Today failure independence:** If Today list fails but Brief status reports completed or failed, that result is displayed. If Brief status is idle but Today cannot be loaded, shows "Daily Brief unavailable" with Today retry (no infinite skeleton).
 
 **Needs Attention:** Crash recovery (existing TranscriptRecovery), daily brief failure, contexts error. Per-meeting summary failures require bulk query API (deferred to appropriate later intelligence/action phase).
 
