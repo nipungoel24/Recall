@@ -101,6 +101,7 @@ const Sidebar: React.FC = () => {
   const { betaFeatures } = useConfig();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
@@ -491,6 +492,26 @@ const Sidebar: React.FC = () => {
     };
   }, []);
 
+  // Global Ctrl+K / Cmd+K shortcut to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        // If sidebar is collapsed, expand it first so search is visible
+        if (isCollapsed) {
+          toggleCollapse();
+        }
+      }
+      // Escape blurs search input
+      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        searchInputRef.current?.blur();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isCollapsed, toggleCollapse]);
+
   const renderCollapsedIcons = () => {
     if (!isCollapsed) return null;
 
@@ -509,7 +530,8 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={() => router.push('/')}
                 aria-label="Home"
-                className={`p-2 rounded-lg transition-colors duration-150 ${isHomePage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                aria-current={isHomePage ? 'page' : undefined}
+                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isHomePage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
                   }`}
               >
                 <Home className="w-5 h-5" />
@@ -526,7 +548,7 @@ const Sidebar: React.FC = () => {
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
                 aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
-                className={`p-2 ${isRecording ? 'bg-destructive cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-full transition-colors duration-150 shadow-sm`}
+                className={`p-2 ${isRecording ? 'bg-destructive cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-full transition-colors duration-150 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
               >
                 {isRecording ? (
                   <Square className="w-5 h-5 text-primary-foreground" />
@@ -545,7 +567,8 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={() => router.push('/calendar')}
                 aria-label="Calendar"
-                className={`p-2 rounded-lg transition-colors duration-150 ${isCalendarPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                aria-current={isCalendarPage ? 'page' : undefined}
+                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isCalendarPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
                   }`}
               >
                 <CalendarDays className="w-5 h-5" />
@@ -561,7 +584,8 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={() => router.push('/daily')}
                 aria-label="Daily"
-                className={`p-2 rounded-lg transition-colors duration-150 ${pathname === '/daily' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                aria-current={pathname === '/daily' ? 'page' : undefined}
+                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/daily' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
                   }`}
               >
                 <Sun className="w-5 h-5" />
@@ -577,7 +601,8 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={() => router.push('/context')}
                 aria-label="Contexts"
-                className={`p-2 rounded-lg transition-colors duration-150 ${pathname?.includes('/context') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                aria-current={pathname?.includes('/context') ? 'page' : undefined}
+                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname?.includes('/context') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
                   }`}
               >
                 <LayoutList className="w-5 h-5" />
@@ -593,7 +618,8 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={() => router.push('/templates')}
                 aria-label="Templates"
-                className={`p-2 rounded-lg transition-colors duration-150 ${pathname === '/templates' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                aria-current={pathname === '/templates' ? 'page' : undefined}
+                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/templates' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
                   }`}
               >
                 <LayoutTemplate className="w-5 h-5" />
@@ -644,7 +670,8 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={() => router.push('/settings')}
                 aria-label="Settings"
-                className={`p-2 rounded-lg transition-colors duration-150 ${isSettingsPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                aria-current={isSettingsPage ? 'page' : undefined}
+                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isSettingsPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
                   }`}
               >
                 <Settings className="w-5 h-5" />
@@ -816,6 +843,8 @@ const Sidebar: React.FC = () => {
                   <InputGroup >
                     <InputGroupInput placeholder='Search meeting content...' value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
+                      ref={searchInputRef}
+                      aria-label="Search meeting content"
                     />
                     <InputGroupAddon>
                       <SearchIcon />
@@ -842,70 +871,76 @@ const Sidebar: React.FC = () => {
           <div className="flex-shrink-0">
             {!isCollapsed && (
               <>
-                <div
+                <button
                   onClick={() => router.push('/')}
-                  className={`p-3 text-sm font-medium items-center hover:bg-accent/50 h-10 flex mx-3 mt-3 rounded-lg cursor-pointer ${pathname === '/' ? 'bg-accent text-accent-foreground' : 'text-foreground'
+                  aria-current={pathname === '/' ? 'page' : undefined}
+                  className={`p-3 text-sm font-medium items-center hover:bg-accent/50 h-10 flex mx-3 mt-3 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/' ? 'bg-accent text-accent-foreground' : 'text-foreground'
                     }`}
                 >
                   <Home className="w-4 h-4 mr-2" />
                   <span>Home</span>
-                </div>
+                </button>
                 <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Meetings
                 </div>
-                <div
+                <button
                   onClick={handleRecordingToggle}
-                  className="p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer hover:bg-accent/50 text-foreground"
+                  className="p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer hover:bg-accent/50 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Mic className="w-4 h-4 mr-2 text-destructive" />
                   <span>Record / New Meeting</span>
-                </div>
-                <div
+                </button>
+                <button
                   onClick={() => router.push('/calendar')}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/calendar' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
+                  aria-current={pathname === '/calendar' ? 'page' : undefined}
+                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/calendar' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
                     }`}
                 >
                   <CalendarDays className="w-4 h-4 mr-2" />
                   <span>Calendar</span>
-                </div>
-                <div
+                </button>
+                <button
                   onClick={() => router.push('/daily')}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/daily' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
+                  aria-current={pathname === '/daily' ? 'page' : undefined}
+                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/daily' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
                     }`}
                 >
                   <Sun className="w-4 h-4 mr-2" />
                   <span>Daily</span>
-                </div>
+                </button>
                 <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Knowledge
                 </div>
-                <div
+                <button
                   onClick={() => router.push('/context')}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname?.includes('/context') ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
+                  aria-current={pathname?.includes('/context') ? 'page' : undefined}
+                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname?.includes('/context') ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
                     }`}
                 >
                   <LayoutList className="w-4 h-4 mr-2" />
                   <span>Contexts</span>
-                </div>
-                <div
+                </button>
+                <button
                   onClick={() => router.push('/templates')}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/templates' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
+                  aria-current={pathname === '/templates' ? 'page' : undefined}
+                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/templates' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
                     }`}
                 >
                   <LayoutTemplate className="w-4 h-4 mr-2" />
                   <span>Templates</span>
-                </div>
+                </button>
                 <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   System
                 </div>
-                <div
+                <button
                   onClick={() => router.push('/settings')}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer ${pathname === '/settings' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
+                  aria-current={pathname === '/settings' ? 'page' : undefined}
+                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/settings' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
                     }`}
                 >
                   <Settings className="w-4 h-4 mr-2" />
                   <span>Settings</span>
-                </div>
+                </button>
               </>
             )}
           </div>
