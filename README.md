@@ -21,7 +21,7 @@ There are currently **no official GitHub Release assets**. The supported way to 
 
 ## What Recall Does
 
-- **Meeting recording** — captures microphone and system audio simultaneously, with RMS-based mixing and RNNoise noise suppression.
+- **Meeting recording** — captures and mixes microphone and system audio for local recording and transcription.
 - **On-device transcription** — uses Whisper or Parakeet models running entirely on your hardware. GPU-accelerated when available.
 - **Meeting summaries** — generates structured summaries from transcripts using local LLMs or optional cloud providers.
 - **Custom templates** — create and use your own summary templates with section-level instructions.
@@ -39,15 +39,18 @@ Recall is **local-first, not network-free**.
 
 ### What stays on your device
 
-Recall keeps all structured application data and generated assets locally.
+Recall keeps its meeting data and application state locally unless the user explicitly chooses a cloud workflow.
 
-**Structured data (SQLite):**
+**Structured meeting data (SQLite):**
 
 - Meeting metadata
 - Transcripts
 - Summaries and templates
 - Context Memory (facts, decisions, actions, questions)
-- Application settings
+
+**Local preferences and application state:**
+
+- Theme, UI preferences, and other application settings are stored locally using Recall's application-storage mechanisms (not all settings are SQLite rows).
 
 **Filesystem data:**
 
