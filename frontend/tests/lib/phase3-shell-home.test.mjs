@@ -4,6 +4,10 @@
  * Verifies:
  * - Sidebar uses semantic tokens (no hardcoded gray/white/blue/red)
  * - HomeDashboard uses semantic tokens (no hardcoded gray/white/blue)
+ * - Sidebar accessibility: aria-current, button semantics, focus-visible
+ * - Keyboard shortcut (Ctrl+K) exists
+ * - Home failure states: brief error, contexts error
+ * - Home hierarchy: brutalist (no shadows, no excessive rounding)
  * - Routes file exports all required route helpers
  * - CSS variables and Tailwind config map semantic tokens
  * - Required test/tooling files exist
@@ -30,7 +34,6 @@ function readRoot(rel) {
 describe('Phase 3 — shell tokens', () => {
   it('sidebar uses no hardcoded gray/white/blue/red', () => {
     const raw = read('components/Sidebar/index.tsx')
-    // Strip comments so commented-out legacy code doesn't trigger false positives
     const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '')
     const violations = []
     if (/bg-gray-/.test(src)) violations.push('bg-gray')
@@ -56,6 +59,66 @@ describe('Phase 3 — shell tokens', () => {
   })
 })
 
+// ── Sidebar accessibility ─────────────────────────────────
+
+describe('Phase 3 — sidebar accessibility', () => {
+  it('expanded nav items are <button> elements, not <div>', () => {
+    const src = read('components/Sidebar/index.tsx')
+    // Find expanded nav section (after "Fixed navigation items" comment)
+    const navStart = src.indexOf('Fixed navigation items')
+    assert.ok(navStart > 0, 'nav section must exist')
+    const navSection = src.slice(navStart, navStart + 3000)
+    // Should NOT have div with onClick for route navigation
+    const divWithOnClick = navSection.match(/<div[^>]*onClick[^>]*router\.push/g)
+    assert.ok(
+      !divWithOnClick || divWithOnClick.length === 0,
+      'expanded nav items must be <button>, not <div> with onClick',
+    )
+  })
+
+  it('sidebar has aria-current="page" on active nav items', () => {
+    const src = read('components/Sidebar/index.tsx')
+    assert.ok(
+      src.includes("aria-current="),
+      'sidebar must use aria-current on active nav items',
+    )
+    // Should have aria-current on at least 4 items (Home, Calendar, Daily, Contexts/Templates/Settings)
+    const ariaCurrentCount = (src.match(/aria-current=/g) || []).length
+    assert.ok(
+      ariaCurrentCount >= 4,
+      `sidebar should have aria-current on multiple nav items (found ${ariaCurrentCount})`,
+    )
+  })
+
+  it('sidebar nav buttons have focus-visible styling', () => {
+    const src = read('components/Sidebar/index.tsx')
+    assert.ok(
+      src.includes('focus-visible:ring'),
+      'sidebar nav buttons must have focus-visible:ring styling',
+    )
+  })
+
+  it('sidebar has Ctrl+K keyboard shortcut handler', () => {
+    const src = read('components/Sidebar/index.tsx')
+    assert.ok(
+      src.includes("metaKey") || src.includes("ctrlKey"),
+      'sidebar must have Ctrl+K / Cmd+K handler',
+    )
+    assert.ok(
+      src.includes("'k'") || src.includes('"k"'),
+      'sidebar must check for k key in shortcut handler',
+    )
+  })
+
+  it('sidebar search input has aria-label', () => {
+    const src = read('components/Sidebar/index.tsx')
+    assert.ok(
+      src.includes('aria-label="Search'),
+      'sidebar search input must have aria-label',
+    )
+  })
+})
+
 // ── Home tokens ───────────────────────────────────────────
 
 describe('Phase 3 — home tokens', () => {
@@ -77,20 +140,6 @@ describe('Phase 3 — home tokens', () => {
     assert.ok(src.includes('bg-background'), 'HomeDashboard page wrapper must use bg-background')
   })
 
-  it('HomeDashboard uses bg-surface for card sections', () => {
-    const src = read('components/Home/HomeDashboard.tsx')
-    assert.ok(src.includes('bg-surface'), 'HomeDashboard cards must use bg-surface')
-  })
-
-  it('HomeDashboard uses text-foreground for headings', () => {
-    const src = read('components/Home/HomeDashboard.tsx')
-    const foregroundCount = (src.match(/text-foreground/g) || []).length
-    assert.ok(
-      foregroundCount >= 5,
-      `HomeDashboard should use text-foreground for headings (found ${foregroundCount})`,
-    )
-  })
-
   it('HomeDashboard uses text-muted-foreground for descriptions', () => {
     const src = read('components/Home/HomeDashboard.tsx')
     const mutedCount = (src.match(/text-muted-foreground/g) || []).length
@@ -105,9 +154,89 @@ describe('Phase 3 — home tokens', () => {
     assert.ok(src.includes('divide-border'), 'HomeDashboard must use divide-border for lists')
   })
 
-  it('HomeDashboard uses border-border for card borders', () => {
+  it('HomeDashboard uses border-border for sections', () => {
     const src = read('components/Home/HomeDashboard.tsx')
-    assert.ok(src.includes('border-border'), 'HomeDashboard cards must use border-border')
+    assert.ok(src.includes('border-border'), 'HomeDashboard sections must use border-border')
+  })
+})
+
+// ── Home hierarchy (brutalist) ────────────────────────────
+
+describe('Phase 3 — home hierarchy', () => {
+  it('HomeDashboard has no shadow-sm (brutalist: no shadows)', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      !src.includes('shadow-sm'),
+      'HomeDashboard must not use shadow-sm (brutalist direction)',
+    )
+  })
+
+  it('HomeDashboard has no rounded-xl or rounded-2xl sections', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      !src.includes('rounded-xl'),
+      'HomeDashboard must not use rounded-xl (brutalist: compact radii)',
+    )
+    assert.ok(
+      !src.includes('rounded-2xl'),
+      'HomeDashboard must not use rounded-2xl (brutalist: compact radii)',
+    )
+  })
+
+  it('HomeDashboard section headers use uppercase tracking-wider', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      src.includes('uppercase'),
+      'HomeDashboard section headers should use uppercase tracking',
+    )
+    assert.ok(
+      src.includes('tracking-wider'),
+      'HomeDashboard section headers should use tracking-wider',
+    )
+  })
+})
+
+// ── Home failure states ───────────────────────────────────
+
+describe('Phase 3 — home failure states', () => {
+  it('HomeDashboard imports AlertTriangle for error indicators', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      src.includes('AlertTriangle'),
+      'HomeDashboard must import AlertTriangle for failure states',
+    )
+  })
+
+  it('HomeDashboard shows daily brief failure state', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      src.includes('briefFailed') || src.includes('brief?.status'),
+      'HomeDashboard must handle brief failure status',
+    )
+    assert.ok(
+      src.includes('Brief generation failed') || src.includes('failed'),
+      'HomeDashboard must show brief failure message',
+    )
+  })
+
+  it('HomeDashboard shows contexts error state', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      src.includes('contextsState.error'),
+      'HomeDashboard must render contextsState.error',
+    )
+    assert.ok(
+      src.includes("Couldn't load contexts") || src.includes("Couldn"),
+      'HomeDashboard must show contexts error message',
+    )
+  })
+
+  it('HomeDashboard has retry for contexts error', () => {
+    const src = read('components/Home/HomeDashboard.tsx')
+    assert.ok(
+      src.includes('contextsState.refetch'),
+      'HomeDashboard must have retry (refetch) for contexts error',
+    )
   })
 })
 
