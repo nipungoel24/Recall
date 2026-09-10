@@ -1,4 +1,4 @@
-# Phase 3 Correction Report — Application Shell + Home
+# Phase 3 Final Closure Report — Application Shell + Home
 
 **Date:** 2026-09-09
 **Branch:** `phase/3-shell-home`
@@ -6,7 +6,7 @@
 
 ## Summary
 
-Completed the full Phase 3 scope: application shell with accessible navigation, Ctrl+K search, brutalist Home hierarchy, honest failure states, and 27 regression tests. Eight commits total (4 original + 4 correction).
+Completed the full Phase 3 scope: application shell with accessible navigation, Ctrl+K search with deferred post-expansion focus, brutalist Home hierarchy, honest failure state semantics, and 29 regression tests. The Phase 3 branch contains the four original commits, four correction implementation/test commits, the previous report-finalization commit, and the final closure commits listed below.
 
 ## Commits
 
@@ -26,118 +26,100 @@ f105d2c fix(home): surface real failure states instead of hiding them
 7098ecd test(ui): expand Phase 3 regression to 27 tests
 ```
 
+### Final Closure Commits
+```
+17e8738 fix(ui): correct collapsed sidebar search focus + brief error semantics + a11y gaps
+b1cbfe4 test(ui): harden Phase 3 interaction contracts
+```
+
 ## Application Shell
 
-**Navigation:**
-- Expanded: 7 nav items (Home, Record, Calendar, Daily, Contexts, Templates, Settings) as `<button>` elements
-- Collapsed: 9 icon buttons with tooltips and aria-labels
-- Section groups: Meetings / Knowledge / System with uppercase labels
+**Navigation:** 7 expanded `<button>` items + 9 collapsed icon buttons with tooltips. Section groups (Meetings/Knowledge/System) with uppercase labels.
 
-**Active route:** `aria-current="page"` on both expanded and collapsed nav items. Visual: `bg-accent text-accent-foreground`.
+**Active route:** `aria-current="page"` on all active nav items. Visual: `bg-accent text-accent-foreground`.
 
 **Accessibility:**
 - All nav items: `<button>` elements (not `<div>`)
 - All nav items: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
-- Recording button: `focus-visible:ring-2 focus-visible:ring-ring`
 - Search input: `aria-label="Search meeting content"`
+- Import Audio button: `aria-label="Import Audio"` + `focus-visible:ring`
+- Collapse/expand button: `aria-label` + `focus-visible:ring`
+- Meeting Notes button: `aria-label` + `focus-visible:ring`
 
-**Collapsed state:** Tooltips on all icon buttons. `aria-label` for screen readers.
+**Search:** Ctrl+K / Cmd+K focuses sidebar search with deferred post-expansion focus. When collapsed, `pendingSearchFocus` state is set, sidebar expands, and a React effect focuses the input after mount. Escape blurs search.
 
-**Search:** Ctrl+K / Cmd+K focuses sidebar search input. Auto-expands sidebar if collapsed. Escape blurs search.
+**Recording awareness:** `RecordingStateContext` consumed by both Sidebar and Home.
 
-**Recording awareness:** `RecordingStateContext` consumed by both Sidebar and Home. Sidebar shows recording state; Home switches between `HomeDashboard` and recording workspace.
+**Content frame:** `MainContent` with `bg-background`. Sidebar fixed z-40.
 
-**Content frame:** `MainContent` wrapper with `bg-background`. Sidebar fixed at z-40.
-
-**Window:** Native decorations, 1100x700, close-to-tray. No custom titlebar.
+**Window:** Native decorations, 1100x700, close-to-tray.
 
 ## Home
 
-**Hierarchy (brutalist):**
-- Hero: `border border-border`, no rounded corners, no shadow, compact padding, uppercase label, editorial heading
-- Sections: `border border-border`, `border-b border-border` header separator, `uppercase tracking-wider` labels
-- No `shadow-sm`, no `rounded-xl`, no `rounded-2xl`, no `bg-surface` on sections
-- Grid: `gap-4`, 3-column layout (2/3 left + 1/3 right)
+**Hierarchy:** Brutalist — 1px borders, no shadows, no rounded-xl/2xl, `uppercase tracking-wider` section headers, `border-b` separators, editorial heading.
 
-**Start Recording:** `variant="destructive"` button in hero. Dispatches `start-recording-from-sidebar` event.
+**Start Recording:** `variant="destructive"` button in hero.
 
-**Today:** `api_get_meetings_by_dateRange` for today's meetings. Loading: Skeleton. Error: AlertTriangle + Retry. Empty: "No meetings recorded today yet."
+**Today:** `api_get_meetings_by_dateRange`. Loading: Skeleton. Error: AlertTriangle + Retry. Empty: "No meetings recorded today yet."
 
-**Daily Brief:** `getDailyBriefStatus` for brief status. Loading: Skeleton. Ready: markdown preview + "View Daily Brief". Not ready: "Generate Daily Brief" button. Failed: AlertTriangle + error message + Retry.
+**Daily Brief:** Two distinct failure modes:
+- **Load error** (`briefLoadError`): "Couldn't load Daily Brief" with `loadBriefStatus` retry (re-fetches status only, no AI)
+- **Generation failure** (`briefFailed`): "Brief generation failed" with backend error message, "Open Daily to Retry" action
 
-**Needs Attention:**
-- Crash recovery: `TranscriptRecovery` dialog (existing, already on Home)
-- Daily brief failure: rendered with AlertTriangle + error message + Retry (was silently swallowed)
-- Contexts error: rendered with AlertTriangle + error message + Retry via `refetch()` (was not rendered)
-- Per-meeting summary failures: NOT surfaced (requires new bulk query API on `summary_processes` table — documented as Phase 4+ territory)
+**Needs Attention:** Crash recovery (existing TranscriptRecovery), daily brief failure, contexts error. Per-meeting summary failures require bulk query API (deferred to appropriate later intelligence/action phase).
 
-**Recent Meetings:** `useSidebar().meetings` (reused state, no extra API call). Shows title + relative day + time. Max 6 items.
+**Recent Meetings:** Reused from sidebar. Max 6.
 
-**Active Contexts:** `useContexts()` (reused state, no extra API call). Shows name + meeting count + relative updated time. Max 3 items. Empty: "No Contexts yet" with "Create a Context" button.
+**Contexts:** Reused from `useContexts()`. Max 3. Error: AlertTriangle + Retry via `refetch()`.
 
-**Search:** Ctrl+K focuses sidebar search (existing real search flow).
+**Search:** Ctrl+K focuses existing sidebar search.
 
 ## Data Sources
 
-| Section | API/Data | AI? | Network? | Failure behavior |
+| Section | API/Data | AI? | Network? | Failure |
 |---|---|---|---|---|
-| Today's meetings | `api_get_meetings_by_range` | No | No (local SQLite) | Error banner with Retry |
-| Daily brief | `api_get_daily_summary` | No (status check) | No | AlertTriangle + error + Retry |
-| Recent meetings | `useSidebar().meetings` | No | No | N/A (provided by SidebarProvider) |
-| Contexts | `api_list_context_threads` | No | No | AlertTriangle + error + Retry |
-| Recording state | `RecordingStateContext` | No | No | N/A (context provided) |
+| Today | `api_get_meetings_by_range` | No | No | Error + Retry |
+| Brief | `api_get_daily_summary` | No | No | Load error or generation failure (distinct) |
+| Recent | `useSidebar().meetings` | No | No | N/A |
+| Contexts | `api_list_context_threads` | No | No | AlertTriangle + Retry |
 
-**No AI calls on mount.** No N+1 queries. No hidden network activity. All data local.
+No AI on mount. No N+1. No external network. All local SQLite.
 
-## Empty / Loading / Error
+## Sidebar Accessibility Audit
 
-| State | Today | Brief | Contexts |
-|---|---|---|---|
-| Loading | Skeleton (2 rows) | Skeleton | Skeleton (2 rows) |
-| Empty | "No meetings recorded today yet" | "No meetings today yet" | "No Contexts yet" + Create button |
-| Error | Error banner + Retry | AlertTriangle + error + Retry | AlertTriangle + error + Retry |
-| Partial failure | Independent per section | Independent | Independent |
+| Control | aria-label | focus-visible | aria-current | Tooltip |
+|---|---|---|---|---|
+| Home (expanded) | — | ring | page | — |
+| Home (collapsed) | "Home" | ring | page | Yes |
+| Record (expanded) | — | ring | — | — |
+| Record (collapsed) | "Start Recording" / "Stop Recording" | ring | — | Yes |
+| Calendar (expanded) | — | ring | page | — |
+| Calendar (collapsed) | "Calendar" | ring | page | Yes |
+| Daily (expanded) | — | ring | page | — |
+| Daily (collapsed) | "Daily" | ring | page | Yes |
+| Contexts (expanded) | — | ring | page | — |
+| Contexts (collapsed) | "Contexts" | ring | page | Yes |
+| Templates (expanded) | — | ring | page | — |
+| Templates (collapsed) | "Templates" | ring | page | Yes |
+| Settings (expanded) | — | ring | page | — |
+| Settings (collapsed) | "Settings" | ring | page | Yes |
+| Import Audio (collapsed) | "Import Audio" | ring | — | Yes |
+| Meeting Notes (collapsed) | "Meeting Notes" | ring | — | Yes |
+| Collapse/expand | "Expand sidebar" / "Collapse sidebar" | ring | — | — |
 
-One failed section does not destroy the rest of Home.
+## UI Skills
 
-## Accessibility
+**ibelick/ui-skills:** The referenced skills (`baseline-ui`, `fixing-accessibility`, `fixing-motion-performance`) are not available in the current skill system. Only the 20 skills listed in the environment are exposed. No ibelick skills could be loaded.
 
-**Keyboard:**
-- Ctrl+K / Cmd+K focuses search
-- Escape blurs search
-- Tab navigates all nav items (buttons, not divs)
-- Visible focus ring on all interactive elements
+**Emil Kowalski (emil-design-eng):** Loaded and applied. Brutalist hierarchy: removed shadows, reduced border radius, typography over decorative containers, `uppercase tracking-wider` section headers, `focus-visible:ring` on all interactive elements.
 
-**Focus:** `focus-visible:ring-2 focus-visible:ring-ring` on nav buttons and recording button.
+## Source-of-Truth Corrections
 
-**aria-current:** Present on all active nav items (expanded + collapsed).
+**Phases.md:** Updated with final closure state, Ctrl+K deferred focus description, brief error semantics distinction, 29 tests, native visual QA NOT AVAILABLE.
 
-**Collapsed controls:** Tooltips + `aria-label` on all icon buttons.
+**Memory.md:** Removed stale `Latest commit` field (self-referential). Changed to "complete pending approval" state. Fixed per-meeting summary deferral language to "appropriate later intelligence/action phase".
 
-**Reduced motion:** Supported via `prefers-reduced-motion` (Phase 2 foundation).
-
-## Native Visual QA
-
-**Tauri runtime:** `cargo tauri build --debug --no-bundle` → PASS. Binary built at `target/debug/recall.exe`.
-**Light/Dark/System:** Theme system from Phase 2 verified. Visual inspection requires running GUI — NOT AVAILABLE from CLI.
-**Window sizes:** 1100x700 configured. Responsive grid at lg breakpoint.
-**Routes inspected:** All 7 routes compile and render.
-
-## Performance
-
-**Initial calls:** 2 API calls (today's meetings, daily brief status) + 2 reused hooks (sidebar meetings, contexts).
-**AI on mount:** None.
-**N+1:** None. All data fetched in bulk.
-**Bounded lists:** Recent (6), Contexts (3).
-**Network:** All local SQLite. No external calls.
-
-## Skills Used
-
-**Emil Kowalski (emil-design-eng):**
-- Applied brutalist hierarchy: removed shadows, reduced border radius, used typography hierarchy over decorative containers
-- Section headers use `uppercase tracking-wider` for editorial feel
-- Buttons: `focus-visible:ring` for accessible focus states
-- Error states: flat borders, no rounded corners
+**phase3-report.md:** Rewritten to reflect 10 total commits (4 original + 4 correction + 1 report + 2 closure), accurate commit list, corrected brief error semantics, deferred focus pattern documentation.
 
 ## Tests
 
@@ -145,38 +127,35 @@ One failed section does not destroy the rest of Home.
 |---|---|
 | `pnpm install --frozen-lockfile` | PASS |
 | `pnpm run build` | Compiled successfully |
-| `node --test tests/lib/phase3-shell-home.test.mjs` | 27/27 PASS |
-| `node --test tests/lib/design-system-regression.test.mjs` | 20/20 PASS |
-| `node --test tests/lib/updater-regression.test.mjs` | PASS |
-| `node --test tests/lib/analytics-regression.test.mjs` | PASS |
-| `node tests/contract/audit.mjs` | 80 passed, 0 violations, 1 note |
-| `node --test tests/lib/*.test.mjs` | 177 pass / 1 fail (pre-existing bun) |
+| Phase 3 tests | 29/29 PASS |
+| Design system regression | 20/20 PASS |
+| Updater regression | PASS |
+| Analytics regression | PASS |
+| Contract audit | 80 passed, 0 violations |
+| Node tests total | 179 pass / 1 fail (pre-existing bun) |
 | `cargo fmt --all --check` | PASS |
 | `cargo check --workspace` | PASS |
+| `cargo clippy --workspace --all-targets` | PASS (warnings only) |
 | `cargo test --workspace` | 343 passed, 0 failed |
 | `cargo tauri build --debug --no-bundle` | PASS |
-| Focused lint | 128 errors / 153 warnings (pre-existing baseline) |
+| Focused lint | 128/153 (pre-existing) |
+| Native visual QA | NOT AVAILABLE |
 | Bun | NOT AVAILABLE |
-
-## Documentation
-
-- **Phases.md:** Phase 3 marked complete with full scope description
-- **Memory.md:** Updated to Phase 3 final state with all decisions, test commands, known problems
-- **phase3-report.md:** This file
 
 ## Known Issues
 
-1. **Per-meeting summary failure attention:** `summary_processes.status` is persisted but not exposed on `MeetingMetadata`. Surfacing per-meeting failures as "Needs Attention" requires a new bulk query API. Documented as Phase 4+ territory.
-2. **TemplateEditor.tsx / SummaryTemplateManager.tsx:** Remaining hardcoded gray deferred to screen redesign phases.
-3. **Native visual QA:** Cannot inspect running app from CLI — requires manual verification or GUI test harness.
-4. **Bun test suites:** Not available on Windows host.
+1. Per-meeting summary failure attention requires bulk query API (deferred to appropriate later intelligence/action phase)
+2. TemplateEditor.tsx / SummaryTemplateManager.tsx hardcoded gray (deferred to screen redesign)
+3. Native visual QA requires running GUI (NOT AVAILABLE from CLI)
+4. Bun test suites not available on Windows
+5. ibelick/ui-skills not available in current skill system
 
 ## Recommended Phase 4
 
-Recording Experience (per Phases.md): device selection, permission flows, live audio levels, timer, live transcription, model readiness, stop/cancel with min-duration guard, crash recovery, post-processing state.
+Recording Experience per Phases.md.
 
 Do not implement Phase 4.
 
 ---
 
-Phase 3 is complete. The Phase 3 branch is published. I have not merged Phase 3 into main. I have not started Phase 4. Awaiting approval.
+Phase 3 closure is complete. The Phase 3 branch is published. I have not merged Phase 3 into main. I have not started Phase 4. Awaiting approval.

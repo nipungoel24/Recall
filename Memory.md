@@ -4,10 +4,9 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 3 COMPLETE
+- Current phase: Phase 3 — complete pending approval
 - Branch: `phase/3-shell-home`
 - Base: `a8a386b` (Phase 2 merged to main)
-- Latest commit: `7098ecd`
 
 # Completed
 
@@ -19,13 +18,8 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Pre-paint theme bootstrap (inline script in <head>, no first-frame flash)
   - Morphicons real integration (ThemeToggle morphs Monitor/Sun/Moon)
   - WCAG AA contrast validated for both light and dark themes
-- Phase 2 closure: `4931b92` + 2 closure corrections (`Phases.md` test-count fix, unused import removal)
-- Phase 3: application shell + home (7 commits on phase/3-shell-home)
-  - Commits: `2a03af9`, `e97092f`, `0908dd2`, `a7b7cdf`, `7479d6e`, `f105d2c`, `57697a7`, `7098ecd`
-  - Sidebar: semantic tokens, button semantics (div→button), aria-current, focus-visible, Ctrl+K, search aria-label
-  - Home: semantic tokens, brutalist hierarchy (no shadows, no rounded-xl, uppercase headers, border separators)
-  - Home failure states: daily brief error + contexts error surfaced with AlertTriangle + retry
-  - 27 regression tests covering accessibility, hierarchy, failure states, tokens, routes
+- Phase 2 closure: `4931b92` + 2 closure corrections
+- Phase 3: application shell + home (complete pending approval)
 
 # Decisions
 
@@ -45,18 +39,19 @@ Concise, factual working memory. Updated after every completed task, major decis
 - Phase 3 failure states: daily brief failure + contexts error now surface honest error messages with retry
 - Phase 3 attention: per-meeting summary failures NOT surfaced (requires new bulk query API on summary_processes table — deferred)
 
-# Phase 3 Test Commands
+# Phase 3 Test Commands (final closure)
 
 - pnpm install --frozen-lockfile → PASS
 - pnpm run build → PASS (Compiled successfully)
-- node --test tests/lib/phase3-shell-home.test.mjs → 27/27 PASS
+- node --test tests/lib/phase3-shell-home.test.mjs → 29/29 PASS
 - node --test tests/lib/design-system-regression.test.mjs → 20/20 PASS
 - node --test tests/lib/updater-regression.test.mjs → PASS
 - node --test tests/lib/analytics-regression.test.mjs → PASS
 - node tests/contract/audit.mjs → 80 passed, 0 violations, 1 note
-- node --test tests/lib/*.test.mjs → 177 pass / 1 fail (pre-existing bun issue on Windows)
+- node --test tests/lib/*.test.mjs → 179 pass / 1 fail (pre-existing bun issue on Windows)
 - cargo fmt --all --check → PASS
 - cargo check --workspace → PASS
+- cargo clippy --workspace --all-targets → PASS (warnings only, 0 errors)
 - cargo test --workspace → 343 passed, 0 failed (2 + 340 + 0 + 1)
 - cargo tauri build --debug --no-bundle → PASS (recall.exe built)
 - focused lint → 128 errors / 153 warnings (pre-existing baseline, no new)
@@ -71,7 +66,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 - Main branch protection: recommended but not enabled (direct push succeeded)
 - TemplateEditor.tsx: 15+ hardcoded gray references (deferred to screen redesign)
 - SummaryTemplateManager.tsx: remaining hardcoded gray (deferred to screen redesign)
-- Per-meeting summary failure attention signals require new bulk query API (Phase 4+ territory)
+- Per-meeting summary failure attention signals require bulk query API (deferred to appropriate later intelligence/action phase)
 
 # Next Exact Step
 

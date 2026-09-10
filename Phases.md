@@ -44,14 +44,14 @@ Each phase requires user approval before starting. Never begin the next phase au
 - Goal: app shell (sidebar/topbar/tray surfaces) and a Home that answers "what requires my attention?".
 - Done:
   - Sidebar: semantic tokens (bg-destructive recording, bg-accent active, text-primary-foreground icons, bg-background MainContent).
-  - Sidebar accessibility: expanded nav items converted from `<div>` to `<button>` elements; `aria-current="page"` on all active nav items (expanded + collapsed); `focus-visible:ring-2 focus-visible:ring-ring` on all interactive elements; `aria-label` on search input.
-  - Keyboard: global Ctrl+K / Cmd+K shortcut focuses sidebar search (auto-expands if collapsed); Escape blurs search input.
-  - HomeDashboard: semantic tokens throughout (bg-background page, bg-surface sections, text-foreground headings, text-muted-foreground descriptions, text-primary links, divide-border lists, border-border sections).
+  - Sidebar accessibility: expanded nav items converted from `<div>` to `<button>` elements; `aria-current="page"` on all active nav items (expanded + collapsed); `focus-visible:ring-2 focus-visible:ring-ring` on all interactive elements; `aria-label` on search input, Import Audio, collapse/expand.
+  - Keyboard: global Ctrl+K / Cmd+K shortcut focuses sidebar search with deferred post-expansion focus (pendingSearchFocus pattern); Escape blurs search input.
+  - HomeDashboard: semantic tokens throughout (bg-background page, text-foreground headings, text-muted-foreground descriptions, text-primary links, divide-border lists, border-border sections).
   - Home hierarchy: brutalist redesign — no shadows, no rounded-xl/2xl, 1px borders, uppercase tracking-wider section headers, border-b separators, information-dense layout.
-  - Home failure states: daily brief failure rendered with AlertTriangle + error message + Retry button (was silently swallowed); contexts error rendered with AlertTriangle + error message + Retry via refetch (was not rendered).
-  - Phase 3 regression test suite (27 tests): shell tokens, sidebar accessibility (aria-current, button semantics, focus-visible, Ctrl+K), home tokens, home hierarchy (brutalist), home failure states, routes, design-system compliance, test/tooling existence.
-- Deferred (documented): per-meeting summary failure attention signals require new bulk query API (summary_processes.status not exposed on MeetingMetadata); TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray deferred to their screen redesign phases.
-- Acceptance: all met (build, cargo test 343, cargo fmt, contract audit, 27/27 Phase 3 tests pass).
+  - Home failure states: Daily Brief distinguishes load error ("Couldn't load Daily Brief" with status-load retry) from generation failure ("Brief generation failed" with "Open Daily to Retry"); contexts error rendered with AlertTriangle + error message + Retry via refetch.
+  - Phase 3 regression test suite (29 tests): shell tokens, sidebar accessibility (aria-current, button semantics, focus-visible, Ctrl+K deferred focus, Import Audio aria-label, collapse button focus), home tokens, home hierarchy (brutalist), home failure states (brief load vs generation distinction), routes, design-system compliance, test/tooling existence.
+- Deferred (documented): per-meeting summary failure attention signals require bulk query API (summary_processes.status not exposed on MeetingMetadata — deferred to appropriate later intelligence/action phase); TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray deferred to their screen redesign phases.
+- Acceptance: all met (build, cargo test 343, cargo fmt, cargo clippy, contract audit, 29/29 Phase 3 tests pass). Native visual QA: NOT AVAILABLE (CLI environment).
 
 ## PHASE 4 — Recording Experience
 
