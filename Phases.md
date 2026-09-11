@@ -49,16 +49,30 @@ Each phase requires user approval before starting. Never begin the next phase au
   - HomeDashboard: semantic tokens throughout (bg-background page, text-foreground headings, text-muted-foreground descriptions, text-primary links, divide-border lists, border-border sections).
   - Home hierarchy: brutalist redesign — no shadows, no rounded-xl/2xl, 1px borders, uppercase tracking-wider section headers, border-b separators, information-dense layout.
   - Home failure states: Daily Brief distinguishes load error ("Couldn't load Daily Brief" with status-load retry) from generation failure ("Brief generation failed" with "Open Daily to Retry"); contexts error rendered with AlertTriangle + error message + Retry via refetch.
-  - Phase 3 regression test suite (29 tests): shell tokens, sidebar accessibility (aria-current, button semantics, focus-visible, Ctrl+K deferred focus, Import Audio aria-label, collapse button focus), home tokens, home hierarchy (brutalist), home failure states (brief load vs generation distinction), routes, design-system compliance, test/tooling existence.
+  - Phase 3 regression suite → PASS at closure (static-source suites: shell tokens, sidebar accessibility (aria-current, button semantics, focus-visible, Ctrl+K deferred focus, Import Audio aria-label, collapse button focus), home tokens, home hierarchy (brutalist), home failure states (brief load vs generation distinction), routes, design-system compliance, test/tooling existence).
 - Deferred (documented): per-meeting summary failure attention signals require bulk query API (summary_processes.status not exposed on MeetingMetadata — deferred to appropriate later intelligence/action phase); TemplateEditor.tsx and SummaryTemplateManager.tsx remaining hardcoded gray deferred to their screen redesign phases.
-- Acceptance: all met (build, cargo test 343, cargo fmt, cargo clippy, contract audit, 29/29 Phase 3 tests pass). Native visual QA: NOT AVAILABLE (CLI environment).
+- Acceptance: all met (build, cargo test, cargo fmt, cargo clippy, contract audit, Phase 3 regression suite → PASS). Native visual QA: NOT AVAILABLE (CLI environment). Merged to main at `c1197a8`.
 
-## PHASE 4 — Recording Experience
+## PHASE 4 — Recording Experience ✅ (complete — pending approval/merge)
 
 - Goal: mission-critical recording polish without breaking the native pipeline.
 - Scope: device selection, permissions, levels, timer, live transcription status, model readiness, errors, stop/cancel, recovery UX.
-- Non-scope: new capture backends unless justified.
+- Non-scope: new capture backends unless justified (no backends added).
+- Done:
+  - Fake audio visualization removed: page + RecordingControls no longer simulate bar levels (`Math.random`/`barHeights` deleted).
+  - Truthful timer: pill shows backend `recording_duration` (real elapsed time, tabular-nums), REC + paused live indicator (motion-safe ping).
+  - RecordingControls rewritten: explicit Start/Pause/Resume/Stop transitions and duplicate guards, sonner toasts instead of `alert()`, semantic tokens, focus-visible rings, `role="status"` `aria-live="polite"` status region, labelled start/stop buttons.
+  - Stop-flow data loss fixed: SQLite save gated on `shouldSaveMeetingAfterStop(isCallApi)` — the save runs on any successful stop (backend always finalizes audio) even when live transcription timed out; brief wait for the `recording-stopped` payload race.
+  - Provider-aware readiness: new pure `src/lib/recordingReadiness.ts`; `getReadinessAdapter`/`resolveTranscriptionReadiness` consult ONLY the configured provider's adapter — Local Whisper is fully independent of Parakeet (regression-gated).
+  - Unified start orchestration in `useRecordingStart` (manual/auto/direct single path), provider-driven readiness (ignored cloud STT), explicit STARTING/ERROR transitions, toast on failure instead of `alert()`.
+  - Permission check honesty: `usePermissionCheck` enumerates devices and never pretends to query OS permission grants; exposes `deviceStatus`; `requestPermissions` calls the real `trigger_microphone_permission` command then rechecks.
+  - DeviceSelection + PermissionWarning: truthful copy (no BlackHole/screen-recording claims — macOS default is CoreAudio process taps), semantic tokens, honest empty states.
+  - Competing state sources removed: `useRecordingStateSync` deleted; `RecordingStateContext` is the single source (owns `isRecordingDisabled`), page derives state from context, events drive transitions.
+  - Rust: `AudioPipeline::new` returns `Result<Self>`; VAD processor init failure propagates as an error instead of panicking.
+  - Phase 4 regression suite → PASS (32 tests: provider independence, stop-save gate, no-fake-viz, no-alert, permission honesty, device truthfulness, single-source-of-truth, workspace a11y/tokens, Rust VAD no-panic).
 - Acceptance: verified inside real Tauri (macOS + Windows), crash recovery retained.
+  - Windows: `pnpm build` PASS, full `.mjs` regression suite 214 pass / 1 pre-existing bun-only fail, `cargo fmt/check/clippy/test` PASS (0 new warnings from Phase 4 edits), `cargo build` (debug) links recall.exe, cargo unit tests 340 passed / 2 ignored.
+  - macOS: NOT AVAILABLE (Windows-only environment). Backend assertions verified via code inspection (CoreAudio taps default, no BlackHole dependency in copy).
 
 ## PHASE 5 — Meeting Workspace + Provenance
 
