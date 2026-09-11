@@ -8,10 +8,29 @@ import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateCon
 import { storageService } from '@/services/storageService';
 import { transcriptService } from '@/services/transcriptService';
 import { routes } from '@/lib/routes';
+import { shouldSaveMeetingAfterStop } from '@/lib/recordingReadiness';
 import {
   applyPinnedSummaryLanguageToMeeting,
   detectAndCacheSummaryLanguage,
 } from '@/lib/summary-language-preferences';
+
+// The `recording-stopped` event and the `stop_recording` invoke response travel
+// over separate IPC channels, so the sessionStorage payload can arrive a moment
+// after the frontend resumes. Poll briefly instead of discarding the save.
+async function waitForStoppedPayloadValue(
+  key: string,
+  timeoutMs: number
+): Promise<string | null> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const value = sessionStorage.getItem(key);
+    if (value) {
+      return value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return sessionStorage.getItem(key);
+}
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -36,10 +55,7 @@ interface UseRecordingStopReturn {
  * - Toast notifications for success/error
  * - Window exposure for Rust callbacks
  */
-export function useRecordingStop(
-  setIsRecording: (value: boolean) => void,
-  setIsRecordingDisabled: (value: boolean) => void
-): UseRecordingStopReturn {
+export function useRecordingStop(): UseRecordingStopReturn {
   // USE global state instead
   const recordingState = useRecordingState();
   const {
@@ -47,7 +63,8 @@ export function useRecordingStop(
     setStatus,
     isStopping,
     isProcessing: isProcessingTranscript,
-    isSaving: isSavingTranscript
+    isSaving: isSavingTranscript,
+    setIsRecordingDisabled,
   } = recordingState;
 
   const {
@@ -130,7 +147,6 @@ export function useRecordingStop(
 
     // Set status to STOPPING immediately
     setStatus(RecordingStatus.STOPPING);
-    setIsRecording(false);
     setIsRecordingDisabled(true);
     const stopStartTime = Date.now();
 
@@ -230,9 +246,11 @@ export function useRecordingStop(
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Save to SQLite
-      // NOTE: enabled to save COMPLETE transcripts after frontend receives all updates
-      // This ensures user sees all transcripts streaming in before database save
-      if (isCallApi && transcriptionComplete == true) {
+      // The backend finalizes the audio file during stop_recording, so the
+      // save runs whenever the stop succeeded — even if transcription timed
+      // out. In that case the meeting is created with whatever transcripts
+      // exist, and the audio/folder link is still preserved (no silent loss).
+      if (shouldSaveMeetingAfterStop(isCallApi)) {
 
         setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
 
@@ -240,7 +258,11 @@ export function useRecordingStop(
         const freshTranscripts = [...transcriptsRef.current];
 
         // Get folder_path and meeting_name from recording-stopped event
-        const folderPath = sessionStorage.getItem('last_recording_folder_path');
+        // (briefly wait for the payload if the event lags the IPC response)
+        let folderPath = sessionStorage.getItem('last_recording_folder_path');
+        if (!folderPath) {
+          folderPath = await waitForStoppedPayloadValue('last_recording_folder_path', 2500);
+        }
         const savedMeetingName = sessionStorage.getItem('last_recording_meeting_name');
 
         console.log('💾 Saving COMPLETE transcripts to database...', {
@@ -356,21 +378,18 @@ export function useRecordingStop(
       }
 
       setIsMeetingActive(false);
-      // isRecording already set to false at function start
       setIsRecordingDisabled(false);
     } catch (error) {
       console.error('Error in handleRecordingStop:', error);
       setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : 'Unknown error');
-      // isRecording already set to false at function start
       setIsRecordingDisabled(false);
     } finally {
       // Always reset the guard flag when done
       stopInProgressRef.current = false;
     }
   }, [
-    setIsRecording,
-    setIsRecordingDisabled,
     setStatus,
+    setIsRecordingDisabled,
     transcriptsRef,
     flushBuffer,
     clearTranscripts,

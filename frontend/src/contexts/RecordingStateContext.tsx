@@ -44,6 +44,10 @@ interface RecordingStateContextType extends RecordingState {
   isStopping: boolean;
   isProcessing: boolean;
   isSaving: boolean;
+
+  // Frontend-only guard: prevents re-recording while a stop is being processed.
+  isRecordingDisabled: boolean;
+  setIsRecordingDisabled: (value: boolean) => void;
 }
 
 const RecordingStateContext = createContext<RecordingStateContextType | null>(null);
@@ -68,6 +72,10 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
   });
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Frontend-only guard so the workspace cannot re-enter recording while a
+  // stop/processing flow is running. Reset happens via the stop hook or events.
+  const [isRecordingDisabled, setIsRecordingDisabled] = useState(false);
 
   // NEW: Status setter with logging
   const setStatus = useCallback((status: RecordingStatus, message?: string) => {
@@ -96,8 +104,6 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
         recordingDuration: backendState.recording_duration,
         activeDuration: backendState.active_duration,
       }));
-
-      console.log('[RecordingStateContext] Synced with backend:', backendState);
     } catch (error) {
       console.error('[RecordingStateContext] Failed to sync with backend:', error);
       // Don't update state on error - keep current state
@@ -229,10 +235,12 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
   const contextValue = useMemo(() => ({
     ...state,
     setStatus,
+    isRecordingDisabled,
+    setIsRecordingDisabled,
     isStopping: state.status === RecordingStatus.STOPPING,
     isProcessing: state.status === RecordingStatus.PROCESSING_TRANSCRIPTS,
     isSaving: state.status === RecordingStatus.SAVING,
-  }), [state, setStatus]);
+  }), [state, setStatus, isRecordingDisabled]);
 
   return (
     <RecordingStateContext.Provider value={contextValue}>

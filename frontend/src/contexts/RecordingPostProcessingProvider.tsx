@@ -18,14 +18,9 @@ import { useRecordingStop } from '@/hooks/useRecordingStop';
  * regardless of which page the user is currently on.
  */
 export function RecordingPostProcessingProvider({ children }: { children: React.ReactNode }) {
-  // No-op functions since the global RecordingStateContext already handles state updates
-  // These are only needed for the hook's local component state management
-  const setIsRecording = () => { };
-  const setIsRecordingDisabled = () => { };
-
   const {
     handleRecordingStop,
-  } = useRecordingStop(setIsRecording, setIsRecordingDisabled);
+  } = useRecordingStop();
 
   useEffect(() => {
     let unlistenFn: (() => void) | undefined;
