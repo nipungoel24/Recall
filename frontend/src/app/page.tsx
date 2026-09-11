@@ -14,7 +14,6 @@ import { TranscriptPanel } from './_components/TranscriptPanel';
 import { HomeDashboard } from '@/components/Home/HomeDashboard';
 import { routes } from '@/lib/routes';
 import { useModalState } from '@/hooks/useModalState';
-import { useRecordingStateSync } from '@/hooks/useRecordingStateSync';
 import { useRecordingStart } from '@/hooks/useRecordingStart';
 import { useRecordingStop } from '@/hooks/useRecordingStop';
 import { useTranscriptRecovery } from '@/hooks/useTranscriptRecovery';
@@ -25,8 +24,6 @@ import { useRouter } from 'next/navigation';
 
 export default function Home() {
   // Local page state (not moved to contexts)
-  const [isRecording, setIsRecordingState] = useState(false);
-  const [barHeights, setBarHeights] = useState(['58%', '76%', '58%']);
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
 
   // Use contexts for state management
@@ -35,20 +32,16 @@ export default function Home() {
   const recordingState = useRecordingState();
 
   // Extract status from global state
-  const { status, isStopping, isProcessing, isSaving } = recordingState;
+  const { status, isStopping, isProcessing, isSaving, isRecording, isRecordingDisabled } = recordingState;
 
   // Hooks
   const { hasMicrophone } = usePermissionCheck();
   const { setIsMeetingActive, isCollapsed: sidebarCollapsed, refetchMeetings } = useSidebar();
   const { modals, messages, showModal, hideModal } = useModalState(transcriptModelConfig);
-  const { isRecordingDisabled, setIsRecordingDisabled } = useRecordingStateSync(isRecording, setIsRecordingState, setIsMeetingActive);
-  const { handleRecordingStart } = useRecordingStart(isRecording, setIsRecordingState, showModal);
+  const { handleRecordingStart } = useRecordingStart(showModal);
 
-  // Get handleRecordingStop function and setIsStopping (state comes from global context)
-  const { handleRecordingStop, setIsStopping } = useRecordingStop(
-    setIsRecordingState,
-    setIsRecordingDisabled
-  );
+  // handleRecordingStop runs the post-stop flow; state comes from global context
+  const { handleRecordingStop, setIsStopping } = useRecordingStop();
 
   // Recovery hook
   const {
@@ -69,7 +62,7 @@ export default function Home() {
       try {
         // Skip recovery check if currently recording or processing stop
         // This prevents the recovery dialog from showing when:
-        if (recordingState.isRecording ||
+        if (isRecording ||
           status === RecordingStatus.STOPPING ||
           status === RecordingStatus.PROCESSING_TRANSCRIPTS ||
           status === RecordingStatus.SAVING) {
@@ -100,7 +93,7 @@ export default function Home() {
     };
 
     performStartupChecks();
-  }, [checkForRecoverableTranscripts, recordingState.isRecording, status]);
+  }, [checkForRecoverableTranscripts, isRecording, status]);
 
   // Watch for recoverable meetings changes and show dialog once per session
   useEffect(() => {
@@ -167,29 +160,13 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    if (recordingState.isRecording) {
-      const interval = setInterval(() => {
-        setBarHeights(prev => {
-          const newHeights = [...prev];
-          newHeights[0] = Math.random() * 20 + 10 + 'px';
-          newHeights[1] = Math.random() * 20 + 10 + 'px';
-          newHeights[2] = Math.random() * 20 + 10 + 'px';
-          return newHeights;
-        });
-      }, 300);
-
-      return () => clearInterval(interval);
-    }
-  }, [recordingState.isRecording]);
-
   // Computed values using global status
   const isProcessingStop = status === RecordingStatus.PROCESSING_TRANSCRIPTS || isProcessing;
 
   // Idle Home shows the productivity dashboard; any active recording state
   // switches to the recording workspace (live transcript + controls).
   const showRecordingWorkspace =
-    recordingState.isRecording ||
+    isRecording ||
     isStopping ||
     isProcessingStop ||
     status === RecordingStatus.SAVING;
@@ -199,7 +176,7 @@ export default function Home() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col h-screen bg-gray-50"
+      className="flex flex-col h-screen bg-background"
     >
       {/* All Modals supported*/}
       <SettingsModals
@@ -228,7 +205,7 @@ export default function Home() {
 
           {/* Recording controls - persistent compact control while a recording
               session is active; the idle state uses the Home dashboard CTA */}
-          {(hasMicrophone || recordingState.isRecording) &&
+          {(hasMicrophone || isRecording) &&
             status !== RecordingStatus.PROCESSING_TRANSCRIPTS &&
             status !== RecordingStatus.SAVING && (
               <div className="fixed bottom-12 left-0 right-0 z-10">
@@ -239,14 +216,12 @@ export default function Home() {
                   }}
                 >
                   <div className="w-2/3 max-w-[750px] flex justify-center">
-                    <div className="bg-white rounded-full shadow-lg flex items-center">
                       <RecordingControls
-                        isRecording={recordingState.isRecording}
+                        isRecording={isRecording}
                         onRecordingStop={(callApi = true) => handleRecordingStop(callApi)}
                         onRecordingStart={handleRecordingStart}
                         onTranscriptReceived={() => { }} // Not actually used by RecordingControls
                         onStopInitiated={() => setIsStopping(true)}
-                        barHeights={barHeights}
                         onTranscriptionError={(message) => {
                           showModal('errorAlert', message);
                         }}
@@ -255,7 +230,6 @@ export default function Home() {
                         selectedDevices={selectedDevices}
                         meetingName={meetingTitle}
                       />
-                    </div>
                   </div>
                 </div>
               </div>
@@ -263,7 +237,7 @@ export default function Home() {
 
           {/* Status Overlays - Processing and Saving */}
           <StatusOverlays
-            isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !recordingState.isRecording}
+            isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !isRecording}
             isSaving={status === RecordingStatus.SAVING}
             sidebarCollapsed={sidebarCollapsed}
           />
