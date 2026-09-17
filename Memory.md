@@ -4,7 +4,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 4 — Recording Experience (implementation complete, awaiting review)
+- Current phase: Phase 4 — Recording Experience (implementation + closure corrections complete, awaiting review)
 - Branch: `phase/4-recording-experience`
 - Base: `c1197a8` (Phase 3 merged to main)
 
@@ -20,7 +20,7 @@ Concise, factual working memory. Updated after every completed task, major decis
   - WCAG AA contrast validated for both light and dark themes
 - Phase 2 closure: `4931b92` + 2 closure corrections
 - Phase 3: application shell + home — merged to main as `c1197a8` (fast-forward from `a8a386b`)
-- Phase 4: recording experience — implementation on `phase/4-recording-experience` (pending review)
+- Phase 4: recording experience — implementation + closure corrections on `phase/4-recording-experience` (awaiting review)
   - Fake bar-chart visualization removed (page + RecordingControls)
   - Truthful timer from backend `recording_duration`; REC/paused live indicator
   - RecordingControls rewritten: sonner toasts (no `alert()`), semantic tokens, `role=status` a11y
@@ -31,6 +31,9 @@ Concise, factual working memory. Updated after every completed task, major decis
   - DeviceSelection/PermissionWarning: truthful copy (no BlackHole/screen-recording claims), semantic tokens
   - Rust: `AudioPipeline::new` returns `Result` — VAD init error propagates instead of panicking
   - Competing state sources removed: `useRecordingStateSync` deleted; page derives from `RecordingStateContext`
+  - Refresh bootstrap: `reconcileRecordingSnapshot` + single poller in `RecordingStateContext`
+  - Stop failure: `resolveStopOutcome` backend-truth reconcile; restore RECORDING on genuine failure; never fake save
+  - Recovery UX: no `alert()`/`confirm()`; persistent destructive Alert; two-step delete confirm
 
 # Decisions
 
@@ -56,16 +59,18 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 - pnpm install --frozen-lockfile → PASS
 - pnpm run build → PASS (Compiled successfully)
-- node --test tests/lib/phase4-recording-experience.test.mjs → 32/32 PASS
+- node --test tests/lib/phase4-recording-experience.test.mjs → 52/52 PASS
+- node --experimental-strip-types --test tests/lib/phase4-recording-behavior.mjs → 25/25 PASS
 - node --test tests/lib/phase3-shell-home.test.mjs → PASS (32/32)
 - node --test tests/lib/design-system-regression.test.mjs → PASS (20/20)
 - node --test tests/lib/updater-regression.test.mjs → PASS
 - node --test tests/lib/analytics-regression.test.mjs → PASS
-- node --test tests/lib/*.test.mjs → 214 pass / 1 fail (pre-existing bun-only `qa-routes.test.mjs` on Windows)
+- node --test tests/lib/*.test.mjs → 234 pass / 1 fail (pre-existing bun-only `qa-routes.test.mjs` on Windows)
+- Contract audit: node tests/contract/audit.mjs → 80 pass / 0 violations
 - cargo fmt --all --check → PASS
 - cargo check --offline → PASS (pre-existing warnings only)
-- cargo clippy --offline --all-targets → PASS (warnings only, 0 errors; no warnings from pipeline change)
-- cargo test --offline → 340 lib passed, 0 failed (2 ignored) + 1 doc passed
+- cargo clippy --offline --all-targets → PASS (warnings only, 0 errors; no new warnings from Phase 4 edits)
+- cargo test --offline → 343 lib passed, 0 failed (2 ignored) + 1 doc passed
 - cargo build --offline (debug) → PASS (recall.exe linked)
 - bun test → NOT AVAILABLE on Windows (`.test.ts` suites cannot run here)
 
@@ -84,10 +89,13 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Push `phase/4-recording-experience`, verify `main` still at `c1197a8`, await review.
-2. After approval, fast-forward main to `phase/4-recording-experience`.
-3. Begin Phase 5 per Phases.md.
+1. Commit + push closure commits to `phase/4-recording-experience` (4 commits), verify `HEAD == origin`, `main` still at `c1197a8`, 0 behind, clean tree.
+2. Deliver the mandated `RECALL PHASE 4 — FINAL CLOSURE CORRECTION REPORT` ending with the exact approval sentence.
+3. After approval, fast-forward main to `phase/4-recording-experience` (NOT auto-merged by this agent).
+4. Begin Phase 5 per Phases.md ONLY after user approval.
 
 # Blockers
 
-- None.
+- Native GUI / Windows recording QA NOT PERFORMED (Windows CLI host only; `cargo build` is build verification, NOT GUI workflow QA).
+- macOS recording QA NOT AVAILABLE.
+- Bun-only test suites cannot run on this machine (NOT AVAILABLE).

@@ -10,15 +10,20 @@ Completed the full Phase 4 scope: honest recording workspace (no fake audio visu
 
 ## Commits
 
-Pending — this report is written before the branch is committed/pushed. Suggested structure:
-
 ```
-chore: start Phase 4 branch state
-refactor(recording): unify readiness and recording state
-feat(recording): redesign truthful recording workspace
-fix(recording): harden stop errors and recovery
-test(recording): add Phase 4 lifecycle regressions
-docs: record Phase 4 verification
+11da2d7 refactor(recording): unify readiness and recording state
+0e1260f feat(recording): redesign truthful recording workspace
+7eae467 fix(recording): honest permission and device detection UX
+9321666 fix(audio): propagate VAD init errors instead of panicking
+584f9b0 test(recording): add Phase 4 lifecycle regressions
+ba8793e docs: record Phase 4 verification
+```
+*Plus the Phase 4 closure corrections (this report):*
+```
+fix(recording): close Phase 4 readiness and refresh-state gaps
+fix(recording): finish recovery and recording-status UX
+test(recording): harden Phase 4 closure regressions
+docs: finalize Phase 4 closure accuracy
 ```
 
 ## Rust: VAD Panic Elimination
@@ -114,19 +119,21 @@ Required coverage implemented (per plan):
 | Gate | Result |
 |---|---|
 | `pnpm install --frozen-lockfile` | PASS |
-| `pnpm run build` | Compiled successfully |
-| Phase 4 tests (`phase4-recording-experience.test.mjs`) | 32/32 PASS |
-| Phase 3 tests (`phase3-shell-home.test.mjs`) | PASS |
+| `pnpm run build` | PASS (Compiled successfully) |
+| Phase 4 static tests (`phase4-recording-experience.test.mjs`) | 52/52 PASS |
+| Phase 4 behavioral tests (`phase4-recording-behavior.mjs` under `--experimental-strip-types`) | 25/25 PASS |
+| Phase 3 tests (`phase3-shell-home.test.mjs`) | 32/32 PASS |
 | Design system regression | PASS (20/20) |
-| Updater regression | PASS |
-| Analytics regression | PASS |
-| `.mjs` suite total | 214 pass / 1 fail (pre-existing bun-only `qa-routes.test.mjs`) |
+| Updater regression | PASS (5/5) |
+| Analytics regression | PASS (5/5) |
+| `.mjs` suite total | 234 pass / 1 fail (pre-existing bun-only `qa-routes.test.mjs`) |
+| Contract audit | 80 pass / 0 violations |
 | `cargo fmt --all --check` | PASS |
 | `cargo check --offline` | PASS (pre-existing warnings only) |
-| `cargo clippy --offline --all-targets` | PASS, 0 errors (only pre-existing warnings; no warnings from the VAD change) |
+| `cargo clippy --offline --all-targets` | PASS (warnings only, 0 errors; no new warnings from Phase 4 edits) |
 | `cargo test --offline` | 340 lib passed, 0 failed, 2 ignored (+1 doc test passed) |
 | `cargo build --offline` (debug) | PASS (recall.exe linked) |
-| Native visual QA | NOT AVAILABLE (Windows CLI host) |
+| Native GUI / Windows recording QA | NOT PERFORMED (Windows CLI host only; `cargo build` is native build verification, NOT GUI workflow QA) |
 | macOS recording QA | NOT AVAILABLE (no macOS in this environment) |
 | Bun | NOT AVAILABLE on Windows (`.test.ts` suites cannot run) |
 
@@ -149,4 +156,4 @@ Do not implement Phase 5.
 
 ---
 
-Phase 4 closure is complete. The Phase 4 branch is not yet pushed. I have not merged Phase 4 into main. I have not started Phase 5. Awaiting approval.
+Phase 4 closure corrections are complete and published. Main remains unchanged at `c1197a8`. I have not merged Phase 4 into main. I have not started Phase 5. Awaiting approval.

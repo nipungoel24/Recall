@@ -69,10 +69,11 @@ Each phase requires user approval before starting. Never begin the next phase au
   - DeviceSelection + PermissionWarning: truthful copy (no BlackHole/screen-recording claims — macOS default is CoreAudio process taps), semantic tokens, honest empty states.
   - Competing state sources removed: `useRecordingStateSync` deleted; `RecordingStateContext` is the single source (owns `isRecordingDisabled`), page derives state from context, events drive transitions.
   - Rust: `AudioPipeline::new` returns `Result<Self>`; VAD processor init failure propagates as an error instead of panicking.
-  - Phase 4 regression suite → PASS (32 tests: provider independence, stop-save gate, no-fake-viz, no-alert, permission honesty, device truthfulness, single-source-of-truth, workspace a11y/tokens, Rust VAD no-panic).
-- Acceptance: verified inside real Tauri (macOS + Windows), crash recovery retained.
-  - Windows: `pnpm build` PASS, full `.mjs` regression suite 214 pass / 1 pre-existing bun-only fail, `cargo fmt/check/clippy/test` PASS (0 new warnings from Phase 4 edits), `cargo build` (debug) links recall.exe, cargo unit tests 340 passed / 2 ignored.
-  - macOS: NOT AVAILABLE (Windows-only environment). Backend assertions verified via code inspection (CoreAudio taps default, no BlackHole dependency in copy).
+  - Phase 4 regression suite → PASS (52 static + 25 behavioral tests: provider independence, stop-save gate, no-fake-viz, no-alert, permission honesty, device truthfulness, single-source-of-truth, workspace a11y/tokens, Rust VAD no-panic, reconcile bootstrap, stop-failure reconcile).
+- Acceptance: verified inside real Tauri (Windows CLI host for build/unit tests), crash recovery retained.
+  - Windows: `pnpm build` PASS, full `.mjs` regression suite 234 pass / 1 pre-existing bun-only fail, `cargo fmt/check/clippy/test` PASS (0 new warnings from Phase 4 edits), `cargo build` (debug) links recall.exe, cargo unit tests 343 passed / 2 ignored.
+  - **Native GUI / Windows recording QA NOT PERFORMED** (Windows CLI host only; `cargo build` success is native build verification, NOT GUI workflow QA).
+  - macOS recording QA NOT AVAILABLE (no macOS in this environment). Backend assertions verified via code inspection (CoreAudio taps default, no BlackHole dependency in copy).
 
 ## PHASE 5 — Meeting Workspace + Provenance
 
