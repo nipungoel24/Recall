@@ -70,7 +70,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 - cargo fmt --all --check → PASS
 - cargo check --offline → PASS (pre-existing warnings only)
 - cargo clippy --offline --all-targets → PASS (warnings only, 0 errors; no new warnings from Phase 4 edits)
-- cargo test --offline → 343 lib passed, 0 failed (2 ignored) + 1 doc passed
+- cargo test --offline → 340 lib passed, 0 failed (2 ignored) + 1 doc passed
 - cargo build --offline (debug) → PASS (recall.exe linked)
 - bun test → NOT AVAILABLE on Windows (`.test.ts` suites cannot run here)
 
@@ -89,10 +89,10 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Commit + push closure commits to `phase/4-recording-experience` (4 commits), verify `HEAD == origin`, `main` still at `c1197a8`, 0 behind, clean tree.
-2. Deliver the mandated `RECALL PHASE 4 — FINAL CLOSURE CORRECTION REPORT` ending with the exact approval sentence.
-3. After approval, fast-forward main to `phase/4-recording-experience` (NOT auto-merged by this agent).
-4. Begin Phase 5 per Phases.md ONLY after user approval.
+1. Await user review/approval of Phase 4.
+2. After approval, fast-forward `main` to `phase/4-recording-experience` using `--ff-only`.
+3. Verify `main == origin/main == approved Phase 4 HEAD`.
+4. Only after the Phase 4 merge is approved and complete, create `phase/5-meeting-workspace-provenance` from updated main.
 
 # Blockers
 

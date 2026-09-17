@@ -62,18 +62,21 @@ Each phase requires user approval before starting. Never begin the next phase au
   - Fake audio visualization removed: page + RecordingControls no longer simulate bar levels (`Math.random`/`barHeights` deleted).
   - Truthful timer: pill shows backend `recording_duration` (real elapsed time, tabular-nums), REC + paused live indicator (motion-safe ping).
   - RecordingControls rewritten: explicit Start/Pause/Resume/Stop transitions and duplicate guards, sonner toasts instead of `alert()`, semantic tokens, focus-visible rings, `role="status"` `aria-live="polite"` status region, labelled start/stop buttons.
-  - Stop-flow data loss fixed: SQLite save gated on `shouldSaveMeetingAfterStop(isCallApi)` — the save runs on any successful stop (backend always finalizes audio) even when live transcription timed out; brief wait for the `recording-stopped` payload race.
-  - Provider-aware readiness: new pure `src/lib/recordingReadiness.ts`; `getReadinessAdapter`/`resolveTranscriptionReadiness` consult ONLY the configured provider's adapter — Local Whisper is fully independent of Parakeet (regression-gated).
+  - Stop-flow data loss fixed: SQLite save gated on `shouldSaveMeetingAfterStop(stopSucceeded)` — the save runs on any successful stop (backend always finalizes audio) even when live transcription timed out; brief wait for the `recording-stopped` payload race.
+  - Provider-aware readiness: new pure `src/lib/recordingReadiness.ts`; `getReadinessAdapter`/`resolveTranscriptionReadiness(provider, selectedModel, adapter)` consult ONLY the configured provider's adapter — Local Whisper is fully independent of Parakeet (regression-gated).
   - Unified start orchestration in `useRecordingStart` (manual/auto/direct single path), provider-driven readiness (ignored cloud STT), explicit STARTING/ERROR transitions, toast on failure instead of `alert()`.
   - Permission check honesty: `usePermissionCheck` enumerates devices and never pretends to query OS permission grants; exposes `deviceStatus`; `requestPermissions` calls the real `trigger_microphone_permission` command then rechecks.
   - DeviceSelection + PermissionWarning: truthful copy (no BlackHole/screen-recording claims — macOS default is CoreAudio process taps), semantic tokens, honest empty states.
   - Competing state sources removed: `useRecordingStateSync` deleted; `RecordingStateContext` is the single source (owns `isRecordingDisabled`), page derives state from context, events drive transitions.
   - Rust: `AudioPipeline::new` returns `Result<Self>`; VAD processor init failure propagates as an error instead of panicking.
   - Phase 4 regression suite → PASS (52 static + 25 behavioral tests: provider independence, stop-save gate, no-fake-viz, no-alert, permission honesty, device truthfulness, single-source-of-truth, workspace a11y/tokens, Rust VAD no-panic, reconcile bootstrap, stop-failure reconcile).
-- Acceptance: verified inside real Tauri (Windows CLI host for build/unit tests), crash recovery retained.
-  - Windows: `pnpm build` PASS, full `.mjs` regression suite 234 pass / 1 pre-existing bun-only fail, `cargo fmt/check/clippy/test` PASS (0 new warnings from Phase 4 edits), `cargo build` (debug) links recall.exe, cargo unit tests 343 passed / 2 ignored.
-  - **Native GUI / Windows recording QA NOT PERFORMED** (Windows CLI host only; `cargo build` success is native build verification, NOT GUI workflow QA).
-  - macOS recording QA NOT AVAILABLE (no macOS in this environment). Backend assertions verified via code inspection (CoreAudio taps default, no BlackHole dependency in copy).
+- Acceptance:
+  - Automated/build acceptance: complete on the Windows CLI host.
+    - Frontend production build and automated regression suites reported PASS.
+    - Rust fmt/check/clippy/test and native debug build reported PASS.
+    - Crash/recovery paths retain automated regression coverage.
+  - Native GUI / Windows recording workflow QA: NOT PERFORMED.
+  - macOS recording workflow QA: NOT AVAILABLE.
 
 ## PHASE 5 — Meeting Workspace + Provenance
 
