@@ -5,10 +5,11 @@ import { toast } from 'sonner';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext';
+import { recordingService } from '@/services/recordingService';
 import { storageService } from '@/services/storageService';
 import { transcriptService } from '@/services/transcriptService';
 import { routes } from '@/lib/routes';
-import { shouldSaveMeetingAfterStop } from '@/lib/recordingReadiness';
+import { resolveStopOutcome, shouldSaveMeetingAfterStop } from '@/lib/recordingReadiness';
 import {
   applyPinnedSummaryLanguageToMeeting,
   detectAndCacheSummaryLanguage,
@@ -150,6 +151,36 @@ export function useRecordingStop(): UseRecordingStopReturn {
     setIsRecordingDisabled(true);
     const stopStartTime = Date.now();
 
+    // When the native stop_recording invoke failed (isCallApi=false), the
+    // backend truth decides whether the session actually ended. Never pretend
+    // a recording stopped while the backend is still recording — that would
+    // silently discard live audio. On a genuine failure the UI returns to
+    // RECORDING so the user can retry Stop.
+    let stopSucceeded = isCallApi;
+    if (!stopSucceeded) {
+      let backendIsRecording: boolean | null = null;
+      try {
+        const backendState = await recordingService.getRecordingState();
+        backendIsRecording = backendState.is_recording;
+      } catch (error) {
+        console.error('[useRecordingStop] Failed to query backend state after stop failure:', error);
+      }
+      stopSucceeded = resolveStopOutcome(false, backendIsRecording) === 'finalized';
+
+      if (!stopSucceeded) {
+        console.error('Stop failed and the backend is still recording; restoring RECORDING state');
+        setStatus(RecordingStatus.RECORDING);
+        setIsRecordingDisabled(false);
+        stopInProgressRef.current = false;
+        toast.error('Could not stop the recording', {
+          description: 'The recording is still active. Try stopping again.',
+          duration: 5000,
+        });
+        return;
+      }
+      console.log('Stop invoke failed but the backend stopped the session; continuing finalization');
+    }
+
     try {
       console.log('Post-stop processing (new implementation)...', {
         stop_initiated_at: new Date(stopStartTime).toISOString(),
@@ -250,7 +281,7 @@ export function useRecordingStop(): UseRecordingStopReturn {
       // save runs whenever the stop succeeded — even if transcription timed
       // out. In that case the meeting is created with whatever transcripts
       // exist, and the audio/folder link is still preserved (no silent loss).
-      if (shouldSaveMeetingAfterStop(isCallApi)) {
+      if (shouldSaveMeetingAfterStop(stopSucceeded)) {
 
         setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
 

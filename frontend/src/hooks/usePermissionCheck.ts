@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { deriveDeviceStatusFromDevices, deriveDeviceStatusFromError } from '@/lib/recordingReadiness';
 
 /**
  * Device availability, not OS permission state.
@@ -42,7 +43,7 @@ export function usePermissionCheck() {
     message: null,
   });
 
-  const checkPermissions = async () => {
+  const checkPermissions = useCallback(async () => {
     setStatus(prev => ({ ...prev, isChecking: true, error: null }));
 
     try {
@@ -50,44 +51,36 @@ export function usePermissionCheck() {
 
       const inputDevices = devices.filter(d => d.device_type === 'Input');
       const outputDevices = devices.filter(d => d.device_type === 'Output');
-      const hasMicrophone = inputDevices.length > 0;
-      const hasSystemAudio = outputDevices.length > 0;
 
       console.log('Device availability check:', {
-        hasMicrophone,
-        hasSystemAudio,
+        hasMicrophone: inputDevices.length > 0,
+        hasSystemAudio: outputDevices.length > 0,
         inputDevices: inputDevices.length,
         outputDevices: outputDevices.length
       });
 
-      setStatus({
-        hasMicrophone,
-        hasSystemAudio,
-        isChecking: false,
-        error: null,
-        deviceStatus: hasMicrophone ? 'available' : 'degraded',
-        message: hasMicrophone
-          ? null
-          : 'No microphone devices were detected. This can mean no mic is connected, or the app has not been granted microphone access.',
-      });
+      const derived = deriveDeviceStatusFromDevices(devices);
+      setStatus({ ...derived, isChecking: false, error: null });
 
-      return { hasMicrophone, hasSystemAudio };
+      return { hasMicrophone: derived.hasMicrophone, hasSystemAudio: derived.hasSystemAudio };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to check devices';
       console.error('Failed to check audio devices:', error);
-      setStatus({
-        hasMicrophone: false,
-        hasSystemAudio: false,
-        isChecking: false,
-        error: message,
-        deviceStatus: 'degraded',
-        message: 'Unable to enumerate audio devices. Microphone access may be required.',
-      });
+      const derived = deriveDeviceStatusFromError();
+      setStatus({ ...derived, isChecking: false, error: message });
       return { hasMicrophone: false, hasSystemAudio: false };
     }
-  };
+  }, []);
 
-  const requestPermissions = async () => {
+  // Initial check on mount. Without this, a fresh page only reports devices
+  // after the user interacts, so the Home preflight and workspace permission
+  // banner would show "checking" forever and recording could start without a
+  // known-good device state.
+  useEffect(() => {
+    void checkPermissions();
+  }, [checkPermissions]);
+
+  const requestPermissions = useCallback(async () => {
     try {
       // On macOS this attempts an input stream, surfacing the OS permission
       // prompt. On Windows/Linux it verifies the input pipeline can start.
@@ -99,9 +92,9 @@ export function usePermissionCheck() {
 
     // Re-enumerate after triggering — permission prompts are async on macOS.
     setTimeout(() => {
-      checkPermissions();
+      void checkPermissions();
     }, 1000);
-  };
+  }, [checkPermissions]);
 
   return {
     ...status,

@@ -72,15 +72,25 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
-  const [isMeetingActive, setIsMeetingActive] = useState(false);
+  // Local, frontend-only override. The authoritative signal is the backend
+  // recording state, bridged below, so a WebView refresh during an active
+  // recording restores the "recording" sidebar state instead of resetting it.
+  const [meetingActiveOverride, setMeetingActiveOverride] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [serverAddress, setServerAddress] = useState('');
   const [transcriptServerAddress, setTranscriptServerAddress] = useState('');
   const [activeSummaryPolls, setActiveSummaryPolls] = useState<Map<string, NodeJS.Timeout>>(new Map());
 
-  // Use recording state from RecordingStateContext (single source of truth)
+  // Use recording state from RecordingStateContext (single source of truth).
+  // isMeetingActive is bridged from the backend recording truth so a page
+  // refresh while recording keeps the sidebar "Recording" state correct.
   const { isRecording } = useRecordingState();
+  const isMeetingActive = isRecording || meetingActiveOverride;
+
+  const setIsMeetingActive = useCallback((active: boolean) => {
+    setMeetingActiveOverride(active);
+  }, []);
 
   const pathname = usePathname();
   const router = useRouter();

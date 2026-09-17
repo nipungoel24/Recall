@@ -3,6 +3,7 @@ import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext';
+import { usePermissionCheck } from '@/hooks/usePermissionCheck';
 import { recordingService } from '@/services/recordingService';
 import { showRecordingNotification } from '@/lib/recordingNotification';
 import { toast } from 'sonner';
@@ -42,6 +43,7 @@ export function useRecordingStart(
   const { setIsMeetingActive } = useSidebar();
   const { selectedDevices, transcriptModelConfig } = useConfig();
   const { setStatus, isRecording } = useRecordingState();
+  const { checkPermissions: checkDevices } = usePermissionCheck();
 
   // Generate meeting title with timestamp
   const generateMeetingTitle = useCallback(() => {
@@ -78,6 +80,9 @@ export function useRecordingStart(
     []
   );
 
+  // Selected-model-aware readiness. The configured model (not the whole
+  // collection) gates the verdict, so an unrelated download or a corrupt
+  // sibling model never blocks or masks the selected model's true state.
   const checkModelReady = useCallback(
     async (provider: string): Promise<ReadinessReport> => {
       const adapter = getReadinessAdapter(provider, readinessAdapters);
@@ -89,21 +94,32 @@ export function useRecordingStart(
           detail: `Unsupported transcription provider: ${provider}`,
         };
       }
-      return resolveTranscriptionReadiness(provider, adapter);
+      const selectedModel = transcriptModelConfig.model ?? null;
+      return resolveTranscriptionReadiness(provider, selectedModel, adapter);
     },
-    [readinessAdapters]
+    [readinessAdapters, transcriptModelConfig]
   );
 
   const notifyModelIssue = useCallback(
     (report: ReadinessReport) => {
+      const modelClause = report.model
+        ? `Configured transcription model "${report.model}"`
+        : 'The configured transcription model';
+
       if (report.state === 'downloading') {
         toast.info('Model download in progress', {
-          description: 'Please wait for the transcription model to finish downloading before recording.',
+          description: `${modelClause} is still downloading. Start recording once the download finishes.`,
           duration: 5000,
         });
+      } else if (report.state === 'corrupted') {
+        toast.error('Transcription model corrupted', {
+          description: `${modelClause} failed its integrity check. Re-download it or select another model.`,
+          duration: 5000,
+        });
+        showModal?.('modelSelector', 'Transcription model setup required');
       } else {
         toast.error('Transcription model not ready', {
-          description: 'Please download a transcription model before recording.',
+          description: `${modelClause} is not available. Download it or select another model.`,
           duration: 5000,
         });
         showModal?.('modelSelector', 'Transcription model setup required');
@@ -116,6 +132,22 @@ export function useRecordingStart(
   // Single orchestration path for every start source.
   const startRecordingOrchestration = useCallback(
     async (source: StartSource): Promise<void> => {
+      // Pre-flight: microphone availability. Device enumeration is NOT an OS
+      // permission verdict; a missing microphone is actionable either way
+      // ("connect a mic" or "grant microphone access"), and we never claim a
+      // permission grant we cannot prove. Absence of a system-audio device is
+      // non-blocking — mic-only recording is supported.
+      const devices = await checkDevices();
+      if (!devices.hasMicrophone) {
+        console.warn(`Recording start blocked: no microphone devices available (${source})`);
+        setStatus(RecordingStatus.IDLE);
+        toast.error('Microphone unavailable', {
+          description: 'Connect a microphone or grant microphone access, then recheck and try again.',
+          duration: 5000,
+        });
+        return;
+      }
+
       const provider = transcriptModelConfig.provider || 'parakeet';
 
       const readiness = await checkModelReady(provider);
@@ -171,6 +203,7 @@ export function useRecordingStart(
       selectedDevices,
       clearTranscripts,
       setIsMeetingActive,
+      checkDevices,
     ]
   );
 

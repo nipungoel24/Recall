@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { recordingService } from '@/services/recordingService';
+import { reconcileRecordingSnapshot, type ReconcileStatus } from '@/lib/recordingReadiness';
 
 /**
  * Recording state synchronized with backend
@@ -23,6 +24,19 @@ export enum RecordingStatus {
   COMPLETED = 'completed',                // Successfully saved
   ERROR = 'error'                         // Error occurred
 }
+
+// Map the pure lifecycle statuses (from recordingReadiness) to the enum so the
+// reconcile logic stays dependency-free and Node-testable.
+const STATUS_BY_LIFECYCLE: Record<ReconcileStatus, RecordingStatus> = {
+  idle: RecordingStatus.IDLE,
+  starting: RecordingStatus.STARTING,
+  recording: RecordingStatus.RECORDING,
+  stopping: RecordingStatus.STOPPING,
+  processing: RecordingStatus.PROCESSING_TRANSCRIPTS,
+  saving: RecordingStatus.SAVING,
+  completed: RecordingStatus.COMPLETED,
+  error: RecordingStatus.ERROR,
+};
 
 interface RecordingState {
   isRecording: boolean;           // Is a recording session active
@@ -89,21 +103,49 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
   }, [state.status, state.isRecording, state.isPaused]);
 
   /**
-   * Sync recording state with backend
-   * Called on mount (fixes refresh desync) and periodically while recording
+   * Sync recording state with backend and reconcile it into the frontend
+   * lifecycle. Called on mount (fixes refresh desync) and periodically while
+   * recording.
+   *
+   * While the backend reports an active recording the frontend adopts the
+   * backend truth (pause state, active/duration metrics) and keeps polling.
+   * When the backend reports no recording, polling stops; an IDLE frontend
+   * stays IDLE, but a frontend already in STOPPING/PROCESSING_TRANSCRIPTS/
+   * SAVING keeps its lifecycle — the backend stops reporting recording as soon
+   * as a stop is requested, before finalization has finished, so a blind reset
+   * would abort a legitimate save in flight.
    */
   const syncWithBackend = async () => {
     try {
       const backendState = await recordingService.getRecordingState();
 
-      setState(prev => ({
-        ...prev,
-        isRecording: backendState.is_recording,
-        isPaused: backendState.is_paused,
-        isActive: backendState.is_active,
-        recordingDuration: backendState.recording_duration,
-        activeDuration: backendState.active_duration,
-      }));
+      setState(prev => {
+        const next = reconcileRecordingSnapshot(
+          {
+            status: prev.status as ReconcileStatus,
+            recordingDuration: prev.recordingDuration,
+            activeDuration: prev.activeDuration,
+          },
+          backendState
+        );
+
+        return {
+          ...prev,
+          isRecording: next.isRecording,
+          isPaused: next.isPaused,
+          isActive: next.isActive,
+          recordingDuration: next.recordingDuration,
+          activeDuration: next.activeDuration,
+          status: STATUS_BY_LIFECYCLE[next.status],
+          statusMessage: next.isRecording ? 'Recording...' : prev.statusMessage,
+        };
+      });
+
+      if (backendState.is_recording) {
+        startPolling();
+      } else {
+        stopPolling();
+      }
     } catch (error) {
       console.error('[RecordingStateContext] Failed to sync with backend:', error);
       // Don't update state on error - keep current state
