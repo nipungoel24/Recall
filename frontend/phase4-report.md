@@ -28,7 +28,7 @@ df60339 test(recording): harden Phase 4 closure regressions
 678251d docs: finalize Phase 4 closure accuracy
 ```
 
-*A final documentation-only accuracy follow-up was made after `678251d`; see the current Phase 4 branch HEAD (`678251d..<new-doc-sha>`).*
+*A final documentation-only source-of-truth correction was made after `678251d`; see the Phase 4 branch history for that follow-up commit.*
 
 ## Rust: VAD Panic Elimination
 
