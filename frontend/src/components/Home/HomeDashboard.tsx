@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useContexts } from '@/components/Context/hooks';
+import { usePermissionCheck } from '@/hooks/usePermissionCheck';
 import { meetingService } from '@/services/meetingService';
 import { getDailyBriefStatus } from '@/services/dailyService';
 import { MeetingMetadata } from '@/types';
@@ -62,16 +63,24 @@ function relativeUpdatedLabel(iso: string | null | undefined, now: Date): string
 /**
  * Home dashboard shown while the app is idle.
  *
- * Performance contract: this component makes exactly two lightweight backend
- * calls of its own (today's meeting metadata + daily brief status) and reuses
- * the sidebar's already-loaded meeting list and the Contexts hook. It never
- * loads transcripts, summaries bodies, or context memory — those stay lazy on
- * their own pages.
+ * Performance contract: this component makes three lightweight backend calls
+ * of its own (device enumeration + today's meeting metadata + daily brief
+ * status) and reuses the sidebar's already-loaded meeting list and the
+ * Contexts hook. It never loads transcripts, summaries bodies, or context
+ * memory — those stay lazy on their own pages.
  */
 export function HomeDashboard() {
   const router = useRouter();
   const { meetings } = useSidebar();
   const contextsState = useContexts();
+  const {
+    isChecking: micChecking,
+    hasMicrophone,
+    message: micMessage,
+    error: micError,
+    checkPermissions,
+    requestPermissions,
+  } = usePermissionCheck();
 
   const now = new Date();
   const todayKey = localDateKey(now);
@@ -177,6 +186,47 @@ export function HomeDashboard() {
                 Calendar
               </Button>
             </div>
+          </div>
+
+          {/* Microphone preflight — honest device availability, not an OS
+              permission claim. "Request Access" goes through the real
+              trigger_microphone_permission remediation path. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border px-6 py-3">
+            {micChecking ? (
+              <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                Checking microphone…
+              </span>
+            ) : hasMicrophone ? (
+              <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground">
+                <span className="h-2 w-2 rounded-full bg-success" />
+                Microphone available
+                <span className="text-xs text-muted-foreground">
+                  System audio is optional — mic-only recording is supported.
+                </span>
+              </span>
+            ) : (
+              <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-foreground">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <span className="font-medium">
+                  {micError
+                    ? 'Could not check devices — microphone access may be required'
+                    : 'Microphone unavailable'}
+                </span>
+                <span className="max-w-md text-xs text-muted-foreground">
+                  {micMessage ??
+                    'This can mean no mic is connected, or the app has not been granted microphone access.'}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => void checkPermissions()}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Recheck
+                </Button>
+                <Button variant="default" size="sm" onClick={() => void requestPermissions()}>
+                  <Mic className="h-3.5 w-3.5" />
+                  Request Access
+                </Button>
+              </span>
+            )}
           </div>
         </section>
 

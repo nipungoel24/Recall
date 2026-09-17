@@ -44,12 +44,20 @@ export function TranscriptRecovery({
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Two-step destructive confirmation: the first Delete click arms the in-dialog
+  // confirmation panel instead of deleting immediately.
+  const [deleteConfirmFor, setDeleteConfirmFor] = useState<string | null>(null);
 
   // Reset selection when dialog opens
   useEffect(() => {
     if (isOpen) {
       setSelectedMeetingId(null);
       setPreviewTranscripts([]);
+      setRecoveryError(null);
+      setDeleteError(null);
+      setDeleteConfirmFor(null);
     }
   }, [isOpen]);
 
@@ -80,13 +88,16 @@ export function TranscriptRecovery({
     if (!selectedMeetingId) return;
 
     setIsRecovering(true);
+    setRecoveryError(null);
     try {
       const result = await onRecover(selectedMeetingId);
       console.log('Recovery successful:', result);
       onClose();
     } catch (error) {
       console.error('Recovery failed:', error);
-      alert('Failed to recover meeting. Please try again.');
+      setRecoveryError(
+        'Failed to recover this meeting. The recoverable meeting is still intact — you can try again or close this dialog.'
+      );
     } finally {
       setIsRecovering(false);
     }
@@ -95,7 +106,12 @@ export function TranscriptRecovery({
   const handleDelete = async () => {
     if (!selectedMeetingId) return;
 
-    if (!confirm('Are you sure you want to delete this meeting? This cannot be undone.')) {
+    // First click arms the destructive confirmation panel; the second click
+    // actually deletes. This prevents accidental deletion without a browser
+    // confirm() dialog.
+    if (deleteConfirmFor !== selectedMeetingId) {
+      setDeleteConfirmFor(selectedMeetingId);
+      setDeleteError(null);
       return;
     }
 
@@ -104,9 +120,11 @@ export function TranscriptRecovery({
       await onDelete(selectedMeetingId);
       setSelectedMeetingId(null);
       setPreviewTranscripts([]);
+      setDeleteConfirmFor(null);
+      setDeleteError(null);
     } catch (error) {
       console.error('Delete failed:', error);
-      alert('Failed to delete meeting. Please try again.');
+      setDeleteError('Failed to delete this recoverable meeting. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -155,11 +173,11 @@ export function TranscriptRecovery({
                       </div>
                       {meeting.folderPath ? (
                         <span title="Audio available">
-                          <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
                         </span>
                       ) : (
                         <span title="No audio">
-                          <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                          <AlertCircle className="w-4 h-4 text-warning flex-shrink-0" />
                         </span>
                       )}
                     </div>
@@ -187,12 +205,12 @@ export function TranscriptRecovery({
                         {selectedMeeting.transcriptCount} transcripts
                       </span>
                       {selectedMeeting.folderPath ? (
-                        <span className="flex items-center gap-1 text-green-600">
+                        <span className="flex items-center gap-1 text-success">
                           <CheckCircle2 className="w-4 h-4" />
                           Audio available
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-yellow-600">
+                        <span className="flex items-center gap-1 text-warning">
                           <AlertCircle className="w-4 h-4" />
                           No audio
                         </span>
@@ -264,47 +282,90 @@ export function TranscriptRecovery({
           </div>
         </div>
 
+        <div className="space-y-2 px-6">
+          {(recoveryError || deleteError) && (
+            <Alert variant="destructive">
+              <AlertDescription className="text-sm">{recoveryError ?? deleteError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        {deleteConfirmFor === selectedMeetingId && (
+          <div className="mx-6 flex items-center justify-between gap-4 border border-destructive/40 bg-destructive/5 px-4 py-3">
+            <p className="text-sm text-foreground">
+              This removes the recoverable meeting data and cannot be undone.
+            </p>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmFor(null)}
+                disabled={isDeleting}
+              >
+                Keep
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <XCircle className="w-4 h-4 mr-2 animate-spin motion-reduce:animate-none" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete permanently
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="px-6 pb-6">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isRecovering || isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={!selectedMeetingId || isRecovering || isDeleting}
-          >
-            {isDeleting ? (
-              <>
-                <XCircle className="w-4 h-4 mr-2 animate-spin" />
-                Deleting...
-              </>
-            ) : (
-              <>
+          {deleteConfirmFor === selectedMeetingId ? (
+            <Button variant="outline" onClick={onClose} disabled={isRecovering || isDeleting}>
+              Cancel
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={isRecovering || isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => void handleDelete()}
+                disabled={!selectedMeetingId || isRecovering || isDeleting}
+              >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </>
-            )}
-          </Button>
-          <Button
-            onClick={handleRecover}
-            disabled={!selectedMeetingId || isRecovering || isDeleting}
-          >
-            {isRecovering ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2 animate-spin" />
-                Recovering...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Recover
-              </>
-            )}
-          </Button>
+                Delete…
+              </Button>
+              <Button
+                onClick={() => void handleRecover()}
+                disabled={!selectedMeetingId || isRecovering || isDeleting}
+              >
+                {isRecovering ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2 animate-spin motion-reduce:animate-none" />
+                    Recovering...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Recover
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
