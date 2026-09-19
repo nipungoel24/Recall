@@ -184,3 +184,41 @@ pub struct TranscriptSetting {
     #[serde(rename = "openaiApiKey")]
     pub openai_api_key: Option<String>,
 }
+
+// Meeting Intelligence models (Phase 5)
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingIntelligenceModel {
+    pub meeting_id: String,
+    pub abstract_text: Option<String>,
+    pub schema_version: i64,
+    pub generated_at: Option<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingIntelligenceItemModel {
+    pub id: String,
+    pub meeting_id: String,
+    pub kind: String,                           // topic | decision | action | question | fact | follow_up
+    pub text: String,
+    pub ordering: i64,
+    pub confidence: Option<f64>,                // 0.0 to 1.0
+    pub owner: Option<String>,
+    pub due_date: Option<String>,
+    pub status: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingIntelligenceItemSourceModel {
+    pub id: String,
+    pub item_id: String,
+    pub transcript_segment_id: String,
+    pub meeting_id: String,
+    pub created_at: DateTimeUtc,
+}

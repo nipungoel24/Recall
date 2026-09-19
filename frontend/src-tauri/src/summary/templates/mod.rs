@@ -41,11 +41,10 @@
 //! Custom templates must follow the JSON schema defined in `types::Template`.
 
 mod defaults;
-mod loader;
+pub mod loader;
 pub(crate) mod store;
 mod types;
 
-// Re-export public API
 pub use loader::{
     get_template, get_template_json_raw, is_builtin_template_id, list_template_ids, list_templates,
     list_templates_with_source, set_bundled_templates_dir, template_source,

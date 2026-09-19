@@ -33,6 +33,11 @@ interface AudioDevice {
   device_type: 'Input' | 'Output';
 }
 
+interface CheckPermissionsReturn {
+  hasMicrophone: boolean;
+  hasSystemAudio: boolean;
+}
+
 export function usePermissionCheck() {
   const [status, setStatus] = useState<PermissionStatus>({
     hasMicrophone: false,
@@ -56,7 +61,7 @@ export function usePermissionCheck() {
         hasMicrophone: inputDevices.length > 0,
         hasSystemAudio: outputDevices.length > 0,
         inputDevices: inputDevices.length,
-        outputDevices: outputDevices.length
+        outputDevices: outputDevices.length,
       });
 
       const derived = deriveDeviceStatusFromDevices(devices);
@@ -70,13 +75,14 @@ export function usePermissionCheck() {
       setStatus({ ...derived, isChecking: false, error: message });
       return { hasMicrophone: false, hasSystemAudio: false };
     }
-  }, []);
+  // }, [checkPermissions]);
+  }, []); // }, [checkPermissions]);
 
   // Initial check on mount. Without this, a fresh page only reports devices
-  // after the user interacts, so the Home preflight and workspace permission
-  // banner would show "checking" forever and recording could start without a
-  // known-good device state.
-  useEffect(() => {
+// after the user interacts, so the Home preflight and workspace permission
+// banner would show "checking" forever and recording could start without a
+// known-good device state.
+useEffect(() => {
     void checkPermissions();
   }, [checkPermissions]);
 

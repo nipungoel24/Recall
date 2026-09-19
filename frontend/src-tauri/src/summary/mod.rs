@@ -30,6 +30,7 @@ pub struct CustomOpenAIConfig {
 }
 
 pub mod commands;
+pub mod intelligence_commands;
 pub(crate) mod daily_brief;
 pub mod daily_commands;
 pub mod daily_service;
@@ -62,6 +63,20 @@ pub use commands::{
     api_save_meeting_summary_language,
 };
 
+pub use intelligence_commands::{
+    __cmd__api_generate_meeting_intelligence, __cmd__api_get_meeting_intelligence,
+    __cmd__api_get_meeting_intelligence_items, __cmd__api_get_transcript_segment,
+    __cmd__api_get_transcript_segment_position,
+    __tauri_command_name_api_generate_meeting_intelligence,
+    __tauri_command_name_api_get_meeting_intelligence,
+    __tauri_command_name_api_get_meeting_intelligence_items,
+    __tauri_command_name_api_get_transcript_segment,
+    __tauri_command_name_api_get_transcript_segment_position,
+    api_generate_meeting_intelligence, api_get_meeting_intelligence,
+    api_get_meeting_intelligence_items, api_get_transcript_segment,
+    api_get_transcript_segment_position,
+};
+
 // Re-export template commands
 pub use template_commands::{
     __cmd__api_create_custom_template, __cmd__api_delete_custom_template,
@@ -90,4 +105,7 @@ pub use processor::{
     chunk_text, clean_llm_markdown_output, extract_meeting_name_from_markdown,
     generate_meeting_summary, rough_token_count,
 };
-pub use service::SummaryService;
+pub use service::{
+    SummaryService, StructuredIntelligence, IntelligenceItem, generate_structured_output,
+    validate_intelligence_provenance,
+};

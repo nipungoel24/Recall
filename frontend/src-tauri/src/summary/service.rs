@@ -11,11 +11,13 @@ use crate::summary::metadata::read_detected_summary_language_from_metadata;
 use crate::summary::processor::{
     extract_meeting_name_from_markdown, generate_meeting_summary, language_name_from_code,
 };
-use crate::summary::templates::{self, Template};
+use crate::database::repositories::meeting_intelligence::NewIntelligenceItem;
+use crate::summary::templates::{self, Template, get_template};
+use serde_json::json;
+use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -496,7 +498,7 @@ impl SummaryService {
             match resolve_provider_runtime_config(&pool, &model_provider, &model_name).await {
                 Ok(config) => config,
                 Err(e) => {
-                    Self::update_process_failed(&pool, &meeting_id, &e).await;
+                    update_process_failed(&pool, &meeting_id, &e).await;
                     return;
                 }
             };
@@ -520,7 +522,7 @@ impl SummaryService {
             Ok(template) => template,
             Err(e) => {
                 let err_msg = format!("Failed to load template '{}': {}", template_id, e);
-                Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
+                update_process_failed(&pool, &meeting_id, &err_msg).await;
                 return;
             }
         };
@@ -592,9 +594,9 @@ impl SummaryService {
             provider_config.custom_openai_endpoint.as_deref(),
             provider_config.custom_openai_max_tokens,
             provider_config.custom_openai_temperature,
-            provider_config.custom_openai_top_p,
-            app_data_dir.as_ref(),
-            Some(&cancellation_token),
+provider_config.custom_openai_top_p,
+        app_data_dir.as_ref(),
+        Some(&cancellation_token),
             summary_language.as_deref(),
             detected_summary_language.as_deref(),
             cached_english.as_deref(),
@@ -723,10 +725,427 @@ impl SummaryService {
                         );
                     }
                 } else {
-                    Self::update_process_failed(&pool, &meeting_id, &e).await;
+                    update_process_failed(&pool, &meeting_id, &e).await;
+}
+        }
+    }
+}
+}
+
+/// Structured intelligence output schema
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StructuredIntelligence {
+    #[serde(rename = "abstract")]
+    pub abstract_text: String,
+    pub topics: Vec<IntelligenceItem>,
+    pub decisions: Vec<IntelligenceItem>,
+    pub actions: Vec<IntelligenceItem>,
+    pub questions: Vec<IntelligenceItem>,
+    pub facts: Vec<IntelligenceItem>,
+    pub follow_ups: Vec<IntelligenceItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IntelligenceItem {
+    pub text: String,
+    pub confidence: Option<f64>,
+    pub owner: Option<String>,
+    pub due_date: Option<String>,
+    pub status: Option<String>,
+    #[serde(rename = "sourceSegmentIds")]
+    pub source_segment_ids: Vec<String>,
+}
+
+/// Generate structured meeting intelligence from transcript
+///
+/// This is the Phase 5 entry point for structured intelligence generation.
+/// It reuses the existing provider infrastructure and validation pipeline.
+pub async fn generate_structured_intelligence(
+    app: AppHandle<impl tauri::Runtime>,
+    pool: SqlitePool,
+    meeting_id: String,
+    transcript_text: String,
+    provider: String,
+    model: String,
+    template: Template,
+    custom_prompt: Option<String>,
+    context_ids: Vec<String>,
+) -> Result<StructuredIntelligence, String> {
+    use crate::context::prompts::build_effective_prompt;
+    use crate::database::repositories::meeting_intelligence::MeetingIntelligenceRepository;
+
+    // Load context memory for context_ids (same as summary generation)
+    let mut memory_blocks: Vec<String> = Vec::new();
+    if !context_ids.is_empty() {
+        let app_data_dir = app.path().app_data_dir().ok();
+        let provider_config = resolve_provider_runtime_config(&pool, &provider, &model).await?;
+        let client = reqwest::Client::new();
+        let extractor = LlmMemoryExtractor::new(
+            client,
+            provider_config.provider,
+            model.clone(),
+            provider_config.api_key,
+            provider_config.ollama_endpoint,
+            provider_config.custom_openai_endpoint,
+            provider_config.custom_openai_max_tokens,
+            provider_config.custom_openai_temperature,
+provider_config.custom_openai_top_p,
+app_data_dir,
+        );
+        let per_context_budget = MemoryBudget {
+            context_tokens: (crate::context::model::DEFAULT_CONTEXT_BUDGET_TOKENS
+                / context_ids.len().max(1))
+            .max(crate::context::model::MIN_CONTEXT_BUDGET_TOKENS),
+            ..MemoryBudget::default()
+        };
+        for context_id in &context_ids {
+            match crate::context::load_and_render_context_memory(
+                &pool,
+                context_id,
+                crate::context::model::DEFAULT_MAX_MEMORY_ITEMS,
+                per_context_budget,
+            )
+            .await
+            {
+                Ok(Some(block)) => memory_blocks.push(block),
+                Ok(None) => {}
+                Err(e) => {
+                    warn!(
+                        "Failed to load context memory for meeting {} (context {}, intelligence generation proceeds without it): {}",
+                        meeting_id, context_id, e
+                    );
                 }
             }
         }
+    }
+    let prior_context_memory = if memory_blocks.is_empty() {
+        None
+    } else {
+        Some(memory_blocks.join("\n\n"))
+    };
+
+    // Build the structured intelligence prompt
+    let effective_prompt = build_effective_prompt(prior_context_memory.as_deref(), custom_prompt.as_deref().unwrap_or(""));
+
+    // Create transcript with segment IDs for provenance
+    let transcript_with_ids = transcript_text.clone(); // For now, use full text; segment IDs could be added later
+
+    let structured_prompt = format!(
+        r#"{}
+
+You are an expert meeting analyst. Your task is to extract structured intelligence from the meeting transcript below.
+
+Return ONLY valid JSON matching this exact schema:
+
+{{
+  "abstract": "string - 2-3 sentence executive summary of the meeting",
+  "topics": [
+    {{"text": "string", "confidence": 0.9, "sourceSegmentIds": ["seg-id-1", "seg-id-2"]}}
+  ],
+  "decisions": [
+    {{"text": "string", "confidence": 0.95, "sourceSegmentIds": ["seg-id-3"]}}
+  ],
+  "actions": [
+    {{"text": "string", "confidence": 0.9, "owner": "string or null", "dueDate": "ISO8601 or null", "status": "string or null", "sourceSegmentIds": ["seg-id-4"]}}
+  ],
+  "questions": [
+    {{"text": "string", "confidence": 0.8, "sourceSegmentIds": ["seg-id-5"]}}
+  ],
+  "facts": [
+    {{"text": "string", "confidence": 0.95, "sourceSegmentIds": ["seg-id-6"]}}
+  ],
+  "follow_ups": [
+    {{"text": "string", "confidence": 0.85, "sourceSegmentIds": ["seg-id-7"]}}
+  ]
+}}
+
+RULES:
+1. Every item MUST include "sourceSegmentIds" - an array of transcript segment IDs that support the claim.
+2. Only reference segment IDs that exist in the transcript below. Do NOT invent IDs.
+3. If no evidence exists for a type, return an empty array.
+4. Confidence must be between 0.0 and 1.0.
+5. Owner, dueDate, status are optional (use null when unknown).
+6. Actions should be specific, actionable items with clear ownership when stated.
+7. Decisions are explicit commitments or resolutions made during the meeting.
+8. Questions are unresolved questions raised during the meeting.
+9. Facts are verifiable statements made during the meeting.
+10. Follow-ups are items requiring future action or investigation.
+11. Topics are the main themes discussed.
+
+Transcript segments with IDs:
+
+{}
+
+{} "#,
+        effective_prompt,
+        transcript_with_ids,
+        transcript_text
+    );
+
+    // Get provider config
+    let provider_config = resolve_provider_runtime_config(&pool, &provider, &model).await?;
+    let app_data_dir = app.path().app_data_dir().ok();
+
+    // Generate using the existing summary infrastructure
+    let client = reqwest::Client::new();
+
+    // For structured intelligence, we use a single-pass generation since it's structured output
+    let result = generate_structured_output(
+        &client,
+        &provider_config,
+        &model,
+        &structured_prompt,
+        provider_config.token_threshold,
+        provider_config.ollama_endpoint.as_deref(),
+        provider_config.custom_openai_endpoint.as_deref(),
+        provider_config.custom_openai_max_tokens,
+        provider_config.custom_openai_temperature,
+        provider_config.custom_openai_top_p,
+app_data_dir.as_ref(),
+    )
+    .await?;
+
+    // Parse and validate the structured output
+    let intelligence: StructuredIntelligence = serde_json::from_str(&result)
+        .map_err(|e| format!("Failed to parse structured intelligence: {}", e))?;
+
+    // Validate provenance - ensure all source segment IDs exist and belong to this meeting
+    let validated_intelligence = validate_intelligence_provenance(&pool, &meeting_id, intelligence).await?;
+
+    // Persist the intelligence
+    let abstract_text = Some(validated_intelligence.abstract_text.clone());
+    MeetingIntelligenceRepository::upsert_intelligence(
+        &pool,
+        &meeting_id,
+        abstract_text.as_deref(),
+        Some(&provider),
+        Some(&model),
+    )
+    .await
+    .map_err(|e| format!("Failed to upsert intelligence: {}", e))?;
+
+    // Convert to items for storage
+    let mut items = Vec::new();
+    let mut ordering = 0;
+
+    for topic in &validated_intelligence.topics {
+        items.push(NewIntelligenceItem {
+            kind: "topic".to_string(),
+            text: topic.text.clone(),
+            confidence: topic.confidence,
+            owner: topic.owner.clone(),
+            due_date: topic.due_date.clone(),
+            status: topic.status.clone(),
+            sources: topic.source_segment_ids.clone(),
+        });
+        ordering += 1;
+    }
+    for decision in &validated_intelligence.decisions {
+        items.push(NewIntelligenceItem {
+            kind: "decision".to_string(),
+            text: decision.text.clone(),
+            confidence: decision.confidence,
+            owner: decision.owner.clone(),
+            due_date: decision.due_date.clone(),
+            status: decision.status.clone(),
+            sources: decision.source_segment_ids.clone(),
+        });
+        ordering += 1;
+    }
+    for action in &validated_intelligence.actions {
+        items.push(NewIntelligenceItem {
+            kind: "action".to_string(),
+            text: action.text.clone(),
+            confidence: action.confidence,
+            owner: action.owner.clone(),
+            due_date: action.due_date.clone(),
+            status: action.status.clone(),
+            sources: action.source_segment_ids.clone(),
+        });
+        ordering += 1;
+    }
+    for question in &validated_intelligence.questions {
+        items.push(NewIntelligenceItem {
+            kind: "question".to_string(),
+            text: question.text.clone(),
+            confidence: question.confidence,
+            owner: question.owner.clone(),
+            due_date: question.due_date.clone(),
+            status: question.status.clone(),
+            sources: question.source_segment_ids.clone(),
+        });
+        ordering += 1;
+    }
+    for fact in &validated_intelligence.facts {
+        items.push(NewIntelligenceItem {
+            kind: "fact".to_string(),
+            text: fact.text.clone(),
+            confidence: fact.confidence,
+            owner: fact.owner.clone(),
+            due_date: fact.due_date.clone(),
+            status: fact.status.clone(),
+            sources: fact.source_segment_ids.clone(),
+        });
+        ordering += 1;
+    }
+    for follow_up in &validated_intelligence.follow_ups {
+        items.push(NewIntelligenceItem {
+            kind: "follow_up".to_string(),
+            text: follow_up.text.clone(),
+            confidence: follow_up.confidence,
+            owner: follow_up.owner.clone(),
+            due_date: follow_up.due_date.clone(),
+            status: follow_up.status.clone(),
+            sources: follow_up.source_segment_ids.clone(),
+        });
+        ordering += 1;
+    }
+
+    MeetingIntelligenceRepository::replace_items(&pool, &meeting_id, items)
+        .await
+        .map_err(|e| format!("Failed to save intelligence items: {}", e))?;
+
+    Ok(validated_intelligence)
+}
+
+/// Generate structured JSON output from the LLM
+pub async fn generate_structured_output(
+    client: &reqwest::Client,
+    provider_config: &crate::summary::service::ProviderRuntimeConfig,
+    model: &str,
+    prompt: &str,
+    token_threshold: usize,
+    ollama_endpoint: Option<&str>,
+    custom_openai_endpoint: Option<&str>,
+    custom_openai_max_tokens: Option<u32>,
+    custom_openai_temperature: Option<f32>,
+    custom_openai_top_p: Option<f32>,
+    app_data_dir: Option<&std::path::PathBuf>,
+) -> Result<String, String> {
+    use crate::summary::llm_client::{generate_summary, LLMProvider};
+    use crate::summary::processor::chunk_text;
+
+    // Chunk the prompt if needed
+    let chunks = chunk_text(prompt, token_threshold, 1000);
+
+    // For structured output, we send the full prompt (or first chunk if it fits)
+    let input = if chunks.len() == 1 {
+        chunks[0].clone()
+    } else {
+        // If too long, we need a different approach - for now use first chunk with instruction
+        format!(
+            "{}\n\n[TRUNCATED - transcript too long for single pass, process first portion]",
+            chunks[0]
+        )
+    };
+
+    // Use the LLM client with a JSON response format instruction
+    let json_instruction = "\n\nIMPORTANT: Return ONLY valid JSON. No markdown formatting, no explanations, no extra text. The response must be parsable as JSON.";
+    let full_prompt = format!("{}{}", input, json_instruction);
+
+    // Use the existing generate_summary function
+    let system_prompt = "You are a precise JSON generator. Output only valid JSON matching the requested schema.";
+    
+    generate_summary(
+        client,
+        &provider_config.provider,
+        model,
+        &provider_config.api_key,
+        system_prompt,
+        &full_prompt,
+        ollama_endpoint,
+        custom_openai_endpoint,
+        custom_openai_max_tokens,
+        custom_openai_temperature,
+        custom_openai_top_p,
+app_data_dir,
+        None, // cancellation_token
+    )
+    .await
+}
+
+    /// Validate intelligence provenance - ensure all source segment IDs exist and belong to this meeting
+    pub async fn validate_intelligence_provenance(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        mut intelligence: StructuredIntelligence,
+    ) -> Result<StructuredIntelligence, String> {
+    // Collect all unique source segment IDs
+    let mut all_source_ids = std::collections::HashSet::new();
+    for item in &intelligence.topics {
+        all_source_ids.extend(item.source_segment_ids.iter().cloned());
+    }
+    for item in &intelligence.decisions {
+        all_source_ids.extend(item.source_segment_ids.iter().cloned());
+    }
+    for item in &intelligence.actions {
+        all_source_ids.extend(item.source_segment_ids.iter().cloned());
+    }
+    for item in &intelligence.questions {
+        all_source_ids.extend(item.source_segment_ids.iter().cloned());
+    }
+    for item in &intelligence.facts {
+        all_source_ids.extend(item.source_segment_ids.iter().cloned());
+    }
+    for item in &intelligence.follow_ups {
+        all_source_ids.extend(item.source_segment_ids.iter().cloned());
+    }
+
+    if all_source_ids.is_empty() {
+        return Ok(intelligence);
+    }
+
+    // Query database to verify all segments exist and belong to this meeting
+    let placeholders = all_source_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let query = format!(
+        "SELECT id FROM transcripts WHERE meeting_id = ? AND id IN ({})",
+        placeholders
+    );
+
+    let mut q = sqlx::query_as::<_, (String,)>(&query).bind(meeting_id);
+    for id in &all_source_ids {
+        q = q.bind(id);
+    }
+    let valid_segments: Vec<(String,)> = q
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Failed to validate provenance: {}", e))?;
+
+    let valid_ids: std::collections::HashSet<String> = valid_segments.into_iter().map(|(id,)| id).collect();
+
+    // Filter out invalid source IDs from each item
+    let filter_sources = |ids: &mut Vec<String>| {
+        ids.retain(|id| valid_ids.contains(id));
+    };
+
+    for item in &mut intelligence.topics {
+        filter_sources(&mut item.source_segment_ids);
+    }
+    for item in &mut intelligence.decisions {
+        filter_sources(&mut item.source_segment_ids);
+    }
+    for item in &mut intelligence.actions {
+        filter_sources(&mut item.source_segment_ids);
+    }
+    for item in &mut intelligence.questions {
+        filter_sources(&mut item.source_segment_ids);
+    }
+    for item in &mut intelligence.facts {
+        filter_sources(&mut item.source_segment_ids);
+    }
+    for item in &mut intelligence.follow_ups {
+        filter_sources(&mut item.source_segment_ids);
+    }
+
+    // Remove items with no valid sources (for provenance-sensitive types)
+    intelligence.decisions.retain(|item| !item.source_segment_ids.is_empty());
+    intelligence.actions.retain(|item| !item.source_segment_ids.is_empty());
+    intelligence.questions.retain(|item| !item.source_segment_ids.is_empty());
+    intelligence.facts.retain(|item| !item.source_segment_ids.is_empty());
+    intelligence.follow_ups.retain(|item| !item.source_segment_ids.is_empty());
+    // Topics can exist without direct evidence
+
+Ok(intelligence)
     }
 
     /// Updates the summary process status to failed with error message
@@ -749,7 +1168,6 @@ impl SummaryService {
             );
         }
     }
-}
 
 #[cfg(test)]
 mod tests {
