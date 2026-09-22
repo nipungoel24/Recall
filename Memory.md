@@ -4,7 +4,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, & 4 complete, Gates 5-9 pending)
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, 4, & 5 complete, Gates 6-9 pending)
 - Branch: `phase/5-meeting-workspace-provenance`
 - Base: `80a1485` (Phase 4 merged to main)
 
@@ -69,6 +69,19 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Clean prop forwarding: `MeetingWorkspace` accepts `isLoadingTranscripts` and `transcriptError` and forwards down to `TranscriptTab`, `TranscriptPanel`, and `VirtualizedTranscriptView`.
   - Strict safety invariants: zero `alert()`, `confirm()`, or `window.prompt()` calls; zero raw transcript logging.
   - Tests: `tests/lib/phase5-transcript-integration.test.mjs` (26/26 PASS). All Phase 5 suites pass (82 pass). Next.js production build (`pnpm run build`) compiled 12/12 static pages successfully. Rust checks pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test` 340 passed). Contract audit passes (80 passed, 0 violations). Full regression suites pass. Gate 5 has NOT started.
+- Phase 5 Gate 5: Meeting Action Items Intelligence verified (on `phase/5-meeting-workspace-provenance`)
+  - Upgraded `TasksTab` from Gate 2 minimal presentation to full Gate 5 intelligence-state-aware presentation.
+  - State separation: calls both `getMeetingIntelligence()` and `getMeetingIntelligenceItems()` in parallel via `Promise.all`; renders 4 distinct states: (1) loading skeleton, (2) error with `role="alert"`, (3) no-intelligence-yet with Generate trigger, (4) intelligence-ran (empty or populated).
+  - Previously the "no intelligence" and "no action items" states were conflated; now truthfully separated: "No Intelligence Generated" when `intelligence === null`, "No Action Items Identified" when intelligence exists but actions is empty.
+  - `handleGenerate`: triggers `generateMeetingIntelligence()` from no-intelligence state; `isGenerating` disables button, shows spinner; on success updates both `intelligence` and `tasks` state.
+  - Confidence display: shows `X% confidence` with `tabular-nums` when available (aligns with OverviewTab `ItemCard` pattern).
+  - AI sourcing disclosure: header copy states "Action items are AI-extracted from meeting intelligence and may require verification."
+  - Action items count shown only when populated (not "Action Items (0)").
+  - Evidence navigation: unchanged — `canNavigate`, `hasValidEvidence`, `onNavigateToEvidence` props preserved.
+  - `role="alert"` added to error div for screen reader announcement.
+  - Zero new Rust commands, zero new migrations, zero new services — reuses existing `meetingIntelligenceService`.
+  - Strict safety invariants: zero `alert()`, `confirm()`, `window.prompt()`; zero raw task text logging; zero SQL in component; zero hardcoded gray classes.
+  - Tests: `tests/lib/phase5-tasks-intelligence.test.mjs` (31/31 PASS). All Phase 5 suites pass (113/113 PASS). Next.js build compiled successfully. Rust checks pass. Contract audit 80 passed, 0 violations. Gate 6 has NOT started.
 
 # Decisions
 
@@ -124,8 +137,8 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Gate 1, Gate 2, Gate 3, & Gate 4 complete — proceed to Gate 5: Tasks lifecycle and intelligence.
-2. After Gate 5: Gate 6 (Notes), Gate 7 (Context), Gate 8 (polish), Gate 9 (tests + docs).
+1. Gate 1, Gate 2, Gate 3, Gate 4, & Gate 5 complete — proceed to Gate 6: Notes (replace /notes demo with real per-meeting notes).
+2. After Gate 6: Gate 7 (Context), Gate 8 (polish), Gate 9 (tests + docs).
 3. All gates verified → final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
 
 # Blockers
