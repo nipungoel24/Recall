@@ -14,23 +14,41 @@ interface EmptyStateSummaryProps {
   onGenerate: () => void;
   hasModel: boolean;
   isGenerating?: boolean;
+  hasTranscripts?: boolean;
 }
 
-export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }: EmptyStateSummaryProps) {
+export function EmptyStateSummary({
+  onGenerate,
+  hasModel,
+  isGenerating = false,
+  hasTranscripts = true,
+}: EmptyStateSummaryProps) {
+  const isGenerateDisabled = !hasModel || !hasTranscripts || isGenerating;
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col items-center justify-center h-full p-8 text-center"
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className="flex flex-col items-center justify-center h-full p-8 text-center text-foreground"
     >
-      <FileQuestion className="w-16 h-16 text-gray-300 mb-4" />
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+      <div className="rounded-full bg-muted/60 p-4 mb-4">
+        <FileQuestion className="w-10 h-10 text-muted-foreground" aria-hidden="true" />
+      </div>
+      <h3 className="text-base font-semibold text-foreground mb-1.5">
         No Summary Generated Yet
       </h3>
-      <p className="text-sm text-gray-500 mb-6 max-w-md">
-        Generate an AI-powered summary of your meeting transcript to get key points, action items, and decisions.
+      <p className="text-sm text-muted-foreground mb-6 max-w-md">
+        Generate an AI-powered summary of your meeting transcript to capture key discussion points, decisions, and action items.
       </p>
+
+      {!hasTranscripts && (
+        <div className="rounded-md border border-border bg-muted/30 px-3.5 py-2 mb-5 max-w-md">
+          <p className="text-xs text-muted-foreground">
+            No transcript is available for this meeting yet. Record audio or wait for live transcription before generating a summary.
+          </p>
+        </div>
+      )}
 
       <TooltipProvider>
         <Tooltip>
@@ -38,7 +56,7 @@ export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }
             <div>
               <Button
                 onClick={onGenerate}
-                disabled={!hasModel || isGenerating}
+                disabled={isGenerateDisabled}
                 className="gap-2"
               >
                 <Sparkles className="w-4 h-4" />
@@ -46,16 +64,20 @@ export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }
               </Button>
             </div>
           </TooltipTrigger>
-          {!hasModel && (
+          {!hasModel ? (
             <TooltipContent>
               <p>Please select a model in Settings first</p>
             </TooltipContent>
-          )}
+          ) : !hasTranscripts ? (
+            <TooltipContent>
+              <p>Cannot generate summary without a transcript</p>
+            </TooltipContent>
+          ) : null}
         </Tooltip>
       </TooltipProvider>
 
       {!hasModel && (
-        <p className="text-xs text-amber-600 mt-3">
+        <p className="text-xs text-destructive mt-3">
           Please select a model in Settings first
         </p>
       )}

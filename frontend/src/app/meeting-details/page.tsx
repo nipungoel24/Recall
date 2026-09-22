@@ -1,13 +1,13 @@
-"use client"
-import { useSidebar } from "@/components/Sidebar/SidebarProvider";
-import { useState, useEffect, useCallback, Suspense } from "react";
-import { Transcript, Summary } from "@/types";
-import PageContent from "./page-content";
-import { useRouter, useSearchParams } from "next/navigation";
-import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, LoaderIcon } from "lucide-react";
-import { useConfig } from "@/contexts/ConfigContext";
-import { usePaginatedTranscripts } from "@/hooks/usePaginatedTranscripts";
+'use client';
+
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { MeetingWorkspace } from '@/components/MeetingWorkspace/MeetingWorkspace';
+import { useSidebar } from '@/components/Sidebar/SidebarProvider';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { invoke } from '@tauri-apps/api/core';
+import { ArrowLeft, LoaderIcon } from 'lucide-react';
+import { useConfig } from '@/contexts/ConfigContext';
+import { usePaginatedTranscripts } from '@/hooks/usePaginatedTranscripts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { routes } from '@/lib/routes';
 
@@ -16,19 +16,19 @@ interface MeetingDetailsResponse {
   title: string;
   created_at: string;
   updated_at: string;
-  transcripts: Transcript[];
+  transcripts: any[];
   folder_path?: string;
 }
 
 function MeetingDetailsContent() {
   const searchParams = useSearchParams();
   const meetingId = searchParams.get('id');
-  const source = searchParams.get('source'); // Check if navigated from recording
+  const source = searchParams.get('source');
   const { setCurrentMeeting, refetchMeetings, stopSummaryPolling } = useSidebar();
-  const { isAutoSummary } = useConfig(); // Get auto-summary toggle state
+  const { isAutoSummary } = useConfig();
   const router = useRouter();
   const [meetingDetails, setMeetingDetails] = useState<MeetingDetailsResponse | null>(null);
-  const [meetingSummary, setMeetingSummary] = useState<Summary | null>(null);
+  const [meetingSummary, setMeetingSummary] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState<boolean>(false);
@@ -64,7 +64,7 @@ function MeetingDetailsContent() {
 
   // Set up auto-generation - respects DB as source of truth
   const setupAutoGeneration = useCallback(async () => {
-    if (hasCheckedAutoGen) return; // Only check once
+    if (hasCheckedAutoGen) return;
 
     // Only auto-generate if navigated from recording
     if (source !== 'recording') {
@@ -120,24 +120,21 @@ function MeetingDetailsContent() {
   // Sync meeting metadata from pagination hook to meeting details state
   useEffect(() => {
     if (metadata && (!meetingId || meetingId === 'intro-call')) {
-      // If invalid meeting ID, don't sync
       return;
     }
 
     if (metadata) {
       console.log('Meeting metadata loaded:', metadata);
 
-      // Build meeting details from metadata and paginated transcripts
       setMeetingDetails({
         id: metadata.id,
         title: metadata.title,
         created_at: metadata.created_at,
         updated_at: metadata.updated_at,
-        transcripts: transcripts, // Paginated transcripts from hook
-        folder_path: metadata.folder_path, // For retranscription feature
+        transcripts: transcripts,
+        folder_path: metadata.folder_path,
       });
 
-      // Sync with sidebar context
       setCurrentMeeting({ id: metadata.id, title: metadata.title });
     }
   }, [metadata, transcripts, meetingId, setCurrentMeeting]);
@@ -150,24 +147,20 @@ function MeetingDetailsContent() {
     }
   }, [transcriptError]);
 
-  // Extract fetchMeetingDetails for use in child components (now refetches via hook)
+  // Extract fetchMeetingDetails for use in child components
   const fetchMeetingDetails = useCallback(async () => {
     if (!meetingId || meetingId === 'intro-call') {
       return;
     }
-
-    // The usePaginatedTranscripts hook automatically refetches when meetingId changes
-    // This function is kept for compatibility with onMeetingUpdated callback
     console.log('fetchMeetingDetails called - pagination hook will handle refetch');
   }, [meetingId]);
 
-  // Reset states when meetingId changes (prevent race conditions)
+  // Reset states when meetingId changes
   useEffect(() => {
     setMeetingDetails(null);
     setMeetingSummary(null);
     setError(null);
     setIsLoading(true);
-    // Reset auto-generation state to allow new meeting to be checked
     setHasCheckedAutoGen(false);
     setShouldAutoGenerate(false);
   }, [meetingId]);
@@ -187,7 +180,7 @@ function MeetingDetailsContent() {
 
     if (!meetingId || meetingId === 'intro-call') {
       console.warn('No valid meeting ID in URL - meetingId:', meetingId);
-      setError("No meeting selected");
+      setError('No meeting selected');
       setIsLoading(false);
       return;
     }
@@ -199,9 +192,6 @@ function MeetingDetailsContent() {
     setError(null);
     setIsLoading(true);
 
-    // Stale guard: if the user navigates to another meeting while this
-    // fetch is in flight, its result is dropped instead of flashing the
-    // wrong meeting's summary.
     let stale = false;
 
     const fetchMeetingSummary = async () => {
@@ -214,8 +204,6 @@ function MeetingDetailsContent() {
 
         console.log('FETCH SUMMARY: Raw response:', summary);
 
-        // Check if the summary request failed with 404 or error status, or if no summary exists yet (idle)
-        // Note: 'cancelled' and 'failed' statuses can still have data if backup was restored
         if (summary.status === 'idle' || (!summary.data && summary.status === 'error')) {
           console.warn('Meeting summary not found or no summary generated yet:', summary.error || 'idle');
           setMeetingSummary(null);
@@ -224,7 +212,6 @@ function MeetingDetailsContent() {
 
         const summaryData = summary.data || {};
 
-        // Parse if it's a JSON string (backend may return double-encoded JSON)
         let parsedData = summaryData;
         if (typeof summaryData === 'string') {
           try {
@@ -253,10 +240,8 @@ function MeetingDetailsContent() {
 
         const { MeetingName, _section_order, ...restSummaryData } = parsedData;
 
-        // Format the summary data with consistent styling - PRESERVE ORDER
-        const formattedSummary: Summary = {};
+        const formattedSummary: any = {};
 
-        // Use section order if available to maintain exact order and handle duplicates
         const sectionKeys = _section_order || Object.keys(restSummaryData);
 
         console.log('LEGACY FORMAT: Processing sections:', sectionKeys);
@@ -264,26 +249,22 @@ function MeetingDetailsContent() {
         for (const key of sectionKeys) {
           try {
             const section = restSummaryData[key];
-            // Comprehensive null checks to prevent the error
             if (section &&
               typeof section === 'object' &&
               'title' in section &&
               'blocks' in section) {
               const typedSection = section as { title?: string; blocks?: any[] };
 
-              // Ensure blocks is an array before mapping
               if (Array.isArray(typedSection.blocks)) {
                 formattedSummary[key] = {
                   title: typedSection.title || key,
                   blocks: typedSection.blocks.map((block: any) => ({
                     ...block,
-                    // type: 'bullet',
                     color: 'default',
                     content: block?.content?.trim() || ''
                   }))
                 };
               } else {
-                // Handle case where blocks is not an array
                 console.warn(`LEGACY FORMAT: Section ${key} has invalid blocks:`, typedSection.blocks);
                 formattedSummary[key] = {
                   title: typedSection.title || key,
@@ -295,7 +276,6 @@ function MeetingDetailsContent() {
             }
           } catch (error) {
             console.warn(`LEGACY FORMAT: Error processing section ${key}:`, error);
-            // Continue processing other sections
           }
         }
 
@@ -304,7 +284,6 @@ function MeetingDetailsContent() {
       } catch (error) {
         if (stale) return;
         console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
-        // Don't set error state for summary fetch failure, set to null to show generate button
         setMeetingSummary(null);
       }
     };
@@ -329,11 +308,6 @@ function MeetingDetailsContent() {
   // Auto-generation check: runs when meeting is loaded with no summary
   useEffect(() => {
     const checkAutoGen = async () => {
-      // Only auto-generate if:
-      // 1. We have meeting details
-      // 2. No summary exists
-      // 3. Meeting has transcripts
-      // 4. Haven't checked yet
       if (
         meetingDetails &&
         meetingSummary === null &&
@@ -370,7 +344,20 @@ function MeetingDetailsContent() {
   if ((isLoading || isLoadingTranscripts) || !meetingDetails) {
     return (
       <div className="flex flex-col h-screen bg-gray-50">
-        <MeetingDetailsTopBar title="" />
+        <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4">
+          <button
+            type="button"
+            onClick={() => router.push(routes.home())}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Home
+          </button>
+          <span className="h-4 w-px bg-gray-200" />
+          <span className="truncate text-sm font-medium text-gray-800">
+            Loading...
+          </span>
+        </div>
         <div className="flex flex-1 overflow-hidden">
           <div className="hidden md:flex md:w-1/4 lg:w-1/3 border-r border-gray-200 bg-white flex-col p-4 space-y-3">
             <Skeleton className="h-8 w-1/2" />
@@ -392,20 +379,13 @@ function MeetingDetailsContent() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      <MeetingDetailsTopBar title={meetingDetails.title} createdAt={meetingDetails.created_at} />
-      <PageContent
+      <MeetingWorkspace
         meeting={meetingDetails}
         summaryData={meetingSummary}
-        shouldAutoGenerate={shouldAutoGenerate}
-        onAutoGenerateComplete={() => setShouldAutoGenerate(false)}
         onMeetingUpdated={async () => {
-          // Refetch meeting details to get updated title from backend
-          await fetchMeetingDetails();
-          // Refetch meetings list to update sidebar
           await refetchMeetings();
         }}
         onRefetchTranscripts={refetch}
-        // Pagination props for efficient transcript loading
         segments={segments}
         hasMore={hasMore}
         isLoadingMore={isLoadingMore}
@@ -413,49 +393,6 @@ function MeetingDetailsContent() {
         loadedCount={loadedCount}
         onLoadMore={loadMore}
       />
-    </div>
-  );
-}
-
-/**
- * Slim orientation bar above the three-panel meeting workspace: a
- * deterministic back action (never depends on browser history) plus the
- * meeting identity (title and when it happened).
- */
-function MeetingDetailsTopBar({ title, createdAt }: { title: string; createdAt?: string }) {
-  const router = useRouter();
-  const happenedLabel = createdAt
-    ? new Date(createdAt).toLocaleString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : '';
-  return (
-    <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4">
-      <button
-        type="button"
-        onClick={() => router.push(routes.home())}
-        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Home
-      </button>
-      <span className="h-4 w-px bg-gray-200" />
-      <span className="truncate text-sm font-medium text-gray-800" title={title}>
-        {title}
-      </span>
-      {happenedLabel && (
-        <>
-          <span className="hidden sm:inline h-4 w-px bg-gray-200" />
-          <span className="hidden sm:inline flex-shrink-0 text-xs text-gray-400 tabular-nums">
-            {happenedLabel}
-          </span>
-        </>
-      )}
     </div>
   );
 }

@@ -155,13 +155,11 @@ pub async fn api_generate_meeting_intelligence<R: Runtime>(
     let meeting_id = request.meeting_id.clone();
 
     // Fetch meeting transcripts
-    let transcripts = crate::database::repositories::meeting::MeetingsRepository::get_meeting(
-        &pool,
-        &meeting_id,
-    )
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Meeting not found: {}", meeting_id))?;
+    let transcripts =
+        crate::database::repositories::meeting::MeetingsRepository::get_meeting(&pool, &meeting_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Meeting not found: {}", meeting_id))?;
 
     if transcripts.transcripts.is_empty() {
         return Err("Meeting has no transcripts".to_string());
@@ -176,14 +174,17 @@ pub async fn api_generate_meeting_intelligence<R: Runtime>(
         .join("\n");
 
     // Get model config
-    let model_config = crate::api::api_get_model_config(app.clone(), state, None).await?
-        .ok_or_else(|| "No model configuration found. Please configure a model in settings.".to_string())?;
+    let model_config = crate::api::api_get_model_config(app.clone(), state, None)
+        .await?
+        .ok_or_else(|| {
+            "No model configuration found. Please configure a model in settings.".to_string()
+        })?;
 
     // Load template
     let template = crate::summary::templates::get_template(
-        request.template_id.as_deref().unwrap_or("standard_meeting")
+        request.template_id.as_deref().unwrap_or("standard_meeting"),
     )
-        .map_err(|e| format!("Template not found: {}", e))?;
+    .map_err(|e| format!("Template not found: {}", e))?;
 
     // Generate structured intelligence using the existing summary infrastructure
     let intelligence = crate::summary::service::generate_structured_intelligence(
@@ -237,14 +238,13 @@ pub async fn api_get_transcript_segment_position<R: Runtime>(
     let pool = state.db_manager.pool();
 
     // Get the segment's audio_start_time first
-    let segment: Option<(f64,)> = sqlx::query_as(
-        "SELECT audio_start_time FROM transcripts WHERE id = ? AND meeting_id = ?",
-    )
-    .bind(&segment_id)
-    .bind(&meeting_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let segment: Option<(f64,)> =
+        sqlx::query_as("SELECT audio_start_time FROM transcripts WHERE id = ? AND meeting_id = ?")
+            .bind(&segment_id)
+            .bind(&meeting_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if segment.is_none() {
         return Ok(None);
@@ -263,13 +263,11 @@ pub async fn api_get_transcript_segment_position<R: Runtime>(
     .map_err(|e| e.to_string())?;
 
     // Total count for the meeting
-    let total: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM transcripts WHERE meeting_id = ?",
-    )
-    .bind(&meeting_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM transcripts WHERE meeting_id = ?")
+        .bind(&meeting_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(Some(TranscriptSegmentPosition {
         segment_id,
@@ -283,6 +281,6 @@ pub async fn api_get_transcript_segment_position<R: Runtime>(
 pub struct TranscriptSegmentPosition {
     pub segment_id: String,
     pub meeting_id: String,
-    pub position: i64,      // 0-based index
-    pub total_count: i64,   // total segments in meeting
+    pub position: i64,    // 0-based index
+    pub total_count: i64, // total segments in meeting
 }

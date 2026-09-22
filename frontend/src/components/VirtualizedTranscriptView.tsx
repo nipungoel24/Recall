@@ -34,6 +34,10 @@ export interface VirtualizedTranscriptViewProps {
     totalCount?: number;
     loadedCount?: number;
     onLoadMore?: () => void;
+
+    // Evidence navigation props
+    highlightedSegmentId?: string | null;
+    scrollToIndex?: number | null;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -71,6 +75,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence,
     isStreaming,
     showConfidence,
+    isHighlighted = false,
 }: {
     id: string;
     timestamp: number;
@@ -78,11 +83,19 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence?: number;
     isStreaming: boolean;
     showConfidence: boolean;
+    isHighlighted?: boolean;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
 
     return (
-        <div id={`segment-${id}`} className="mb-3">
+        <div
+            id={`segment-${id}`}
+            className={`mb-3 rounded-md transition-colors duration-300 ${
+                isHighlighted
+                    ? 'bg-accent/40 ring-1 ring-accent-foreground/20 p-2'
+                    : ''
+            }`}
+        >
             <div className="flex items-start gap-2">
                 <Tooltip>
                     <TooltipTrigger>
@@ -124,6 +137,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     totalCount = 0,
     loadedCount = 0,
     onLoadMore,
+    highlightedSegmentId = null,
+    scrollToIndex = null,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -147,6 +162,26 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             });
         },
     });
+
+    // Evidence navigation: scroll to target segment index when requested
+    useEffect(() => {
+        if (scrollToIndex !== undefined && scrollToIndex !== null && scrollToIndex >= 0 && scrollToIndex < segments.length) {
+            if (segments.length >= VIRTUALIZATION_THRESHOLD) {
+                virtualizer.scrollToIndex(scrollToIndex, {
+                    align: 'center',
+                    behavior: prefersReducedMotion ? 'auto' : 'smooth',
+                });
+            } else {
+                const targetEl = document.getElementById(`segment-${segments[scrollToIndex]?.id}`);
+                if (targetEl) {
+                    targetEl.scrollIntoView({
+                        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+                        block: 'center',
+                    });
+                }
+            }
+        }
+    }, [scrollToIndex, segments, virtualizer, prefersReducedMotion]);
 
     // Custom hook for auto-scrolling (supports both virtualized and non-virtualized)
     useAutoScroll({
@@ -298,6 +333,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        isHighlighted={highlightedSegmentId === segment.id}
                                     />
                                 </div>
                             );
@@ -354,6 +390,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        isHighlighted={highlightedSegmentId === segment.id}
                                     />
                                 </motion.div>
                             );

@@ -110,3 +110,97 @@ export interface TranscriptSegmentData {
   text: string;
   confidence?: number;
 }
+
+// Meeting Intelligence types (Phase 5)
+export type IntelligenceKind = 'topic' | 'decision' | 'action' | 'question' | 'fact' | 'follow_up';
+
+export interface MeetingIntelligence {
+  meeting_id: string;
+  abstract_text: string | null;
+  schema_version: number;
+  generated_at: string | null;
+  provider: string | null;
+  model: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MeetingIntelligenceItem {
+  id: string;
+  meeting_id: string;
+  kind: IntelligenceKind;
+  text: string;
+  ordering: number;
+  confidence: number | null;
+  owner: string | null;
+  due_date: string | null;
+  status: string | null;
+  sources: MeetingIntelligenceItemSource[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MeetingIntelligenceItemSource {
+  id: string;
+  item_id: string;
+  transcript_segment_id: string;
+  meeting_id: string;
+  created_at?: string;
+}
+
+export interface MeetingIntelligenceResponse {
+  meeting_id: string;
+  abstract_text: string | null;
+  schema_version: number;
+  generated_at: string | null;
+  provider: string | null;
+  model: string | null;
+}
+
+export interface IntelligenceItemResponse {
+  id: string;
+  meeting_id: string;
+  kind: IntelligenceKind;
+  text: string;
+  ordering: number;
+  confidence: number | null;
+  owner: string | null;
+  due_date: string | null;
+  status: string | null;
+  sources: IntelligenceSourceResponse[];
+}
+
+export interface IntelligenceSourceResponse {
+  id: string;
+  item_id: string;
+  transcript_segment_id: string;
+  meeting_id: string;
+}
+
+export interface TranscriptSegmentPosition {
+  segment_id: string;
+  meeting_id: string;
+  position: number;      // 0-based index
+  total_count: number;   // total segments in meeting
+}
+
+export interface GenerateIntelligenceRequest {
+  meeting_id: string;
+  custom_prompt?: string;
+  template_id?: string;
+}
+
+export interface IntelligenceItemRequest {
+  kind: IntelligenceKind;
+  text: string;
+  confidence?: number | null;
+  owner?: string | null;
+  due_date?: string | null;
+  status?: string | null;
+  sources: string[];
+}
+
+export interface IntelligenceItemSourceRequest {
+  item_id: string;
+  transcript_segment_id: string;
+}

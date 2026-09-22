@@ -1,6 +1,7 @@
 use crate::context::engine::MemoryEngine;
 use crate::context::extraction::LlmMemoryExtractor;
 use crate::context::model::MemoryBudget;
+use crate::database::repositories::meeting_intelligence::NewIntelligenceItem;
 use crate::database::repositories::{
     meeting::MeetingsRepository, setting::SettingsRepository, summary::SummaryProcessesRepository,
 };
@@ -11,13 +12,12 @@ use crate::summary::metadata::read_detected_summary_language_from_metadata;
 use crate::summary::processor::{
     extract_meeting_name_from_markdown, generate_meeting_summary, language_name_from_code,
 };
-use crate::database::repositories::meeting_intelligence::NewIntelligenceItem;
-use crate::summary::templates::{self, Template, get_template};
-use serde_json::json;
-use std::collections::HashMap;
+use crate::summary::templates::{self, get_template, Template};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -594,9 +594,9 @@ impl SummaryService {
             provider_config.custom_openai_endpoint.as_deref(),
             provider_config.custom_openai_max_tokens,
             provider_config.custom_openai_temperature,
-provider_config.custom_openai_top_p,
-        app_data_dir.as_ref(),
-        Some(&cancellation_token),
+            provider_config.custom_openai_top_p,
+            app_data_dir.as_ref(),
+            Some(&cancellation_token),
             summary_language.as_deref(),
             detected_summary_language.as_deref(),
             cached_english.as_deref(),
@@ -726,10 +726,10 @@ provider_config.custom_openai_top_p,
                     }
                 } else {
                     update_process_failed(&pool, &meeting_id, &e).await;
-}
+                }
+            }
         }
     }
-}
 }
 
 /// Structured intelligence output schema
@@ -789,8 +789,8 @@ pub async fn generate_structured_intelligence(
             provider_config.custom_openai_endpoint,
             provider_config.custom_openai_max_tokens,
             provider_config.custom_openai_temperature,
-provider_config.custom_openai_top_p,
-app_data_dir,
+            provider_config.custom_openai_top_p,
+            app_data_dir,
         );
         let per_context_budget = MemoryBudget {
             context_tokens: (crate::context::model::DEFAULT_CONTEXT_BUDGET_TOKENS
@@ -825,7 +825,10 @@ app_data_dir,
     };
 
     // Build the structured intelligence prompt
-    let effective_prompt = build_effective_prompt(prior_context_memory.as_deref(), custom_prompt.as_deref().unwrap_or(""));
+    let effective_prompt = build_effective_prompt(
+        prior_context_memory.as_deref(),
+        custom_prompt.as_deref().unwrap_or(""),
+    );
 
     // Create transcript with segment IDs for provenance
     let transcript_with_ids = transcript_text.clone(); // For now, use full text; segment IDs could be added later
@@ -877,9 +880,7 @@ Transcript segments with IDs:
 {}
 
 {} "#,
-        effective_prompt,
-        transcript_with_ids,
-        transcript_text
+        effective_prompt, transcript_with_ids, transcript_text
     );
 
     // Get provider config
@@ -901,7 +902,7 @@ Transcript segments with IDs:
         provider_config.custom_openai_max_tokens,
         provider_config.custom_openai_temperature,
         provider_config.custom_openai_top_p,
-app_data_dir.as_ref(),
+        app_data_dir.as_ref(),
     )
     .await?;
 
@@ -910,7 +911,8 @@ app_data_dir.as_ref(),
         .map_err(|e| format!("Failed to parse structured intelligence: {}", e))?;
 
     // Validate provenance - ensure all source segment IDs exist and belong to this meeting
-    let validated_intelligence = validate_intelligence_provenance(&pool, &meeting_id, intelligence).await?;
+    let validated_intelligence =
+        validate_intelligence_provenance(&pool, &meeting_id, intelligence).await?;
 
     // Persist the intelligence
     let abstract_text = Some(validated_intelligence.abstract_text.clone());
@@ -1044,8 +1046,9 @@ pub async fn generate_structured_output(
     let full_prompt = format!("{}{}", input, json_instruction);
 
     // Use the existing generate_summary function
-    let system_prompt = "You are a precise JSON generator. Output only valid JSON matching the requested schema.";
-    
+    let system_prompt =
+        "You are a precise JSON generator. Output only valid JSON matching the requested schema.";
+
     generate_summary(
         client,
         &provider_config.provider,
@@ -1058,18 +1061,18 @@ pub async fn generate_structured_output(
         custom_openai_max_tokens,
         custom_openai_temperature,
         custom_openai_top_p,
-app_data_dir,
+        app_data_dir,
         None, // cancellation_token
     )
     .await
 }
 
-    /// Validate intelligence provenance - ensure all source segment IDs exist and belong to this meeting
-    pub async fn validate_intelligence_provenance(
-        pool: &SqlitePool,
-        meeting_id: &str,
-        mut intelligence: StructuredIntelligence,
-    ) -> Result<StructuredIntelligence, String> {
+/// Validate intelligence provenance - ensure all source segment IDs exist and belong to this meeting
+pub async fn validate_intelligence_provenance(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    mut intelligence: StructuredIntelligence,
+) -> Result<StructuredIntelligence, String> {
     // Collect all unique source segment IDs
     let mut all_source_ids = std::collections::HashSet::new();
     for item in &intelligence.topics {
@@ -1096,7 +1099,11 @@ app_data_dir,
     }
 
     // Query database to verify all segments exist and belong to this meeting
-    let placeholders = all_source_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let placeholders = all_source_ids
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(",");
     let query = format!(
         "SELECT id FROM transcripts WHERE meeting_id = ? AND id IN ({})",
         placeholders
@@ -1111,7 +1118,8 @@ app_data_dir,
         .await
         .map_err(|e| format!("Failed to validate provenance: {}", e))?;
 
-    let valid_ids: std::collections::HashSet<String> = valid_segments.into_iter().map(|(id,)| id).collect();
+    let valid_ids: std::collections::HashSet<String> =
+        valid_segments.into_iter().map(|(id,)| id).collect();
 
     // Filter out invalid source IDs from each item
     let filter_sources = |ids: &mut Vec<String>| {
@@ -1138,36 +1146,46 @@ app_data_dir,
     }
 
     // Remove items with no valid sources (for provenance-sensitive types)
-    intelligence.decisions.retain(|item| !item.source_segment_ids.is_empty());
-    intelligence.actions.retain(|item| !item.source_segment_ids.is_empty());
-    intelligence.questions.retain(|item| !item.source_segment_ids.is_empty());
-    intelligence.facts.retain(|item| !item.source_segment_ids.is_empty());
-    intelligence.follow_ups.retain(|item| !item.source_segment_ids.is_empty());
+    intelligence
+        .decisions
+        .retain(|item| !item.source_segment_ids.is_empty());
+    intelligence
+        .actions
+        .retain(|item| !item.source_segment_ids.is_empty());
+    intelligence
+        .questions
+        .retain(|item| !item.source_segment_ids.is_empty());
+    intelligence
+        .facts
+        .retain(|item| !item.source_segment_ids.is_empty());
+    intelligence
+        .follow_ups
+        .retain(|item| !item.source_segment_ids.is_empty());
     // Topics can exist without direct evidence
 
-Ok(intelligence)
-    }
+    Ok(intelligence)
+}
 
-    /// Updates the summary process status to failed with error message
-    ///
-    /// # Arguments
-    /// * `pool` - SQLx connection pool
-    /// * `meeting_id` - Meeting identifier
-    /// * `error_msg` - Error message to store
-    async fn update_process_failed(pool: &SqlitePool, meeting_id: &str, error_msg: &str) {
+/// Updates the summary process status to failed with error message
+///
+/// # Arguments
+/// * `pool` - SQLx connection pool
+/// * `meeting_id` - Meeting identifier
+/// * `error_msg` - Error message to store
+async fn update_process_failed(pool: &SqlitePool, meeting_id: &str, error_msg: &str) {
+    error!(
+        "Processing failed for meeting_id {}: {}",
+        meeting_id, error_msg
+    );
+    if let Err(e) =
+        SummaryProcessesRepository::update_process_failed(pool, meeting_id, error_msg).await
+    {
         error!(
-            "Processing failed for meeting_id {}: {}",
-            meeting_id, error_msg
+            "Failed to update DB status to failed for {}: {}",
+            meeting_id, e
         );
-        if let Err(e) =
-            SummaryProcessesRepository::update_process_failed(pool, meeting_id, error_msg).await
-        {
-            error!(
-                "Failed to update DB status to failed for {}: {}",
-                meeting_id, e
-            );
-        }
     }
+}
 
 #[cfg(test)]
 mod tests {

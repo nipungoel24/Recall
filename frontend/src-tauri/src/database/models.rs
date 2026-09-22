@@ -203,10 +203,10 @@ pub struct MeetingIntelligenceModel {
 pub struct MeetingIntelligenceItemModel {
     pub id: String,
     pub meeting_id: String,
-    pub kind: String,                           // topic | decision | action | question | fact | follow_up
+    pub kind: String, // topic | decision | action | question | fact | follow_up
     pub text: String,
     pub ordering: i64,
-    pub confidence: Option<f64>,                // 0.0 to 1.0
+    pub confidence: Option<f64>, // 0.0 to 1.0
     pub owner: Option<String>,
     pub due_date: Option<String>,
     pub status: Option<String>,

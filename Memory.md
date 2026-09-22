@@ -4,9 +4,9 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 4 — Recording Experience (implementation + closure corrections complete, awaiting review)
-- Branch: `phase/4-recording-experience`
-- Base: `c1197a8` (Phase 3 merged to main)
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, & 3 complete, Gates 4-9 pending)
+- Branch: `phase/5-meeting-workspace-provenance`
+- Base: `80a1485` (Phase 4 merged to main)
 
 # Completed
 
@@ -20,7 +20,7 @@ Concise, factual working memory. Updated after every completed task, major decis
   - WCAG AA contrast validated for both light and dark themes
 - Phase 2 closure: `4931b92` + 2 closure corrections
 - Phase 3: application shell + home — merged to main as `c1197a8` (fast-forward from `a8a386b`)
-- Phase 4: recording experience — implementation + closure corrections on `phase/4-recording-experience` (awaiting review)
+- Phase 4: recording experience — implementation + closure corrections on `phase/4-recording-experience` (merged to main as `80a1485`)
   - Fake bar-chart visualization removed (page + RecordingControls)
   - Truthful timer from backend `recording_duration`; REC/paused live indicator
   - RecordingControls rewritten: sonner toasts (no `alert()`), semantic tokens, `role=status` a11y
@@ -34,6 +34,30 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Refresh bootstrap: `reconcileRecordingSnapshot` + single poller in `RecordingStateContext`
   - Stop failure: `resolveStopOutcome` backend-truth reconcile; restore RECORDING on genuine failure; never fake save
   - Recovery UX: no `alert()`/`confirm()`; persistent destructive Alert; two-step delete confirm
+- Phase 5 Gate 1: Meeting Intelligence domain types + typed service + migration verified (on `phase/5-meeting-workspace-provenance`)
+  - TypeScript domain types added to `src/types/index.ts`: `MeetingIntelligence`, `MeetingIntelligenceItem`, `MeetingIntelligenceItemSource`, `IntelligenceKind`, `MeetingIntelligenceResponse`, `IntelligenceItemResponse`, `IntelligenceSourceResponse`, `TranscriptSegmentPosition`, `GenerateIntelligenceRequest`, `IntelligenceItemRequest`, `IntelligenceItemSourceRequest`
+  - Frontend service `src/services/meetingIntelligenceService.ts` with typed wrappers for: `api_get_meeting_intelligence`, `api_get_meeting_intelligence_items`, `api_generate_meeting_intelligence`, `api_get_transcript_segment`, `api_get_transcript_segment_position`
+  - Migration `20260917000000_add_meeting_intelligence.sql` verified against Rust models, repository, and Tauri commands
+- Phase 5 Gate 2: Meeting Workspace shell + Overview tab + evidence navigation reconstruction verified (on `phase/5-meeting-workspace-provenance`)
+  - Thin workspace orchestrator reconstructed in `src/components/MeetingWorkspace/MeetingWorkspace.tsx` (no god component, no direct database calls).
+  - Six conceptual sections: Overview, Summary, Transcript, Tasks, Notes, Context with shadcn/Radix Tabs, accessible keyboard navigation, visible focus, and semantic tokens.
+  - Dedicated `OverviewTab.tsx`: communicates abstract, topics, decisions, actions, questions, facts/follow-ups; loading skeleton, deliberate empty state, and truthful provenance (evidence affordances rendered ONLY when valid sources exist).
+  - Dedicated `TasksTab.tsx`: minimal Gate 2 action item presentation from meeting intelligence.
+  - Clean tab wiring: `SummaryTab.tsx` forwards to `SummaryPanel`, `TranscriptTab.tsx` preserves virtualization and forwards pagination & evidence navigation, `NotesTab.tsx` fixes nested duplicate toolbars, and `ContextTab.tsx` connects to `contextService` with typed models.
+  - Evidence navigation hook `useEvidenceNavigation.ts`: strictly enforces Cross-Meeting Invariant (`source.meeting_id === currentMeetingId`), calls Gate 1 `getTranscriptSegmentPosition`, switches active tab to transcript, scrolls, and applies temporary highlight with auto-expiration (3000ms).
+  - Virtualized transcript coordination: `VirtualizedTranscriptView.tsx` and `TranscriptPanel.tsx` updated with `highlightedSegmentId` and `scrollToIndex` without disabling virtualization.
+  - Safety invariants: zero `alert()` or `confirm()` calls; zero raw transcript content logging.
+  - Tests: `tests/lib/phase5-meeting-workspace.test.mjs` (25/25 PASS) and `tests/lib/phase5-evidence-navigation-behavior.test.mjs` (6/6 PASS). Next.js production build (`pnpm run build`) compiled 12/12 static pages successfully. Rust validation passes (`cargo fmt --all --check`, `cargo check --offline`, `cargo clippy --offline --all-targets`, `cargo test --offline` 340 passed). Contract audit passes (80 passed, 0 violations). Full regression suites pass (145 pass / 1 known Phase 4 baseline fail). Gate 3 has NOT started.
+- Phase 5 Gate 3: Summary Integration & Meeting Workspace Refinement verified (on `phase/5-meeting-workspace-provenance`)
+  - Reused existing summary pipeline (`SummaryPanel`, `BlockNoteSummaryView`, templates, generation hooks, language selection, persistence); zero second summary system, zero duplicate hooks, zero direct SQL/DB in UI.
+  - Safety invariant: removed raw `alert('Failed to save changes. Please try again.')` in `BlockNoteSummaryView.tsx`; replaced with accessible `toast.error()` from `sonner`. Zero `alert()` or `confirm()` across all summary components.
+  - Semantic tokens applied: hardcoded `bg-white`, button gradients (`bg-gradient-to-r`), and raw colors (`text-green-600`, `bg-green-200`, `border-red-200`, `border-blue-200`, etc.) eliminated in favor of semantic tokens (`bg-background`, `bg-surface`, `border-border`, `text-foreground`, `text-muted-foreground`, `text-destructive`, `text-primary`).
+  - Unified workspace toolbar: eliminated redundant internal title `h2` in Summary tab; consolidated `AddToContextButton`, `SummaryGeneratorButtonGroup` (Generate/Stop, Model Settings, Template Selector, Language Picker), and `SummaryUpdaterButtonGroup` (Save with dirty status, Copy) in top toolbar with semantic tokens.
+  - Truthful empty state: `EmptyStateSummary` accepts `hasTranscripts` and disables generation with a tooltip explaining that a transcript is required.
+  - Non-jumping loading state: animated `Loader2` spinner in `text-primary`, dynamic status message from `getSummaryStatusMessage`, and explicit Stop Generation action.
+  - Safe, non-leaking error state: confirms transcript safety (*"Transcript Safe: Your audio recording and transcript remain intact and unaffected"*), provides Retry and Model Settings buttons, and non-destructively preserves existing summary on failed regeneration.
+  - Saved summaries rendered without blocking `transcripts?.length > 0 &&` check; legacy fixed-bottom overlay removed; editorial document width container (`max-w-4xl`).
+  - Tests: `tests/lib/phase5-summary-integration.test.mjs` (25/25 PASS). All regression suites pass (170 pass / 1 known Phase 4 baseline failure). Next.js production build (`pnpm run build`) compiled 12/12 static pages successfully. Rust checks pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test` 340 passed). Contract audit passes (80 passed, 0 violations). Gate 4 has NOT started.
 
 # Decisions
 
@@ -89,13 +113,13 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Await user review/approval of Phase 4.
-2. After approval, fast-forward `main` to `phase/4-recording-experience` using `--ff-only`.
-3. Verify `main == origin/main == approved Phase 4 HEAD`.
-4. Only after the Phase 4 merge is approved and complete, create `phase/5-meeting-workspace-provenance` from updated main.
+1. Gate 1, Gate 2, & Gate 3 complete — proceed to Gate 4: Transcript integration + evidence scroll polish.
+2. After Gate 4: Gate 5 (Tasks), Gate 6 (Notes), Gate 7 (Context), Gate 8 (polish), Gate 9 (tests + docs).
+3. All gates verified → final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
 
 # Blockers
 
 - Native GUI / Windows recording QA NOT PERFORMED (Windows CLI host only; `cargo build` is build verification, NOT GUI workflow QA).
 - macOS recording QA NOT AVAILABLE.
 - Bun-only test suites cannot run on this machine (NOT AVAILABLE).
+- Phase 4 test `checkPermissions` mount effect fails (pre-existing; documented in Phase 4 report).

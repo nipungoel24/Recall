@@ -207,10 +207,7 @@ impl MeetingIntelligenceRepository {
     }
 
     /// Delete all intelligence items for a meeting
-    pub async fn delete_items(
-        pool: &SqlitePool,
-        meeting_id: &str,
-    ) -> Result<bool, SqlxError> {
+    pub async fn delete_items(pool: &SqlitePool, meeting_id: &str) -> Result<bool, SqlxError> {
         if meeting_id.trim().is_empty() {
             return Err(SqlxError::Protocol(
                 "meeting_id cannot be empty".to_string(),
@@ -233,9 +230,7 @@ impl MeetingIntelligenceRepository {
         item_id: &str,
     ) -> Result<Vec<MeetingIntelligenceItemSourceModel>, SqlxError> {
         if item_id.trim().is_empty() {
-            return Err(SqlxError::Protocol(
-                "item_id cannot be empty".to_string(),
-            ));
+            return Err(SqlxError::Protocol("item_id cannot be empty".to_string()));
         }
 
         let sources = sqlx::query_as::<_, MeetingIntelligenceItemSourceModel>(
