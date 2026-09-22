@@ -4,7 +4,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, & 3 complete, Gates 4-9 pending)
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, & 4 complete, Gates 5-9 pending)
 - Branch: `phase/5-meeting-workspace-provenance`
 - Base: `80a1485` (Phase 4 merged to main)
 
@@ -58,6 +58,17 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Safe, non-leaking error state: confirms transcript safety (*"Transcript Safe: Your audio recording and transcript remain intact and unaffected"*), provides Retry and Model Settings buttons, and non-destructively preserves existing summary on failed regeneration.
   - Saved summaries rendered without blocking `transcripts?.length > 0 &&` check; legacy fixed-bottom overlay removed; editorial document width container (`max-w-4xl`).
   - Tests: `tests/lib/phase5-summary-integration.test.mjs` (25/25 PASS). All regression suites pass (170 pass / 1 known Phase 4 baseline failure). Next.js production build (`pnpm run build`) compiled 12/12 static pages successfully. Rust checks pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test` 340 passed). Contract audit passes (80 passed, 0 violations). Gate 4 has NOT started.
+- Phase 5 Gate 4: Transcript Deep Integration & Evidence Experience verified (on `phase/5-meeting-workspace-provenance`)
+  - Deepened Transcript surface as a first-class workspace section with speaker hierarchy, timestamp formatting, readable typography, and semantic design tokens.
+  - Zero hardcoded gray colors: replaced `text-gray-400`, `text-gray-800`, `bg-gray-100`, `border-gray-200` in `VirtualizedTranscriptView` with semantic tokens (`text-foreground`, `text-muted-foreground`, `text-primary`, `bg-muted/50`, `border-border`). Replaced hardcoded gradients on Enhance button with outline semantic tokens.
+  - Speaker presentation: `resolveSpeaker` supports explicit speaker properties (`'mic'`, `'system'`, named speakers) and regex prefix parsing (`Speaker 1:`, `[Host]:`), rendering clear uppercase brutalist badges.
+  - Timestamp formatting: `formatRecordingTime` handles sub-minute `[00:SS]`, multi-minute `[MM:SS]`, and multi-hour `[HH:MM:SS]` durations safely.
+  - Zero-layout-shift evidence highlight: applied identical padding (`p-2.5`) and border dimensions across normal and highlighted states, eliminating layout jumps. Added `tabIndex={0}`, `role="region"`, `aria-current="true"`, and non-disruptive `focus({ preventScroll: true })`.
+  - Precision virtualizer & pagination boundary handling: clamped `scrollToIndex` within bounds; if target segment index exceeds loaded segments and `hasMore` is true, triggers `onLoadMore()` to paginate up to evidence.
+  - Truthful states: Loading (non-jumping, `role="status"`, `aria-live="polite"`), Error (safe, non-leaking, actionable Retry), Empty (truthful "No transcript recorded" archived meeting state instead of onboarding prompt).
+  - Clean prop forwarding: `MeetingWorkspace` accepts `isLoadingTranscripts` and `transcriptError` and forwards down to `TranscriptTab`, `TranscriptPanel`, and `VirtualizedTranscriptView`.
+  - Strict safety invariants: zero `alert()`, `confirm()`, or `window.prompt()` calls; zero raw transcript logging.
+  - Tests: `tests/lib/phase5-transcript-integration.test.mjs` (26/26 PASS). All Phase 5 suites pass (82 pass). Next.js production build (`pnpm run build`) compiled 12/12 static pages successfully. Rust checks pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test` 340 passed). Contract audit passes (80 passed, 0 violations). Full regression suites pass. Gate 5 has NOT started.
 
 # Decisions
 
@@ -113,8 +124,8 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Gate 1, Gate 2, & Gate 3 complete — proceed to Gate 4: Transcript integration + evidence scroll polish.
-2. After Gate 4: Gate 5 (Tasks), Gate 6 (Notes), Gate 7 (Context), Gate 8 (polish), Gate 9 (tests + docs).
+1. Gate 1, Gate 2, Gate 3, & Gate 4 complete — proceed to Gate 5: Tasks lifecycle and intelligence.
+2. After Gate 5: Gate 6 (Notes), Gate 7 (Context), Gate 8 (polish), Gate 9 (tests + docs).
 3. All gates verified → final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
 
 # Blockers

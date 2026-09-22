@@ -24,6 +24,9 @@ export interface TranscriptTabProps {
   onRefetchTranscripts?: () => Promise<void>;
   highlightedSegmentId?: string | null;
   scrollToIndex?: number | null;
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 export function TranscriptTab({
@@ -44,6 +47,9 @@ export function TranscriptTab({
   onRefetchTranscripts,
   highlightedSegmentId,
   scrollToIndex,
+  isLoading = false,
+  error = null,
+  onRetry,
 }: TranscriptTabProps) {
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-background">
@@ -67,6 +73,9 @@ export function TranscriptTab({
         onRefetchTranscripts={onRefetchTranscripts}
         highlightedSegmentId={highlightedSegmentId}
         scrollToIndex={scrollToIndex}
+        isLoading={isLoading}
+        error={error}
+        onRetry={onRetry}
       />
     </div>
   );

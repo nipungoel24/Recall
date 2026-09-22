@@ -55,6 +55,8 @@ export interface MeetingWorkspaceProps {
   totalCount?: number;
   loadedCount?: number;
   onLoadMore?: () => void;
+  isLoadingTranscripts?: boolean;
+  transcriptError?: string | null;
 }
 
 /**
@@ -78,6 +80,8 @@ export function MeetingWorkspace({
   totalCount,
   loadedCount,
   onLoadMore,
+  isLoadingTranscripts = false,
+  transcriptError = null,
 }: MeetingWorkspaceProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceSection>('overview');
@@ -358,6 +362,9 @@ export function MeetingWorkspace({
               onRefetchTranscripts={onRefetchTranscripts}
               highlightedSegmentId={highlightedSegmentId}
               scrollToIndex={scrollToSegmentIndex}
+              isLoading={isLoadingTranscripts}
+              error={transcriptError}
+              onRetry={onRefetchTranscripts}
             />
           </TabsContent>
 

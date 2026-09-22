@@ -378,7 +378,7 @@ function MeetingDetailsContent() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-background">
       <MeetingWorkspace
         meeting={meetingDetails}
         summaryData={meetingSummary}
@@ -392,6 +392,8 @@ function MeetingDetailsContent() {
         totalCount={totalCount}
         loadedCount={loadedCount}
         onLoadMore={loadMore}
+        isLoadingTranscripts={isLoadingTranscripts}
+        transcriptError={transcriptError}
       />
     </div>
   );

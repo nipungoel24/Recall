@@ -1,7 +1,6 @@
 "use client";
 
 import { Transcript, TranscriptSegmentData } from '@/types';
-import { TranscriptView } from '@/components/TranscriptView';
 import { VirtualizedTranscriptView } from '@/components/VirtualizedTranscriptView';
 import { TranscriptButtonGroup } from './TranscriptButtonGroup';
 import { useMemo } from 'react';
@@ -32,6 +31,11 @@ interface TranscriptPanelProps {
   // Evidence navigation props
   highlightedSegmentId?: string | null;
   scrollToIndex?: number | null;
+
+  // Truthful status props
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 export function TranscriptPanel({
@@ -54,6 +58,9 @@ export function TranscriptPanel({
   onRefetchTranscripts,
   highlightedSegmentId,
   scrollToIndex,
+  isLoading = false,
+  error = null,
+  onRetry,
 }: TranscriptPanelProps) {
   // Convert transcripts to segments if pagination is not used but we want virtualization
   const convertedSegments = useMemo(() => {
@@ -67,6 +74,7 @@ export function TranscriptPanel({
       endTime: t.audio_end_time,
       text: t.text,
       confidence: t.confidence,
+      speaker: t.speaker ?? null,
     }));
   }, [transcripts, usePagination, segments]);
 
@@ -102,6 +110,9 @@ export function TranscriptPanel({
           onLoadMore={onLoadMore}
           highlightedSegmentId={highlightedSegmentId}
           scrollToIndex={scrollToIndex}
+          isLoading={isLoading}
+          error={error}
+          onRetry={onRetry || onRefetchTranscripts}
         />
       </div>
 
