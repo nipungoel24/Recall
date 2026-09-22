@@ -4,7 +4,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, 4, & 5 complete, Gates 6-9 pending)
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, 4, 5, & 6 complete, Gates 7-9 pending)
 - Branch: `phase/5-meeting-workspace-provenance`
 - Base: `80a1485` (Phase 4 merged to main)
 
@@ -82,6 +82,18 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Zero new Rust commands, zero new migrations, zero new services — reuses existing `meetingIntelligenceService`.
   - Strict safety invariants: zero `alert()`, `confirm()`, `window.prompt()`; zero raw task text logging; zero SQL in component; zero hardcoded gray classes.
   - Tests: `tests/lib/phase5-tasks-intelligence.test.mjs` (31/31 PASS). All Phase 5 suites pass (113/113 PASS). Next.js build compiled successfully. Rust checks pass. Contract audit 80 passed, 0 violations. Gate 6 has NOT started.
+- Phase 5 Gate 6: Notes Persistence verified (on `phase/5-meeting-workspace-provenance`)
+  - Implemented `MeetingNotesModel` in `src-tauri/src/database/models.rs` matching existing migration `20251223000000_add_meeting_notes.sql`.
+  - Created `NotesRepository` in `src-tauri/src/database/repositories/notes.rs` with `get_notes()` and `save_notes()` (upsert with meeting validation and timestamp update).
+  - Registered `notes` module in `src-tauri/src/database/repositories/mod.rs`.
+  - Added Tauri commands `api_get_meeting_notes` and `api_save_meeting_notes` in `src-tauri/src/api/api.rs` with typed request/response structs (`MeetingNotesResponse`, `SaveMeetingNotesRequest`).
+  - Registered commands in `src-tauri/src/lib.rs` invoke_handler.
+  - Updated `NotesTab.tsx` to use correct API signatures (`notesMarkdown`, `notesJson` params) and added `focus-visible` accessibility styles to Save button.
+  - Reused existing `BlockNoteSummaryView` editor infrastructure — zero duplicate editor, zero second notes system.
+  - NotesTab handles all states: loading (spinner), error (inline banner + Retry), saving (disabled button + spinner + "Saving..."), success (sonner toast), failure (sonner toast + inline error).
+  - Uses semantic design tokens exclusively; zero hardcoded gray colors; zero `alert()`/`confirm()`/`window.prompt()`; zero raw content logging; zero direct SQL.
+  - Migration verified: `meeting_notes` table with PK on `meeting_id`, FK cascade to `meetings`, `notes_markdown`, `notes_json`, `created_at`, `updated_at`, index on `meeting_id`.
+  - Tests: `tests/lib/phase5-notes-persistence.test.mjs` (35/35 PASS). All Phase 5 suites pass (148/148 PASS). Next.js build compiles 12/12 pages. Rust: fmt/check/clippy/test all PASS (340 tests). Contract audit 80 passed, 0 violations. Full regression suites pass (1 known Phase 4 baseline `checkPermissions` failure unchanged).
 
 # Decisions
 
@@ -137,8 +149,8 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Gate 1, Gate 2, Gate 3, Gate 4, & Gate 5 complete — proceed to Gate 6: Notes (replace /notes demo with real per-meeting notes).
-2. After Gate 6: Gate 7 (Context), Gate 8 (polish), Gate 9 (tests + docs).
+1. Gate 1, Gate 2, Gate 3, Gate 4, Gate 5, & Gate 6 complete — proceed to Gate 7: Context (deepen Context memory).
+2. After Gate 7: Gate 8 (polish), Gate 9 (tests + docs).
 3. All gates verified → final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
 
 # Blockers

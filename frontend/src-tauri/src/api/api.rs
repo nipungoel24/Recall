@@ -7,7 +7,7 @@ use crate::{
     database::{
         models::MeetingModel,
         repositories::{
-            meeting::MeetingsRepository, setting::SettingsRepository,
+            meeting::MeetingsRepository, notes::NotesRepository, setting::SettingsRepository,
             transcript::TranscriptsRepository,
         },
     },
@@ -161,6 +161,25 @@ pub struct SaveMeetingTitleRequest {
 pub struct SaveMeetingSummaryRequest {
     pub meeting_id: String,
     pub summary: serde_json::Value,
+}
+
+/// Meeting notes data structures
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MeetingNotesResponse {
+    pub meeting_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes_markdown: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes_json: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SaveMeetingNotesRequest {
+    pub meeting_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes_markdown: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes_json: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -719,6 +738,86 @@ pub async fn api_save_meeting_title<R: Runtime>(
         Err(e) => {
             log_error!("Failed to update meeting {}", e);
             Err(format!("Failed to update meeting: {}", e))
+        }
+    }
+}
+
+// ===== Meeting Notes Commands =====
+
+#[tauri::command]
+pub async fn api_get_meeting_notes<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+    auth_token: Option<String>,
+) -> Result<Option<MeetingNotesResponse>, String> {
+    log_info!(
+        "api_get_meeting_notes called for meeting_id: {}, auth_token: {}",
+        meeting_id,
+        auth_token.is_some()
+    );
+
+    let pool = state.db_manager.pool();
+
+    match NotesRepository::get_notes(pool, &meeting_id).await {
+        Ok(Some(notes)) => {
+            log_info!("Successfully retrieved notes for meeting {}", meeting_id);
+            Ok(Some(MeetingNotesResponse {
+                meeting_id: notes.meeting_id,
+                notes_markdown: notes.notes_markdown,
+                notes_json: notes.notes_json,
+            }))
+        }
+        Ok(None) => {
+            log_info!("No notes found for meeting {}", meeting_id);
+            Ok(None)
+        }
+        Err(e) => {
+            log_error!("Error retrieving notes for meeting {}: {}", meeting_id, e);
+            Err(format!("Failed to retrieve notes: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn api_save_meeting_notes<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+    notes_markdown: Option<String>,
+    notes_json: Option<String>,
+    auth_token: Option<String>,
+) -> Result<serde_json::Value, String> {
+    log_info!(
+        "api_save_meeting_notes called for meeting_id: {}, auth_token: {}",
+        meeting_id,
+        auth_token.is_some()
+    );
+
+    let pool = state.db_manager.pool();
+
+    match NotesRepository::save_notes(
+        pool,
+        &meeting_id,
+        notes_markdown.as_deref(),
+        notes_json.as_deref(),
+    )
+    .await
+    {
+        Ok(true) => {
+            log_info!("Successfully saved notes for meeting {}", meeting_id);
+            Ok(serde_json::json!({
+                "status": "success",
+                "message": "Notes saved successfully"
+            }))
+        }
+        Ok(false) => {
+            log_warn!("No meeting found with id {} or save failed", meeting_id);
+            Err(format!("No meeting found with id {}", meeting_id))
+        }
+        Err(e) => {
+            log_error!("Failed to save notes for meeting {}: {}", meeting_id, e);
+            Err(format!("Failed to save notes: {}", e))
         }
     }
 }

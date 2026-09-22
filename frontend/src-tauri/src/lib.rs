@@ -622,6 +622,9 @@ pub fn run() {
             api::api_get_meeting_metadata,
             api::api_get_meeting_transcripts,
             api::api_save_meeting_title,
+            // Meeting Notes commands (Phase 5 Gate 6)
+            api::api_get_meeting_notes,
+            api::api_save_meeting_notes,
             api::api_save_transcript,
             api::open_meeting_folder,
             api::open_external_url,

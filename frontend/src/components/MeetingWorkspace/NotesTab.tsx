@@ -48,14 +48,10 @@ export function NotesTab({ meeting }: NotesTabProps) {
     setError(null);
 
     try {
-      const notesData = notesJson || JSON.stringify({
-        type: 'doc',
-        content: notesMarkdown ? [{ type: 'paragraph', content: [{ type: 'text', text: notesMarkdown }] }] : [],
-      });
-
       await invoke('api_save_meeting_notes', {
         meetingId: meeting.id,
-        notes: notesData,
+        notesMarkdown: notesMarkdown || undefined,
+        notesJson: notesJson || undefined,
       });
 
       toast.success('Notes saved successfully');
@@ -112,7 +108,7 @@ export function NotesTab({ meeting }: NotesTabProps) {
           type="button"
           onClick={saveNotes}
           disabled={isSaving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Save className="h-4 w-4" />
           {isSaving ? (

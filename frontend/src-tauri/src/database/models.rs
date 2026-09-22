@@ -222,3 +222,13 @@ pub struct MeetingIntelligenceItemSourceModel {
     pub meeting_id: String,
     pub created_at: DateTimeUtc,
 }
+
+// Meeting Notes model (Phase 5 Gate 6)
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingNotesModel {
+    pub meeting_id: String,
+    pub notes_markdown: Option<String>,
+    pub notes_json: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
