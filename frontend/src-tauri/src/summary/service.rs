@@ -775,6 +775,15 @@ pub async fn generate_structured_intelligence(
     use crate::database::repositories::meeting_intelligence::MeetingIntelligenceRepository;
 
     // Load context memory for context_ids (same as summary generation)
+    let context_ids: Vec<String> = context_ids
+        .into_iter()
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .take(crate::context::model::MAX_CONTEXTS_PER_SUMMARY)
+        .collect();
+
     let mut memory_blocks: Vec<String> = Vec::new();
     if !context_ids.is_empty() {
         let app_data_dir = app.path().app_data_dir().ok();

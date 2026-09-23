@@ -318,3 +318,106 @@ export function provenanceLinkForItem(
 export function meetingIdsOf(meetings: ContextMeetingInfo[]): Set<string> {
   return new Set(meetings.map((meeting) => meeting.id));
 }
+
+const TERMINAL_STATUSES = new Set(['done', 'blocked', 'resolved', 'closed']);
+
+/**
+ * Calculates a deterministic memory relevance score incorporating kind, status,
+ * recency decay, and frequency signals. Mirrors the Rust implementation.
+ */
+export function calculateMemoryItemScore(
+  item: Pick<ContextMemoryItem, 'kind' | 'status' | 'updatedAt' | 'createdAt'>,
+  nowMillis: number = Date.now(),
+  repetitionCount: number = 1,
+): number {
+  const statusLower = item.status ? item.status.toLowerCase().trim() : '';
+  const isClosed = TERMINAL_STATUSES.has(statusLower);
+  const isOpen = !isClosed;
+
+  let baseWeight: number;
+  switch (item.kind) {
+    case 'action':
+      baseWeight = isOpen ? 100.0 : 15.0;
+      break;
+    case 'question':
+      baseWeight = isOpen ? 85.0 : 15.0;
+      break;
+    case 'decision':
+      baseWeight = 70.0;
+      break;
+    case 'fact':
+      baseWeight = 55.0;
+      break;
+    case 'note':
+      baseWeight = 40.0;
+      break;
+    default:
+      baseWeight = 10.0;
+      break;
+  }
+
+  const timestampStr = item.updatedAt || item.createdAt;
+  const parsedTime = Date.parse(timestampStr);
+  let recencyFactor: number;
+
+  if (!Number.isFinite(parsedTime) || parsedTime <= 0 || nowMillis <= 0) {
+    recencyFactor = 0.1;
+  } else {
+    const ageMillis = Math.max(0, nowMillis - parsedTime);
+    const ageDays = ageMillis / 86400000.0;
+    recencyFactor = 1.0 / (1.0 + ageDays / 30.0);
+  }
+
+  const occurrences = Math.max(1, repetitionCount);
+  const frequencyMultiplier = 1.0 + Math.min(occurrences - 1, 4) * 0.25;
+
+  const raw = baseWeight * recencyFactor * frequencyMultiplier;
+  return Math.round(raw * 10000) / 10000;
+}
+
+/**
+ * Deterministic 4-stage comparator for ranking memory items:
+ * 1. Score descending
+ * 2. Updated timestamp descending
+ * 3. sourceMeetingId (Some before None, then lexicographically)
+ * 4. Item id ascending
+ */
+export function compareContextMemoryItems(
+  a: ContextMemoryItem,
+  b: ContextMemoryItem,
+  nowMillis: number = Date.now(),
+): number {
+  const scoreA = calculateMemoryItemScore(a, nowMillis, 1);
+  const scoreB = calculateMemoryItemScore(b, nowMillis, 1);
+
+  if (scoreB !== scoreA) {
+    return scoreB - scoreA;
+  }
+
+  const timeA = timestampForSort(a.updatedAt || a.createdAt);
+  const timeB = timestampForSort(b.updatedAt || b.createdAt);
+  if (timeB !== timeA) {
+    return timeB - timeA;
+  }
+
+  const sA = a.sourceMeetingId ?? '';
+  const sB = b.sourceMeetingId ?? '';
+  if (sA !== sB) {
+    if (sA && !sB) return -1;
+    if (!sA && sB) return 1;
+    return sA.localeCompare(sB);
+  }
+
+  return a.id.localeCompare(b.id);
+}
+
+/**
+ * Ranks context memory items with deterministic 4-stage tie-breaking.
+ * Pure function: never mutates input array.
+ */
+export function rankContextMemoryItems(
+  items: ContextMemoryItem[],
+  nowMillis: number = Date.now(),
+): ContextMemoryItem[] {
+  return [...items].sort((a, b) => compareContextMemoryItems(a, b, nowMillis));
+}

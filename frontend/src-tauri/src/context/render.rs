@@ -4,7 +4,7 @@
 
 use crate::context::model::{
     estimate_tokens, truncate_text_to_tokens, ContextMemoryItemView, MemoryBudget, MemoryItem,
-    MemoryKind, STATUS_OPEN,
+    MemoryKind,
 };
 use std::cmp::Reverse;
 
@@ -36,9 +36,72 @@ fn kind_tier(item: &MemoryItem) -> u8 {
     }
 }
 
-/// Sort key: (tier ascending, most recently updated first).
-fn priority_key(item: &MemoryItem) -> (u8, Reverse<i64>) {
+/// Sort key: (tier ascending, most recently updated first) - legacy fallback.
+pub fn priority_key(item: &MemoryItem) -> (u8, Reverse<i64>) {
     (kind_tier(item), Reverse(item.updated_at_millis()))
+}
+
+/// Deterministic 4-stage comparator for ranking memory views:
+/// 1. Score descending (higher score first).
+/// 2. `updated_at_millis` descending (more recently updated first).
+/// 3. `source_meeting_id` (Some before None, then lexicographically).
+/// 4. `id` ascending (lexicographical string comparison).
+pub fn compare_memory_views(
+    a: &ContextMemoryItemView,
+    b: &ContextMemoryItemView,
+    now_millis: i64,
+) -> std::cmp::Ordering {
+    let score_a = a.score(now_millis, 1);
+    let score_b = b.score(now_millis, 1);
+
+    score_b
+        .partial_cmp(&score_a)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| b.updated_at_millis().cmp(&a.updated_at_millis()))
+        .then_with(|| match (&a.source_meeting_id, &b.source_meeting_id) {
+            (Some(sa), Some(sb)) => sa.cmp(sb),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        })
+        .then_with(|| a.id.cmp(&b.id))
+}
+
+pub fn rank_memory_views(
+    items: &[ContextMemoryItemView],
+    now_millis: i64,
+) -> Vec<ContextMemoryItemView> {
+    let mut ranked = items.to_vec();
+    ranked.sort_by(|a, b| compare_memory_views(a, b, now_millis));
+    ranked
+}
+
+/// Deterministic 4-stage comparator for ranking memory items:
+/// 1. Score descending (higher score first).
+/// 2. `updated_at_millis` descending (more recently updated first).
+/// 3. `source_meeting_id` (Some before None, then lexicographically).
+/// 4. `id` ascending (lexicographical string comparison).
+pub fn compare_memory_items(a: &MemoryItem, b: &MemoryItem, now_millis: i64) -> std::cmp::Ordering {
+    let score_a = a.score(now_millis, 1);
+    let score_b = b.score(now_millis, 1);
+
+    score_b
+        .partial_cmp(&score_a)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| b.updated_at_millis().cmp(&a.updated_at_millis()))
+        .then_with(|| match (&a.source_meeting_id, &b.source_meeting_id) {
+            (Some(sa), Some(sb)) => sa.cmp(sb),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        })
+        .then_with(|| a.id.cmp(&b.id))
+}
+
+pub fn rank_memory_items(items: &[MemoryItem], now_millis: i64) -> Vec<MemoryItem> {
+    let mut ranked = items.to_vec();
+    ranked.sort_by(|a, b| compare_memory_items(a, b, now_millis));
+    ranked
 }
 
 /// Extracts the `YYYY-MM-DD` prefix of an RFC3339 timestamp, if valid.
@@ -106,15 +169,17 @@ pub fn estimate_fold_line_tokens(item: &MemoryItem) -> usize {
 /// by `max_tokens`. Used as the reference for the extractor so it can emit
 /// evidence-based resolutions.
 pub fn render_open_items_reference(items: &[MemoryItem], max_tokens: usize) -> String {
-    let mut sorted: Vec<&MemoryItem> = items
+    let now_millis = chrono::Utc::now().timestamp_millis();
+    let mut open_items: Vec<MemoryItem> = items
         .iter()
         .filter(|i| i.is_open() && i.kind().map(|k| k.is_status_capable()).unwrap_or(false))
+        .cloned()
         .collect();
-    sorted.sort_by_key(|i| priority_key(i));
+    open_items.sort_by(|a, b| compare_memory_items(a, b, now_millis));
 
     let mut lines = Vec::new();
     let mut used = 0usize;
-    for item in sorted {
+    for item in &open_items {
         let line = render_fold_line(item, 280);
         let tokens = estimate_tokens(&line);
         if used + tokens > max_tokens && !lines.is_empty() {
@@ -138,13 +203,18 @@ pub struct RenderResult {
 
 /// Renders the inner compact context memory content, bounded by budget:
 /// the durable-core `memory_markdown` digest gets up to
-/// `budget.digest_cap_tokens()`; item lines are added newest-first until
+/// `budget.digest_cap_tokens()`; item lines are added highest-priority first until
 /// `budget.items_cap_tokens()` is exhausted.
-pub fn render_inner_content(
+///
+/// Guaranteed to stay bounded within `MAX_RENDERED_CONTEXT_CHARS` to protect
+/// downstream model prompts.
+pub fn render_inner_content_at(
     durable_markdown: Option<&str>,
     items: &[ContextMemoryItemView],
     budget: &MemoryBudget,
+    now_millis: i64,
 ) -> RenderResult {
+    let budget = budget.sanitized();
     let mut result = RenderResult::default();
     let mut parts: Vec<String> = Vec::new();
 
@@ -162,8 +232,10 @@ pub fn render_inner_content(
     }
 
     let items_cap = budget.items_cap_tokens();
+    let ranked_items = rank_memory_views(items, now_millis);
+
     let mut used = 0usize;
-    for item in items {
+    for item in &ranked_items {
         let line = render_view_line(item, budget.per_item_max_chars);
         let tokens = estimate_tokens(&line);
         if used + tokens > items_cap && result.item_count > 0 {
@@ -175,9 +247,30 @@ pub fn render_inner_content(
         result.item_count += 1;
     }
 
-    result.markdown = parts.join("\n");
+    let mut combined_markdown = parts.join("\n");
+    if combined_markdown.chars().count() > crate::context::model::MAX_RENDERED_CONTEXT_CHARS {
+        combined_markdown = cap_content(
+            &combined_markdown,
+            crate::context::model::MAX_RENDERED_CONTEXT_CHARS,
+        );
+    }
+
+    result.markdown = combined_markdown;
     result.token_estimate = estimate_tokens(&result.markdown);
     result
+}
+
+pub fn render_inner_content(
+    durable_markdown: Option<&str>,
+    items: &[ContextMemoryItemView],
+    budget: &MemoryBudget,
+) -> RenderResult {
+    render_inner_content_at(
+        durable_markdown,
+        items,
+        budget,
+        chrono::Utc::now().timestamp_millis(),
+    )
 }
 
 /// Result of compaction planning.
@@ -190,9 +283,12 @@ pub struct CompactionPlan {
 /// Plans a compaction: retains highest-priority items within `budget_tokens`
 /// and folds the rest into the durable-core digest. Pure and deterministic.
 /// The first item is always retained even if it alone exceeds the budget.
-pub fn plan_compaction(items: &[MemoryItem], budget_tokens: usize) -> CompactionPlan {
-    let mut sorted: Vec<MemoryItem> = items.to_vec();
-    sorted.sort_by_key(|i| priority_key(i));
+pub fn plan_compaction_at(
+    items: &[MemoryItem],
+    budget_tokens: usize,
+    now_millis: i64,
+) -> CompactionPlan {
+    let sorted = rank_memory_items(items, now_millis);
 
     let mut plan = CompactionPlan::default();
     let mut used = 0usize;
@@ -206,6 +302,10 @@ pub fn plan_compaction(items: &[MemoryItem], budget_tokens: usize) -> Compaction
         }
     }
     plan
+}
+
+pub fn plan_compaction(items: &[MemoryItem], budget_tokens: usize) -> CompactionPlan {
+    plan_compaction_at(items, budget_tokens, chrono::Utc::now().timestamp_millis())
 }
 
 /// Estimated token size of the whole active set (folded-line form).
@@ -254,6 +354,7 @@ pub fn build_folded_digest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::model::STATUS_OPEN;
 
     fn item(
         id: &str,
@@ -509,5 +610,134 @@ mod tests {
         assert!(reference.contains("Which database should we use?"));
         assert!(!reference.contains("Completed task"));
         assert!(!reference.contains("A fact"));
+    }
+
+    #[test]
+    fn ranking_orders_by_score_and_tie_breaks_deterministically() {
+        let now = 1_700_000_000_000i64;
+        let day_ms = 86_400_000i64;
+        let rfc_now = chrono::DateTime::from_timestamp_millis(now)
+            .unwrap()
+            .to_rfc3339();
+        let rfc_older = chrono::DateTime::from_timestamp_millis(now - 10 * day_ms)
+            .unwrap()
+            .to_rfc3339();
+
+        let v_action = view("a1", "action", "Task", Some("m1"), Some("M1"), &rfc_now);
+        let v_decision = view("d1", "decision", "Dec", Some("m1"), Some("M1"), &rfc_now);
+        let v_fact = view("f1", "fact", "Fact", Some("m1"), Some("M1"), &rfc_now);
+        let v_older_action = view(
+            "a2",
+            "action",
+            "Older Task",
+            Some("m1"),
+            Some("M1"),
+            &rfc_older,
+        );
+
+        let items = vec![
+            v_fact.clone(),
+            v_decision.clone(),
+            v_older_action.clone(),
+            v_action.clone(),
+        ];
+        let ranked = rank_memory_views(&items, now);
+
+        // a1 (action at 0d = 100) > a2 (action at 10d = 100 * (30/40) = 75) > d1 (decision at 0d = 70) > f1 (fact at 0d = 55)
+        assert_eq!(ranked[0].id, "a1");
+        assert_eq!(ranked[1].id, "a2");
+        assert_eq!(ranked[2].id, "d1");
+        assert_eq!(ranked[3].id, "f1");
+
+        // Test tie-breaking on identical score and updated_at:
+        // Ties break on source_meeting_id (Some first, then string), then item id ascending
+        let mut tie_a = view(
+            "id-z",
+            "fact",
+            "Same fact 1",
+            Some("m-alpha"),
+            Some("M"),
+            &rfc_now,
+        );
+        let mut tie_b = view(
+            "id-a",
+            "fact",
+            "Same fact 2",
+            Some("m-alpha"),
+            Some("M"),
+            &rfc_now,
+        );
+        let mut tie_c = view(
+            "id-1",
+            "fact",
+            "Same fact 3",
+            Some("m-beta"),
+            Some("M"),
+            &rfc_now,
+        );
+        tie_a.status = None;
+        tie_b.status = None;
+        tie_c.status = None;
+
+        let ties = vec![tie_a, tie_b, tie_c];
+        let ranked_ties = rank_memory_views(&ties, now);
+        // m-alpha comes before m-beta; within m-alpha, id-a comes before id-z
+        assert_eq!(ranked_ties[0].id, "id-a");
+        assert_eq!(ranked_ties[1].id, "id-z");
+        assert_eq!(ranked_ties[2].id, "id-1");
+    }
+
+    #[test]
+    fn prompt_protection_caps_huge_rendered_content() {
+        let budget = MemoryBudget {
+            context_tokens: 3000,
+            ..Default::default()
+        };
+        // 100 items each with maximum content length
+        let mut items = Vec::new();
+        for i in 0..100 {
+            items.push(view(
+                &format!("huge-{i}"),
+                "note",
+                &"Extremely lengthy durable memory note content block. ".repeat(20),
+                Some("m1"),
+                Some("Meeting 1"),
+                &rfc(0),
+            ));
+        }
+
+        let result = render_inner_content(None, &items, &budget);
+        assert!(
+            result.markdown.chars().count() <= crate::context::model::MAX_RENDERED_CONTEXT_CHARS,
+            "Rendered markdown characters {} exceeded MAX_RENDERED_CONTEXT_CHARS {}",
+            result.markdown.chars().count(),
+            crate::context::model::MAX_RENDERED_CONTEXT_CHARS
+        );
+    }
+
+    #[test]
+    fn budget_pruning_retains_first_item_even_if_it_exceeds_budget() {
+        let huge_action = item(
+            "huge-1",
+            MemoryKind::Action,
+            &"Very long action task statement. ".repeat(40),
+            Some(STATUS_OPEN),
+            &rfc(0),
+        );
+        let second_action = item(
+            "act-2",
+            MemoryKind::Action,
+            "Small action task",
+            Some(STATUS_OPEN),
+            &rfc(1),
+        );
+
+        // A tiny budget of only 5 tokens cannot fit huge_action
+        let plan = plan_compaction(&[huge_action.clone(), second_action.clone()], 5);
+        // First item is still retained
+        assert_eq!(plan.retain.len(), 1);
+        assert_eq!(plan.retain[0].id, "huge-1");
+        assert_eq!(plan.fold.len(), 1);
+        assert_eq!(plan.fold[0].id, "act-2");
     }
 }

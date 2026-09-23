@@ -58,7 +58,7 @@ impl ContextMemoryRepository {
             FROM context_memory_items cmi
             LEFT JOIN meetings m ON m.id = cmi.source_meeting_id
             WHERE cmi.context_id = ?
-            ORDER BY cmi.created_at DESC, cmi.id ASC
+            ORDER BY cmi.updated_at DESC, cmi.id ASC
             LIMIT ?
             "#,
         )

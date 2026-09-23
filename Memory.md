@@ -4,7 +4,7 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, 4, 5, & 6 complete, Gates 7-9 pending)
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, 4, 5, 6, & 7 complete, Gates 8-9 pending)
 - Branch: `phase/5-meeting-workspace-provenance`
 - Base: `80a1485` (Phase 4 merged to main)
 
@@ -94,6 +94,27 @@ Concise, factual working memory. Updated after every completed task, major decis
   - Uses semantic design tokens exclusively; zero hardcoded gray colors; zero `alert()`/`confirm()`/`window.prompt()`; zero raw content logging; zero direct SQL.
   - Migration verified: `meeting_notes` table with PK on `meeting_id`, FK cascade to `meetings`, `notes_markdown`, `notes_json`, `created_at`, `updated_at`, index on `meeting_id`.
   - Tests: `tests/lib/phase5-notes-persistence.test.mjs` (35/35 PASS). All Phase 5 suites pass (148/148 PASS). Next.js build compiles 12/12 pages. Rust: fmt/check/clippy/test all PASS (340 tests). Contract audit 80 passed, 0 violations. Full regression suites pass (1 known Phase 4 baseline `checkPermissions` failure unchanged).
+- Phase 5 Gate 7: Context (deepen Context memory) verified (on `phase/5-meeting-workspace-provenance`)
+  - Implemented unified, deterministic scoring model (`calculate_memory_score` in Rust `context/model.rs` and `calculateMemoryItemScore` in TypeScript `types/context.ts`) incorporating:
+    - Base weights: Open Action (100) > Open Question (85) > Decision (70) > Fact (55) > Note (40) > Closed/Resolved/Terminal (15) > Unknown (10).
+    - Monotonic recency decay: smooth exponential decay factor `1.0 / (1.0 + (age_days / 30.0))` with 30-day half-life; missing/invalid timestamps floor safely at 0.1; future timestamps (clock skew) clamp to 0 age.
+    - Repetition/frequency signal: multiplier `1.0 + (min(occurrences - 1, 4) * 0.25)` bounded in `[1.0, 2.0]`.
+    - Deterministic 4-stage tie-breaking: score desc -> updated_at desc -> source_meeting_id -> item ID asc.
+  - Upgraded prompt assembly & compaction:
+    - `render_inner_content` ranks candidate items by score before packing into budget so highest-priority items are rendered first and trivial recent notes do not starve open actions.
+    - `plan_compaction` sorts by score so lowest-scoring items fold into markdown first; first item always retained even if exceeding budget.
+    - Candidate working-set query in `repository.rs` (`list_item_views`) updated to `ORDER BY cmi.updated_at DESC, cmi.id ASC` so items refreshed during dedup are not starved.
+  - Enforced unbounded-prompt hard caps:
+    - `HARD_MAX_CONTEXT_BUDGET_TOKENS` (4000) ceiling on runtime budget.
+    - `MAX_RENDERED_CONTEXT_CHARS` (16,000 chars) hard ceiling on total rendered markdown.
+    - `MemoryBudget` sanitized with parameter clamping.
+    - `MAX_CONTEXTS_PER_SUMMARY` (2) enforced in both summary generation and structured intelligence (`summary/service.rs`).
+  - Upgraded Workspace `ContextTab.tsx`:
+    - Fixed membership isolation bug: loads and maintains `memberContextIds` Set across all contexts on mount; never misidentifies context membership based on selected context.
+    - Continuous memory inspection: loads `getCompactContextMemory(contextId)` and displays durable digest markdown and ranked memory items with kind icons, status pills, and truthful source meeting provenance links (`provenanceLinkForItem`).
+    - Accessibility: eliminated nested `<button>` inside `role="button"` container; added accessible keyboard navigation, visible focus rings, loading spinner with `role="status"`, error banner with `role="alert"` and actionable Retry, and empty state with link to manage contexts.
+    - Semantic design tokens exclusively; zero hardcoded gray/blue palette classes; zero `alert()`/`confirm()`/`window.prompt()`; zero raw content logging; zero direct SQL in component.
+  - Tests: `tests/lib/phase5-context-deepening.test.mjs` (19/19 PASS), `tests/lib/context.test.mjs` (PASS). All Phase 5 suites pass (167/167 PASS). Next.js build compiles 12/12 pages. Rust: fmt/check/clippy/test all PASS (348 tests, 8 new unit tests in `model.rs` and `render.rs`). Contract audit 80 passed, 0 violations. Full regression suites pass.
 
 # Decisions
 
@@ -149,8 +170,8 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Next Exact Step
 
-1. Gate 1, Gate 2, Gate 3, Gate 4, Gate 5, & Gate 6 complete — proceed to Gate 7: Context (deepen Context memory).
-2. After Gate 7: Gate 8 (polish), Gate 9 (tests + docs).
+1. Gates 1 through 7 complete — proceed to Gate 8: Polish.
+2. After Gate 8: Gate 9 (tests + docs).
 3. All gates verified → final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
 
 # Blockers

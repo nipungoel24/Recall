@@ -40,6 +40,12 @@ pub const DEFAULT_MAX_MEMORY_ITEMS: i64 = 30;
 /// Hard cap for the number of memory items in compact memory.
 pub const HARD_MAX_MEMORY_ITEMS: i64 = 100;
 
+/// Hard ceiling for runtime context budgets to prevent unbounded prompts.
+pub const HARD_MAX_CONTEXT_BUDGET_TOKENS: usize = 4000;
+
+/// Absolute upper safety cap on total characters in rendered context memory markdown.
+pub const MAX_RENDERED_CONTEXT_CHARS: usize = 16_000;
+
 /// Memory kinds from the binding schema (§6). These are the only categories
 /// appropriate to the final schema; the richer conceptual taxonomy (risks,
 /// commitments, preferences, project state, ...) is folded into `note` at
@@ -120,6 +126,83 @@ pub struct MemoryItem {
     pub updated_at: String,
 }
 
+/// Calculates a deterministic memory relevance score incorporating kind, status,
+/// recency decay, and frequency signals.
+///
+/// Base weights:
+/// - Action (open): 100.0
+/// - Question (open): 85.0
+/// - Decision: 70.0
+/// - Fact: 55.0
+/// - Note: 40.0
+/// - Terminal / Closed (e.g. done, blocked, resolved): 15.0
+/// - Unknown kind: 10.0
+///
+/// Recency decay:
+/// Monotonic decay factor: `1.0 / (1.0 + (age_days / 30.0))` where `age_days`
+/// is derived from `updated_at_millis` against `now_millis`.
+/// Invalid or missing timestamps safely floor at 0.1. Clock skew / future timestamps
+/// clamp `age_days` to 0.0 (`recency_factor = 1.0`).
+///
+/// Frequency multiplier:
+/// Based on `repetition_count` (occurrences/refreshes):
+/// `1.0 + (min(repetition_count - 1, 4) * 0.25)` bounded in `[1.0, 2.0]`.
+///
+/// Output is deterministically rounded to 4 decimal places.
+pub fn calculate_memory_score(
+    kind: Option<MemoryKind>,
+    status: Option<&str>,
+    updated_at_millis: i64,
+    now_millis: i64,
+    repetition_count: u32,
+) -> f64 {
+    let is_closed = match status {
+        Some(s) => {
+            let s_lower = s.to_ascii_lowercase();
+            s_lower == STATUS_DONE
+                || s_lower == STATUS_BLOCKED
+                || s_lower == STATUS_RESOLVED
+                || s_lower == "closed"
+        }
+        None => false,
+    };
+    let is_open = !is_closed;
+    let base_weight = match kind {
+        Some(MemoryKind::Action) => {
+            if is_open {
+                100.0
+            } else {
+                15.0
+            }
+        }
+        Some(MemoryKind::Question) => {
+            if is_open {
+                85.0
+            } else {
+                15.0
+            }
+        }
+        Some(MemoryKind::Decision) => 70.0,
+        Some(MemoryKind::Fact) => 55.0,
+        Some(MemoryKind::Note) => 40.0,
+        None => 10.0,
+    };
+
+    let recency_factor = if updated_at_millis <= 0 || now_millis <= 0 {
+        0.1
+    } else {
+        let age_millis = (now_millis - updated_at_millis).max(0);
+        let age_days = (age_millis as f64) / 86_400_000.0;
+        1.0 / (1.0 + (age_days / 30.0))
+    };
+
+    let occurrences = repetition_count.max(1);
+    let frequency_multiplier = 1.0 + (occurrences.saturating_sub(1).min(4) as f64 * 0.25);
+
+    let raw = base_weight * recency_factor * frequency_multiplier;
+    (raw * 10_000.0).round() / 10_000.0
+}
+
 impl MemoryItem {
     pub fn kind(&self) -> Option<MemoryKind> {
         MemoryKind::from_str(&self.kind)
@@ -135,6 +218,24 @@ impl MemoryItem {
             .map(|dt| dt.timestamp_millis())
             .unwrap_or(0)
     }
+
+    /// Milliseconds since epoch parsed from `created_at` (RFC3339); 0 on failure.
+    pub fn created_at_millis(&self) -> i64 {
+        chrono::DateTime::parse_from_rfc3339(&self.created_at)
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or(0)
+    }
+
+    /// Calculates item relevance score.
+    pub fn score(&self, now_millis: i64, repetition_count: u32) -> f64 {
+        calculate_memory_score(
+            self.kind(),
+            self.status.as_deref(),
+            self.updated_at_millis(),
+            now_millis,
+            repetition_count,
+        )
+    }
 }
 
 /// A memory item joined with its source meeting title for display (§7.1).
@@ -149,6 +250,38 @@ pub struct ContextMemoryItemView {
     pub status: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl ContextMemoryItemView {
+    pub fn kind(&self) -> Option<MemoryKind> {
+        MemoryKind::from_str(&self.kind)
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.status.as_deref() == Some(STATUS_OPEN)
+    }
+
+    pub fn updated_at_millis(&self) -> i64 {
+        chrono::DateTime::parse_from_rfc3339(&self.updated_at)
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or(0)
+    }
+
+    pub fn created_at_millis(&self) -> i64 {
+        chrono::DateTime::parse_from_rfc3339(&self.created_at)
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or(0)
+    }
+
+    pub fn score(&self, now_millis: i64, repetition_count: u32) -> f64 {
+        calculate_memory_score(
+            self.kind(),
+            self.status.as_deref(),
+            self.updated_at_millis(),
+            now_millis,
+            repetition_count,
+        )
+    }
 }
 
 /// Compact context memory payload for the summary flow (§7.1).
@@ -181,12 +314,37 @@ impl Default for MemoryBudget {
 }
 
 impl MemoryBudget {
+    pub fn new(context_tokens: usize, digest_fraction: f64, per_item_max_chars: usize) -> Self {
+        Self {
+            context_tokens: context_tokens
+                .clamp(MIN_CONTEXT_BUDGET_TOKENS, HARD_MAX_CONTEXT_BUDGET_TOKENS),
+            digest_fraction: digest_fraction.clamp(0.05, 0.90),
+            per_item_max_chars: per_item_max_chars.clamp(50, EXTRACTED_ITEM_CONTENT_MAX_CHARS),
+        }
+    }
+
+    pub fn sanitized(&self) -> Self {
+        Self {
+            context_tokens: self
+                .context_tokens
+                .clamp(MIN_CONTEXT_BUDGET_TOKENS, HARD_MAX_CONTEXT_BUDGET_TOKENS),
+            digest_fraction: self.digest_fraction.clamp(0.05, 0.90),
+            per_item_max_chars: self
+                .per_item_max_chars
+                .clamp(50, EXTRACTED_ITEM_CONTENT_MAX_CHARS),
+        }
+    }
+
     pub fn digest_cap_tokens(&self) -> usize {
-        ((self.context_tokens as f64) * self.digest_fraction).max(1.0) as usize
+        let budget = self.sanitized();
+        ((budget.context_tokens as f64) * budget.digest_fraction).max(1.0) as usize
     }
 
     pub fn items_cap_tokens(&self) -> usize {
-        self.context_tokens.saturating_sub(self.digest_cap_tokens())
+        let budget = self.sanitized();
+        budget
+            .context_tokens
+            .saturating_sub(budget.digest_cap_tokens())
     }
 }
 
@@ -271,5 +429,110 @@ mod tests {
         assert!(estimate_tokens(&truncated) <= 100 + estimate_tokens("\n… (truncated)"));
         assert!(truncated.ends_with("(truncated)"));
         assert_eq!(truncate_text_to_tokens("hello", 100), "hello");
+    }
+
+    #[test]
+    fn scoring_kind_hierarchy_at_zero_age() {
+        let now = 1_700_000_000_000i64;
+        let score_action =
+            calculate_memory_score(Some(MemoryKind::Action), Some("open"), now, now, 1);
+        let score_question =
+            calculate_memory_score(Some(MemoryKind::Question), Some("open"), now, now, 1);
+        let score_decision = calculate_memory_score(Some(MemoryKind::Decision), None, now, now, 1);
+        let score_fact = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 1);
+        let score_note = calculate_memory_score(Some(MemoryKind::Note), None, now, now, 1);
+        let score_closed =
+            calculate_memory_score(Some(MemoryKind::Action), Some("done"), now, now, 1);
+
+        assert_eq!(score_action, 100.0);
+        assert_eq!(score_question, 85.0);
+        assert_eq!(score_decision, 70.0);
+        assert_eq!(score_fact, 55.0);
+        assert_eq!(score_note, 40.0);
+        assert_eq!(score_closed, 15.0);
+
+        assert!(score_action > score_question);
+        assert!(score_question > score_decision);
+        assert!(score_decision > score_fact);
+        assert!(score_fact > score_note);
+        assert!(score_note > score_closed);
+    }
+
+    #[test]
+    fn scoring_recency_decay_is_monotonic() {
+        let now = 1_700_000_000_000i64;
+        let day_ms = 86_400_000i64;
+
+        let score_0d = calculate_memory_score(Some(MemoryKind::Decision), None, now, now, 1);
+        let score_15d =
+            calculate_memory_score(Some(MemoryKind::Decision), None, now - 15 * day_ms, now, 1);
+        let score_30d =
+            calculate_memory_score(Some(MemoryKind::Decision), None, now - 30 * day_ms, now, 1);
+        let score_60d =
+            calculate_memory_score(Some(MemoryKind::Decision), None, now - 60 * day_ms, now, 1);
+
+        // At 30 days (half-life), recency factor is 1 / (1 + 1) = 0.5 => 70.0 * 0.5 = 35.0
+        assert_eq!(score_0d, 70.0);
+        assert_eq!(score_30d, 35.0);
+        assert!(score_0d > score_15d);
+        assert!(score_15d > score_30d);
+        assert!(score_30d > score_60d);
+    }
+
+    #[test]
+    fn scoring_handles_invalid_and_future_timestamps() {
+        let now = 1_700_000_000_000i64;
+        // Invalid (0 or negative) floors at 0.1 factor
+        let score_invalid = calculate_memory_score(Some(MemoryKind::Fact), None, 0, now, 1);
+        assert_eq!(score_invalid, 5.5); // 55.0 * 0.1
+
+        // Future timestamp (clock skew) clamps age to 0 days (factor 1.0)
+        let score_future =
+            calculate_memory_score(Some(MemoryKind::Fact), None, now + 100_000, now, 1);
+        assert_eq!(score_future, 55.0);
+    }
+
+    #[test]
+    fn scoring_frequency_multiplier() {
+        let now = 1_700_000_000_000i64;
+        let score_1x = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 1);
+        let score_2x = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 2);
+        let score_3x = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 3);
+        let score_4x = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 4);
+        let score_5x = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 5);
+        let score_10x = calculate_memory_score(Some(MemoryKind::Fact), None, now, now, 10);
+
+        assert_eq!(score_1x, 55.0); // 1.0x
+        assert_eq!(score_2x, 68.75); // 1.25x
+        assert_eq!(score_3x, 82.5); // 1.5x
+        assert_eq!(score_4x, 96.25); // 1.75x
+        assert_eq!(score_5x, 110.0); // 2.0x (max)
+        assert_eq!(score_10x, 110.0); // clamped at 2.0x
+    }
+
+    #[test]
+    fn memory_budget_clamping() {
+        let unclamped = MemoryBudget {
+            context_tokens: 100_000,
+            digest_fraction: 0.99,
+            per_item_max_chars: 10_000,
+        };
+        let sanitized = unclamped.sanitized();
+        assert_eq!(sanitized.context_tokens, HARD_MAX_CONTEXT_BUDGET_TOKENS); // 4000
+        assert_eq!(sanitized.digest_fraction, 0.90);
+        assert_eq!(
+            sanitized.per_item_max_chars,
+            EXTRACTED_ITEM_CONTENT_MAX_CHARS
+        ); // 2000
+
+        let small = MemoryBudget {
+            context_tokens: 10,
+            digest_fraction: 0.01,
+            per_item_max_chars: 5,
+        };
+        let sanitized_small = small.sanitized();
+        assert_eq!(sanitized_small.context_tokens, MIN_CONTEXT_BUDGET_TOKENS); // 400
+        assert_eq!(sanitized_small.digest_fraction, 0.05);
+        assert_eq!(sanitized_small.per_item_max_chars, 50);
     }
 }
