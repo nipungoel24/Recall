@@ -90,28 +90,29 @@ export function HomebrewDatabaseDetector({ onImportSuccess, onDecline }: Homebre
   };
 
   return (
-    <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+    <div className="mb-4 p-4 bg-primary/5 border border-primary/30 rounded-md">
       <div className="flex items-start gap-3">
-        <Database className="h-6 w-6 text-blue-600 mt-0.5 flex-shrink-0" />
+        <Database className="h-6 w-6 text-primary mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <AlertCircle className="h-4 w-4 text-blue-600" />
-            <h3 className="text-sm font-semibold text-blue-900">
-              Previous Installation Detected!
+            <AlertCircle className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">
+              Previous installation detected
             </h3>
           </div>
-          <p className="text-sm text-blue-800 mb-2">
-            We found an existing database from your previous installation (legacy backend version, including Meetily).
+          <p className="text-sm text-muted-foreground mb-2">
+            An existing database from a previous version of this app was found on this
+            machine.
           </p>
-          <div className="bg-white/50 rounded p-2 mb-3">
-            <p className="text-xs text-blue-700 font-mono break-all">
+          <div className="bg-background border border-border rounded p-2 mb-3">
+            <p className="text-xs text-foreground font-mono break-all">
               {detectedPath}
             </p>
-            <p className="text-xs text-blue-600 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Size: {formatFileSize(dbSize)}
             </p>
           </div>
-          <p className="text-sm text-blue-800 mb-3">
+          <p className="text-sm text-muted-foreground mb-3">
             Would you like to import your previous meetings, transcripts, and summaries?
           </p>
           
@@ -120,16 +121,16 @@ export function HomebrewDatabaseDetector({ onImportSuccess, onDecline }: Homebre
             <button
               onClick={handleYes}
               disabled={isImporting}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {isImporting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   <span>Importing...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="h-4 w-4" />
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                   <span>Yes, Import</span>
                 </>
               )}
@@ -138,7 +139,7 @@ export function HomebrewDatabaseDetector({ onImportSuccess, onDecline }: Homebre
             <button
               onClick={handleNo}
               disabled={isImporting}
-              className="flex-1 px-4 py-2 border-2 border-blue-400 text-blue-700 rounded-lg hover:bg-blue-100 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-4 py-2 text-sm font-medium border border-border text-foreground bg-muted rounded-md hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               No, Browse Manually
             </button>

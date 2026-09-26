@@ -78,6 +78,7 @@
     },
     "bundle": {
         "active": true,
+        "publisher": "Recall",
         "targets": [
             "deb",
             "appimage",

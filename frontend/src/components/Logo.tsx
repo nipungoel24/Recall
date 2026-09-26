@@ -19,7 +19,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
             aria-label="About Recall"
             className="flex items-center justify-start mb-2 cursor-pointer bg-transparent border-none p-0 rounded-md hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Image src="/logo-collapsed.png" alt="" width={40} height={32} />
+            <Image src="/logo-collapsed.png" alt="" width={26} height={26} />
           </button>
         </DialogTrigger>
       ) : (

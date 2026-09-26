@@ -1,99 +1,115 @@
 import React, { useState, useEffect } from "react";
-import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import Image from 'next/image';
 
-
+/**
+ * About Recall.
+ *
+ * Content is restricted to claims the PRD actually supports. Recall is a
+ * local-first product, so this panel describes what the app does and how it
+ * handles data — it is not a marketing surface and carries no calls to action.
+ *
+ * The open-source acknowledgement at the foot is retained because the upstream
+ * project is MIT licensed and that licence requires the copyright notice to
+ * travel with substantial portions of the software. It is presented as a legal
+ * credit, not as product identity.
+ */
 export function About() {
     const [currentVersion, setCurrentVersion] = useState<string>('0.4.0');
 
     useEffect(() => {
-        // Get current version on mount
         getVersion().then(setCurrentVersion).catch(console.error);
     }, []);
 
-    const handleContactClick = async () => {
-        try {
-            await invoke('open_external_url', { url: 'https://meetily.zackriya.com/#about' });
-        } catch (error) {
-            console.error('Failed to open link:', error);
-        }
-    };
+    const capabilities: Array<{ term: string; detail: string }> = [
+        {
+            term: 'Local first',
+            detail: 'Recording, transcription, summaries and memory run on this machine by default.',
+        },
+        {
+            term: 'Structured memory',
+            detail: 'Decisions, questions, facts and action items are captured with links back to the moment they were said.',
+        },
+        {
+            term: 'Provider choice',
+            detail: 'Use a local model, or connect a cloud provider explicitly — the default never uploads meeting content.',
+        },
+        {
+            term: 'Offline capable',
+            detail: 'Capture and intelligence keep working without a network connection.',
+        },
+    ];
 
     return (
-        <div className="p-4 space-y-4 h-[80vh] overflow-y-auto">
-            {/* Compact Header */}
-            <div className="text-center">
-                <div className="mb-3">
-                    <Image
-                        src="icon_128x128.png"
-                        alt="Recall Logo"
-                        width={64}
-                        height={64}
-                        className="mx-auto"
-                    />
-                </div>
-                {/* <h1 className="text-xl font-bold text-foreground">Recall</h1> */}
-                <span className="text-sm text-muted-foreground"> v{currentVersion}</span>
-                <p className="text-medium text-muted-foreground mt-1">
-                    Real-time notes and summaries that never leave your machine.
-                </p>
-            </div>
-
-            {/* Features Grid - Compact */}
-            <div className="space-y-3">
-                <h2 className="text-base font-semibold text-foreground">What makes Recall different</h2>
-                <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-background rounded p-3 hover:bg-muted transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Privacy-first</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Your data & AI processing workflow can now stay within your premise. No cloud, no leaks.</p>
-                    </div>
-                    <div className="bg-background rounded p-3 hover:bg-muted transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Use Any Model</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Prefer local open-source model? Great. Want to plug in an external API? Also fine. No lock-in.</p>
-                    </div>
-                    <div className="bg-background rounded p-3 hover:bg-muted transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Cost-Smart</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Avoid pay-per-minute bills by running models locally (or pay only for the calls you choose).</p>
-                    </div>
-                    <div className="bg-background rounded p-3 hover:bg-muted transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Works everywhere</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Google Meet, Zoom, Teams-online or offline.</p>
-                    </div>
+        <div className="space-y-5">
+            {/* Identity */}
+            <div className="flex items-start gap-3">
+                <Image
+                    src="/icon_128x128.png"
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="mt-0.5 shrink-0 rounded-md border border-border"
+                />
+                <div className="min-w-0">
+                    <h2 className="text-page-title text-foreground">Recall</h2>
+                    <p className="text-caption text-muted-foreground">
+                        Version {currentVersion}
+                    </p>
                 </div>
             </div>
 
-            {/* Coming Soon - Compact */}
-            <div className="bg-primary/5 rounded p-3">
-                <p className="text-xs text-primary">
-                    <span className="font-bold">Coming soon:</span> A library of on-device AI agents-automating follow-ups, action tracking, and more.
-                </p>
-            </div>
+            {/* Positioning — PRD statement of purpose */}
+            <p className="text-body text-foreground border-l-2 border-border pl-3">
+                A private, local-first meeting operating system that turns conversations
+                into searchable memory and actionable work.
+            </p>
 
-            {/* CTA Section - Compact */}
-            <div className="text-center space-y-2">
-                <h3 className="text-medium font-semibold text-foreground">Ready to push your business further?</h3>
-                <p className="text-xs text-muted-foreground">
-                    If you're planning to build privacy-first custom AI agents or a fully tailored product for your <span className="font-bold">business</span>, we can help you build it.
-                </p>
-                <button
-                    onClick={handleContactClick}
-                    className="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded transition-colors duration-200 shadow-sm hover:shadow-md"
-                >
-                    Chat with the Zackriya team
-                </button>
-            </div>
+            {/* Capabilities */}
+            <section>
+                <h3 className="text-label text-muted-foreground mb-2">What Recall does</h3>
+                <dl className="divide-y divide-border border-y border-border">
+                    {capabilities.map(({ term, detail }) => (
+                        <div key={term} className="flex gap-3 py-2">
+                            <dt className="w-32 shrink-0 text-sm font-medium text-foreground">
+                                {term}
+                            </dt>
+                            <dd className="text-sm text-muted-foreground">{detail}</dd>
+                        </div>
+                    ))}
+                </dl>
+            </section>
 
-            {/* Footer - Compact */}
-            <div className="pt-2 border-t border-border text-center">
-                <p className="text-xs text-muted-foreground">
-                    Built by Zackriya Solutions
+            {/* Data handling */}
+            <section>
+                <h3 className="text-label text-muted-foreground mb-2">Your data</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                    <li className="flex gap-2">
+                        <span aria-hidden="true" className="text-foreground">—</span>
+                        <span>Meeting audio, transcripts and notes are stored on this device.</span>
+                    </li>
+                    <li className="flex gap-2">
+                        <span aria-hidden="true" className="text-foreground">—</span>
+                        <span>
+                            Nothing is sent to a cloud provider unless you configure one yourself.
+                        </span>
+                    </li>
+                    <li className="flex gap-2">
+                        <span aria-hidden="true" className="text-foreground">—</span>
+                        <span>
+                            Recall ships no product analytics. Diagnostics stay in local logs.
+                        </span>
+                    </li>
+                </ul>
+            </section>
+
+            {/* Legal credit — required by the upstream MIT licence. */}
+            <footer className="border-t border-border pt-3">
+                <p className="text-caption text-muted-foreground">
+                    Recall is derived from the Meetily open-source project (MIT licence).
+                    Copyright (c) 2024 Zackriya Solutions.
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                    Recall is derived from the Meetily open-source project.
-                </p>
-            </div>
+            </footer>
         </div>
-
-    )
+    );
 }

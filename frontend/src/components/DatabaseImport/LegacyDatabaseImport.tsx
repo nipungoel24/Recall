@@ -120,9 +120,10 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
       <DialogContent className="sm:max-w-[600px]" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="text-2xl">Welcome to Recall!</DialogTitle>
-          <DialogDescription className="text-base pt-2">
-            Do you have data from a previous installation? (Including Meetily — Recall reads the same database.)
-          </DialogDescription>
+            <DialogDescription className="text-base pt-2">
+              Do you have data from a previous version of Recall? Recall reads the same
+              database format, so your existing meetings can be imported.
+            </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
