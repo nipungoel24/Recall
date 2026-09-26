@@ -325,9 +325,9 @@ function MeetingDetailsContent() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-center bg-white rounded-xl border border-gray-200 shadow-sm p-10 max-w-md">
-          <p className="text-sm text-gray-700 mb-4">{error}</p>
+      <div className="flex items-center justify-center h-screen bg-background">
+            <div className="text-center bg-surface rounded-xl border border-border shadow-sm p-10 max-w-md">
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
           <button
             onClick={() => router.push(routes.home())}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
@@ -343,30 +343,30 @@ function MeetingDetailsContent() {
   // Show skeleton layout while initial data loads
   if ((isLoading || isLoadingTranscripts) || !meetingDetails) {
     return (
-      <div className="flex flex-col h-screen bg-gray-50">
-        <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4">
+      <div className="flex flex-col h-screen bg-background">
+        <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
           <button
             type="button"
             onClick={() => router.push(routes.home())}
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Home
           </button>
-          <span className="h-4 w-px bg-gray-200" />
-          <span className="truncate text-sm font-medium text-gray-800">
+          <span className="h-4 w-px bg-border" />
+          <span className="truncate text-sm font-medium text-foreground">
             Loading...
           </span>
         </div>
         <div className="flex flex-1 overflow-hidden">
-          <div className="hidden md:flex md:w-1/4 lg:w-1/3 border-r border-gray-200 bg-white flex-col p-4 space-y-3">
+          <div className="hidden md:flex md:w-1/4 lg:w-1/3 border-r border-border bg-surface flex-col p-4 space-y-3">
             <Skeleton className="h-8 w-1/2" />
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
           </div>
-          <div className="flex-1 bg-white p-4 space-y-3">
+          <div className="flex-1 bg-background p-4 space-y-3">
             <Skeleton className="h-6 w-1/3" />
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-32 w-full" />

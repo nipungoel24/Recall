@@ -72,15 +72,15 @@ export function AddMeetingsToContextDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px] bg-white text-gray-900">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Add Meetings</DialogTitle>
-          <DialogDescription className="text-gray-500">
+          <DialogDescription className="text-muted-foreground">
             Add existing meetings to {contextName}. A meeting can belong to multiple Contexts.
           </DialogDescription>
         </DialogHeader>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -88,9 +88,9 @@ export function AddMeetingsToContextDialog({
             className="pl-9"
           />
         </div>
-        <div className="max-h-72 overflow-y-auto custom-scrollbar border border-gray-200 rounded-md divide-y divide-gray-100">
+        <div className="max-h-72 overflow-y-auto custom-scrollbar border border-border rounded-md divide-y divide-border">
           {candidates.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-8 px-4">
+            <p className="text-sm text-muted-foreground text-center py-8 px-4">
               {meetings.length === 0
                 ? 'No meetings recorded yet.'
                 : 'No matching meetings to add.'}
@@ -105,7 +105,7 @@ export function AddMeetingsToContextDialog({
                   onClick={() => setSelectedIds((prev) => toggleSelectedId(prev, meeting.id))}
                   className={cn(
                     'w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors',
-                    selected ? 'bg-blue-50' : 'hover:bg-gray-50',
+                    selected ? 'bg-blue-50' : 'hover:bg-muted',
                   )}
                 >
                   <span
@@ -113,12 +113,12 @@ export function AddMeetingsToContextDialog({
                       'flex-shrink-0 flex items-center justify-center w-4 h-4 rounded border',
                       selected
                         ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'border-gray-300 bg-white',
+                        : 'border-border bg-background',
                     )}
                   >
                     {selected && <Check className="w-3 h-3" />}
                   </span>
-                  <span className={cn('truncate', selected ? 'text-blue-700' : 'text-gray-700')}>
+                  <span className={cn('truncate', selected ? 'text-blue-700' : 'text-muted-foreground')}>
                     {meeting.title}
                   </span>
                 </button>

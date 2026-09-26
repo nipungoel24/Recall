@@ -68,10 +68,10 @@ export function CreateContextDialog({ open, onOpenChange, onCreated }: CreateCon
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[480px] bg-white text-gray-900">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>New Context</DialogTitle>
-          <DialogDescription className="text-gray-500">
+          <DialogDescription className="text-muted-foreground">
             Group related meetings so their decisions and next steps carry over.
           </DialogDescription>
         </DialogHeader>
@@ -95,7 +95,7 @@ export function CreateContextDialog({ open, onOpenChange, onCreated }: CreateCon
           </div>
           <div className="grid gap-2">
             <Label htmlFor="context-description">
-              Description <span className="text-gray-400 font-normal">(optional)</span>
+              Description <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
             <Textarea
               id="context-description"

@@ -5,6 +5,12 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // These directories render JSX too. Without them their classNames are
+    // never generated, so those surfaces ship unstyled.
+    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/hooks/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/contexts/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/services/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
   	extend: {

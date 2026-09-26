@@ -23,7 +23,7 @@ export function MarkdownRenderer({ markdown, className }: MarkdownRendererProps)
     <div
       className={cn(
         'prose prose-sm max-w-none dark:prose-invert',
-        'prose-headings:font-semibold prose-headings:text-gray-900',
+        'prose-headings:font-semibold prose-headings:text-foreground',
         'prose-h1:text-xl prose-h2:text-lg prose-h3:text-base',
         'prose-ul:my-1 prose-ol:my-1 prose-p:my-1.5',
         'prose-li:my-0.5',

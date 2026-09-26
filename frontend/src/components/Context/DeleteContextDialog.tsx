@@ -43,14 +43,14 @@ export function DeleteContextDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[440px] bg-white text-gray-900">
+      <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle>Delete Context</DialogTitle>
-          <DialogDescription className="text-gray-500">
+          <DialogDescription className="text-muted-foreground">
             Delete &quot;{contextName}&quot;?
           </DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           This removes the Context and its saved knowledge
           {meetingCount > 0
             ? `, and unlinks ${meetingCount} meeting${meetingCount === 1 ? '' : 's'}`

@@ -70,10 +70,10 @@ export function RenameContextDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] bg-white text-gray-900">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Rename Context</DialogTitle>
-          <DialogDescription className="text-gray-500">
+          <DialogDescription className="text-muted-foreground">
             Update the name or description for {contextId ? 'this Context' : ''}. Meetings stay put.
           </DialogDescription>
         </DialogHeader>
@@ -96,7 +96,7 @@ export function RenameContextDialog({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="rename-context-description">
-              Description <span className="text-gray-400 font-normal">(optional)</span>
+              Description <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
             <Textarea
               id="rename-context-description"

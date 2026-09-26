@@ -105,11 +105,11 @@ export function DailyMeetingView({
           <div className="flex w-4 flex-shrink-0 flex-col items-center pt-4" aria-hidden="true">
             <span
               className={`h-2.5 w-2.5 rounded-full border-2 ${
-                index === 0 ? 'border-blue-200 bg-blue-500' : 'border-gray-300 bg-white'
+                index === 0 ? 'border-blue-200 bg-blue-500' : 'border-border bg-background'
               }`}
             />
             {index < dayMeetings.length - 1 && (
-              <span className="my-1 w-px flex-1 bg-gray-200" />
+              <span className="my-1 w-px flex-1 bg-border" />
             )}
           </div>
           <div className="flex-1 min-w-0 pb-2">
@@ -125,11 +125,11 @@ export function DailyMeetingView({
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-gray-400" />
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          <CalendarDays className="h-5 w-5 text-muted-foreground" />
+          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
         </div>
         {!isLoading && error === null && (
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {meetingCountLabel(totals.meetingCount)}
             {totals.meetingCount > 0 && ` · ${formatDuration(totals.durationSeconds)}`}
           </p>
@@ -153,7 +153,7 @@ export function DailyMeetingView({
       {/* States */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="flex flex-col items-center gap-2 text-gray-500">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
             <p className="text-sm">Loading meetings...</p>
           </div>
@@ -173,10 +173,10 @@ export function DailyMeetingView({
           </Button>
         </div>
       ) : meetings.length === 0 ? (
-        <div className="border border-dashed border-gray-300 rounded-lg p-10 text-center">
-          <CalendarDays className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm font-medium text-gray-700">No meetings on this day</p>
-          <p className="text-xs text-gray-500 mt-1">
+        <div className="border border-dashed border-border rounded-lg p-10 text-center">
+          <CalendarDays className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm font-medium text-muted-foreground">No meetings on this day</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Meetings you record on {isSingleDay ? 'this day' : 'these days'} will appear here.
           </p>
         </div>
@@ -184,7 +184,7 @@ export function DailyMeetingView({
         <div className="space-y-6">
           {Array.from(groups.entries()).map(([dayKey, dayMeetings]) => (
             <div key={dayKey}>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2">{formatDayTitle(dayKey)}</h2>
+              <h2 className="text-sm font-semibold text-muted-foreground mb-2">{formatDayTitle(dayKey)}</h2>
               {renderMeetingList(dayMeetings)}
             </div>
           ))}
