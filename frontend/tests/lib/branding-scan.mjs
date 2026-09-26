@@ -140,9 +140,12 @@ export function collectFiles(entry, out, filter = () => true) {
 function isAllowed(relPath, line) {
   const normalized = relPath.split(path.sep).join('/')
   // The gate itself necessarily names the old brand in its allowlist, its
-  // denylist digests and its test titles; never flag the scanner or the tests
-  // that exercise it.
-  if (/tests\/lib\/branding-(scan|regression)(\.test)?\.(mjs|ts)$/.test(normalized)) return true
+  // denylist digests and its test titles. Other gates that assert the brand's
+  // *absence* must name it too. Keep this list explicit: widening it to "any
+  // test file" would let a real leak hide behind a test.
+  if (/tests\/lib\/(?:branding-(?:scan|regression)(?:\.test)?|sidebar-polish\.test)\.(mjs|ts)$/.test(normalized)) {
+    return true
+  }
   return ALLOWLIST.some(
     (rule) => normalized.includes(rule.fileContains) && line.includes(rule.lineContains),
   )

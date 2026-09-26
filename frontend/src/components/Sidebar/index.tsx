@@ -77,6 +77,39 @@ const groupChildrenByHistory = (children: SidebarItem[]): HistoryGroup[] => {
   return groups.filter(group => group.items.length > 0);
 };
 
+/*
+ * Sidebar row system.
+ *
+ * Every navigable row in the sidebar is built from these tokens so that height,
+ * icon box, text baseline, inset, hover and focus are identical everywhere.
+ * A row that is defined inline drifts; a row that is derived from one constant
+ * cannot. Active state is a restrained accent wash plus a 2px accent bar
+ * (absolutely positioned, so activating a row never shifts the layout).
+ */
+const ROW_BASE =
+  'group/row relative flex w-full items-center gap-2.5 rounded-md text-sm ' +
+  'transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 ' +
+  'focus-visible:ring-ring';
+
+const ROW_IDLE = 'text-foreground hover:bg-muted';
+const ROW_ACTIVE = 'bg-accent/20 text-foreground font-medium';
+
+/** Height of a primary navigation row. */
+const ROW_H = 'h-9';
+
+/** Height of a footer utility row — deliberately smaller than navigation. */
+const ROW_H_UTILITY = 'h-8';
+
+const SECTION_LABEL = 'px-3 pt-5 pb-1.5 text-label text-muted-foreground';
+
+/** The 2px marker that makes the active row unmistakable without a layout shift. */
+const ACTIVE_BAR = (
+  <span
+    aria-hidden="true"
+    className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-sm bg-accent"
+  />
+);
+
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
@@ -533,7 +566,7 @@ const Sidebar: React.FC = () => {
 
     return (
       <TooltipProvider>
-        <div className="flex flex-col items-center space-y-4 mt-4">
+        <div className="flex flex-col items-center gap-1 pt-3 pb-2">
           <Logo isCollapsed={isCollapsed} />
 
           <Tooltip>
@@ -542,10 +575,10 @@ const Sidebar: React.FC = () => {
                 onClick={() => router.push('/')}
                 aria-label="Home"
                 aria-current={isHomePage ? 'page' : undefined}
-                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isHomePage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isHomePage ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                   }`}
               >
-                <Home className="w-5 h-5" />
+                <Home className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -559,12 +592,12 @@ const Sidebar: React.FC = () => {
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
                 aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
-                className={`p-2 ${isRecording ? 'bg-destructive cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-full transition-colors duration-150 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                className={`${isRecording ? 'bg-destructive text-destructive-foreground' : 'bg-destructive/10 text-destructive hover:bg-destructive/20'} transition-colors duration-100`}
               >
                 {isRecording ? (
-                  <Square className="w-5 h-5 text-primary-foreground" />
+                  <Square className="h-4 w-4" aria-hidden="true" />
                 ) : (
-                  <Mic className="w-5 h-5 text-primary-foreground" />
+                  <Mic className="h-4 w-4" aria-hidden="true" />
                 )}
               </button>
             </TooltipTrigger>
@@ -579,10 +612,10 @@ const Sidebar: React.FC = () => {
                 onClick={() => router.push('/calendar')}
                 aria-label="Calendar"
                 aria-current={isCalendarPage ? 'page' : undefined}
-                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isCalendarPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isCalendarPage ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                   }`}
               >
-                <CalendarDays className="w-5 h-5" />
+                <CalendarDays className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -596,10 +629,10 @@ const Sidebar: React.FC = () => {
                 onClick={() => router.push('/daily')}
                 aria-label="Daily"
                 aria-current={pathname === '/daily' ? 'page' : undefined}
-                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/daily' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/daily' ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                   }`}
               >
-                <Sun className="w-5 h-5" />
+                <Sun className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -613,10 +646,10 @@ const Sidebar: React.FC = () => {
                 onClick={() => router.push('/context')}
                 aria-label="Contexts"
                 aria-current={pathname?.includes('/context') ? 'page' : undefined}
-                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname?.includes('/context') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname?.includes('/context') ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                   }`}
               >
-                <LayoutList className="w-5 h-5" />
+                <LayoutList className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -630,10 +663,10 @@ const Sidebar: React.FC = () => {
                 onClick={() => router.push('/templates')}
                 aria-label="Templates"
                 aria-current={pathname === '/templates' ? 'page' : undefined}
-                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/templates' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/templates' ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                   }`}
               >
-                <LayoutTemplate className="w-5 h-5" />
+                <LayoutTemplate className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -649,7 +682,7 @@ const Sidebar: React.FC = () => {
                   aria-label="Import Audio"
                   className="p-2 rounded-lg transition-colors duration-150 text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Upload className="w-5 h-5" />
+                  <Upload className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
@@ -666,10 +699,10 @@ const Sidebar: React.FC = () => {
                     toggleFolder('meetings');
                   }}
                   aria-label="Meeting Notes"
-                  className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isMeetingPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                  className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isMeetingPage ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                 >
-                <NotebookPen className="w-5 h-5" />
+                <NotebookPen className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -683,10 +716,10 @@ const Sidebar: React.FC = () => {
                 onClick={() => router.push('/settings')}
                 aria-label="Settings"
                 aria-current={isSettingsPage ? 'page' : undefined}
-                className={`p-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isSettingsPage ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+                className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isSettingsPage ? 'bg-accent/25 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                   }`}
               >
-                <Settings className="w-5 h-5" />
+                <Settings className="h-4 w-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -718,34 +751,37 @@ const Sidebar: React.FC = () => {
 
     if (isCollapsed) return null;
 
+    // Meeting rows are a fixed height with a single truncated line. A long title
+    // must never grow the row, because the history list is the only scrollable
+    // region and variable heights make it impossible to scan.
     const rowTone =
       item.type === 'folder' && depth === 0
-        ? 'p-3 text-sm font-medium h-10 mx-3 mt-3 rounded-lg'
-        : `px-3 py-2 my-0.5 rounded-md text-sm ${
+        ? 'flex items-center h-9 px-3 text-sm font-medium text-muted-foreground'
+        : `${ROW_BASE} ${ROW_H} ${
             isActive
-              ? 'bg-accent text-accent-foreground font-medium'
+              ? ROW_ACTIVE
               : hasTranscriptMatch
-                ? 'bg-warning/10'
-                : 'text-foreground hover:bg-accent/50'
-          } cursor-pointer`;
+                ? 'text-foreground bg-warning/10 hover:bg-warning/15'
+                : ROW_IDLE
+          }`;
 
     return (
-      <div key={item.id} className="group">
+      <div key={item.id} className="group/row">
         <div
-          className={`flex items-center transition-colors duration-150 ${rowTone}`}
-          style={item.type === 'folder' && depth === 0 ? {} : { paddingLeft }}
+          className={`${rowTone} ${item.type === 'folder' && depth === 0 ? '' : 'mx-2'}`}
+          style={item.type === 'folder' && depth === 0 ? {} : { paddingLeft: `${depth * 10 + 10}px` }}
         >
           {item.type === 'folder' ? (
             <button
               type="button"
               onClick={() => toggleFolder(item.id)}
               aria-expanded={isExpanded}
-              className="flex min-w-0 flex-1 items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+              className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
             >
               {item.id === 'meetings' || item.id === 'notes' ? (
-                <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
+                <Calendar className="h-4 w-4 shrink-0" aria-hidden="true" />
               ) : null}
-              <span className={depth === 0 ? "" : "font-medium"}>{item.title}</span>
+              <span className={depth === 0 ? "" : "font-medium truncate"}>{item.title}</span>
               <span className="ml-auto">
                 {isExpanded ? (
                   <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
@@ -766,21 +802,26 @@ const Sidebar: React.FC = () => {
                   router.push(basePath);
                 }}
                 aria-current={isActive ? 'page' : undefined}
-                className="flex min-w-0 flex-1 items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                title={item.title}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
               >
+                {isActive && ACTIVE_BAR}
                 {isMeetingItem ? (
-                  <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-muted">
-                    <File className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-sm bg-muted">
+                    <File className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
                   </span>
                 ) : (
-                  <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-primary/10">
-                    <Plus className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+                  <span className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-sm bg-primary/10">
+                    <Plus className="h-3 w-3 text-primary" aria-hidden="true" />
                   </span>
                 )}
-                <span className="flex-1 break-words">{item.title}</span>
+                <span className="flex-1 truncate">{item.title}</span>
               </button>
               {isMeetingItem && (
-                <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+                /* Absolutely positioned so the hidden state costs the title no
+                   width — `opacity-0` alone would keep reserving ~60px and
+                   truncate every meeting name to a few characters. */
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded bg-surface px-0.5 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100">
                   <button
                     type="button"
                     onClick={() => handleEditStart(item.id, item.title)}
@@ -840,18 +881,18 @@ const Sidebar: React.FC = () => {
           }`}
       >
         {/*  Header with traffic light spacing */}
-        <div className="flex-shrink-0 h-20 flex items-center">
+        <div className="flex-shrink-0 flex items-center">
 
           {/* Title container */}
 
 
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {!isCollapsed && (
-              <div className="p-3">
+              <div className="px-3 pt-3 pb-2">
                 <Logo isCollapsed={isCollapsed} />
 
-                <div className="relative mb-1">
+                <div className="relative mt-2">
                   <InputGroup >
                     <InputGroupInput placeholder='Search meeting content...' value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
@@ -881,81 +922,82 @@ const Sidebar: React.FC = () => {
         </div>
 
         {/* Main content - scrollable area */}
-        <div className="flex-1 flex flex-col min-h-0">
+        {/* Main content — the only region allowed to flex. `overflow-hidden`
+            is a hard guarantee: even if a child misbehaves, it can never paint
+            into the footer strip below. */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Fixed navigation items */}
           <div className="flex-shrink-0">
             {!isCollapsed && (
               <>
-                <button
-                  onClick={() => router.push('/')}
-                  aria-current={pathname === '/' ? 'page' : undefined}
-                  className={`p-3 text-sm font-medium items-center hover:bg-accent/50 h-10 flex mx-3 mt-3 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/' ? 'bg-accent text-accent-foreground' : 'text-foreground'
-                    }`}
-                >
-                  <Home className="w-4 h-4 mr-2" />
-                  <span>Home</span>
-                </button>
-                <div className="mx-5 mt-4 mb-1 text-label text-muted-foreground">
-                  Meetings
+                <div className="px-3 pt-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => router.push('/')}
+                    aria-current={pathname === '/' ? 'page' : undefined}
+                    className={`${ROW_BASE} ${ROW_H} px-3 ${pathname === '/' ? ROW_ACTIVE : ROW_IDLE}`}
+                  >
+                    {pathname === '/' && ACTIVE_BAR}
+                    <Home className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Home</span>
+                  </button>
                 </div>
-                <button
-                  onClick={handleRecordingToggle}
-                  className="p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer hover:bg-accent/50 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Mic className="w-4 h-4 mr-2 text-destructive" />
-                  <span>Record / New Meeting</span>
-                </button>
-                <button
-                  onClick={() => router.push('/calendar')}
-                  aria-current={pathname === '/calendar' ? 'page' : undefined}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/calendar' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
-                    }`}
-                >
-                  <CalendarDays className="w-4 h-4 mr-2" />
-                  <span>Calendar</span>
-                </button>
-                <button
-                  onClick={() => router.push('/daily')}
-                  aria-current={pathname === '/daily' ? 'page' : undefined}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/daily' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
-                    }`}
-                >
-                  <Sun className="w-4 h-4 mr-2" />
-                  <span>Daily</span>
-                </button>
-                <div className="mx-5 mt-4 mb-1 text-label text-muted-foreground">
-                  Knowledge
+
+                <div className={SECTION_LABEL}>Meetings</div>
+                <div className="px-3 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={handleRecordingToggle}
+                    className={`${ROW_BASE} ${ROW_H} px-3 ${ROW_IDLE}`}
+                  >
+                    <Mic className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+                    <span className="truncate">Record / New Meeting</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/calendar')}
+                    aria-current={pathname === '/calendar' ? 'page' : undefined}
+                    className={`${ROW_BASE} ${ROW_H} px-3 ${pathname === '/calendar' ? ROW_ACTIVE : ROW_IDLE}`}
+                  >
+                    {pathname === '/calendar' && ACTIVE_BAR}
+                    <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Calendar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/daily')}
+                    aria-current={pathname === '/daily' ? 'page' : undefined}
+                    className={`${ROW_BASE} ${ROW_H} px-3 ${pathname === '/daily' ? ROW_ACTIVE : ROW_IDLE}`}
+                  >
+                    {pathname === '/daily' && ACTIVE_BAR}
+                    <Sun className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Daily</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => router.push('/context')}
-                  aria-current={pathname?.includes('/context') ? 'page' : undefined}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname?.includes('/context') ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
-                    }`}
-                >
-                  <LayoutList className="w-4 h-4 mr-2" />
-                  <span>Contexts</span>
-                </button>
-                <button
-                  onClick={() => router.push('/templates')}
-                  aria-current={pathname === '/templates' ? 'page' : undefined}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/templates' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
-                    }`}
-                >
-                  <LayoutTemplate className="w-4 h-4 mr-2" />
-                  <span>Templates</span>
-                </button>
-                <div className="mx-5 mt-4 mb-1 text-label text-muted-foreground">
-                  System
+
+                <div className={SECTION_LABEL}>Knowledge</div>
+                <div className="px-3 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => router.push('/context')}
+                    aria-current={pathname?.includes('/context') ? 'page' : undefined}
+                    className={`${ROW_BASE} ${ROW_H} px-3 ${pathname?.includes('/context') ? ROW_ACTIVE : ROW_IDLE}`}
+                  >
+                    {pathname?.includes('/context') && ACTIVE_BAR}
+                    <LayoutList className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Contexts</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/templates')}
+                    aria-current={pathname === '/templates' ? 'page' : undefined}
+                    className={`${ROW_BASE} ${ROW_H} px-3 ${pathname === '/templates' ? ROW_ACTIVE : ROW_IDLE}`}
+                  >
+                    {pathname === '/templates' && ACTIVE_BAR}
+                    <LayoutTemplate className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Templates</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => router.push('/settings')}
-                  aria-current={pathname === '/settings' ? 'page' : undefined}
-                  className={`p-3 text-sm font-medium items-center h-10 flex mx-3 mt-1 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pathname === '/settings' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/50'
-                    }`}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  <span>Settings</span>
-                </button>
               </>
             )}
           </div>
@@ -1014,24 +1056,33 @@ const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer — primary action, then secondary, then utilities.
+            The history list above is the only scrollable region, so these
+            controls are structurally guaranteed to stay above the fold. */}
         {!isCollapsed && (
-
-          <div className="flex-shrink-0 p-2 border-t border-border">
+          <div className="flex-shrink-0 border-t border-border bg-surface px-3 py-2.5 relative z-10">
             <button
               type="button"
               onClick={handleRecordingToggle}
               disabled={isRecording}
-              className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-primary-foreground bg-destructive hover:bg-destructive/90 disabled:bg-destructive/50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label={isRecording ? 'Recording in progress' : 'Start Recording'}
+              className={`flex w-full items-center justify-center gap-2 ${ROW_H_UTILITY} rounded-md px-3 text-sm font-medium transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                isRecording
+                  ? 'bg-destructive/10 text-destructive border border-destructive/40 cursor-default'
+                  : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              }`}
             >
               {isRecording ? (
                 <>
-                  <Square className="w-4 h-4 mr-2" aria-hidden="true" />
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-full bg-destructive motion-safe:animate-pulse motion-reduce:animate-none"
+                  />
                   <span>Recording in progress…</span>
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 mr-2" aria-hidden="true" />
+                  <Mic className="h-4 w-4" aria-hidden="true" />
                   <span>Start Recording</span>
                 </>
               )}
@@ -1041,30 +1092,31 @@ const Sidebar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => openImportDialog()}
-                className="w-full flex items-center justify-center px-3 py-2 mt-1 text-sm font-medium text-foreground bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className={`mt-1 flex w-full items-center gap-2 ${ROW_H_UTILITY} rounded-md px-3 text-sm transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${ROW_IDLE}`}
               >
-                <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
-                <span>Import Audio</span>
+                <Upload className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">Import Audio</span>
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => router.push('/settings')}
-              aria-current={pathname === '/settings' ? 'page' : undefined}
-              className={`w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                pathname === '/settings'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-foreground bg-muted hover:bg-muted/80'
-              }`}
-            >
-              <Settings className="w-4 h-4 mr-2" aria-hidden="true" />
-              <span>Settings</span>
-            </button>
-            <Info isCollapsed={isCollapsed} />
-            <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-muted-foreground">
-              v0.4.0
+            <div className="mt-1 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => router.push('/settings')}
+                aria-current={pathname === '/settings' ? 'page' : undefined}
+                className={`flex min-w-0 flex-1 items-center gap-2 ${ROW_H_UTILITY} rounded-md px-2.5 text-sm transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  pathname === '/settings' ? ROW_ACTIVE : ROW_IDLE
+                }`}
+              >
+                <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">Settings</span>
+              </button>
+              <Info isCollapsed={isCollapsed} />
             </div>
+
+            <p className="mt-2 text-center text-caption text-muted-foreground">
+              Recall v0.4.0
+            </p>
           </div>
         )}
       </div>
