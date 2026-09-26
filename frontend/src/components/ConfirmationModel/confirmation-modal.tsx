@@ -1,35 +1,62 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface ConfirmationModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   text: string;
   isOpen: boolean;
+  title?: string;
+  confirmLabel?: string;
 }
 
-export function ConfirmationModal({ onConfirm, onCancel, text, isOpen }: ConfirmationModalProps) {
-  if (!isOpen) return null;
-
+/**
+ * Destructive-action confirmation built on the Radix `Dialog` primitive so it
+ * inherits real dialog semantics (`role="alertdialog"`, `aria-modal`), focus
+ * trapping, Escape-to-dismiss, focus restoration, and semantic design tokens
+ * (light + dark) instead of hand-rolled hardcoded colors.
+ */
+export function ConfirmationModal({
+  onConfirm,
+  onCancel,
+  text,
+  isOpen,
+  title = 'Confirm Delete',
+  confirmLabel = 'Delete',
+}: ConfirmationModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-semibold mb-4">Confirm Delete</h2>
-        <p className="text-gray-600 mb-6">{text}</p>
-        <div className="flex justify-end space-x-4">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-          >
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <DialogContent className="sm:max-w-md" role="alertdialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-section-title text-foreground">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-destructive" aria-hidden="true" />
+            <span>{title}</span>
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">{text}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={onCancel}>
             Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-md transition-colors"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

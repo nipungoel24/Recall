@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface BackendInfo {
   id: string;
@@ -23,7 +24,6 @@ export function AudioBackendSelector({
   const [currentBackend, setCurrentBackend] = useState<string>('coreaudio');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showTooltip, setShowTooltip] = useState(false);
 
   // Load available backends and current selection
   useEffect(() => {
@@ -76,9 +76,15 @@ export function AudioBackendSelector({
   // Only show selector if there are multiple backends
   if (loading) {
     return (
-      <div className="animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
-        <div className="h-10 bg-gray-200 rounded"></div>
+      <div
+        className="animate-pulse motion-reduce:animate-none"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <span className="sr-only">Loading audio backends…</span>
+        <div className="h-4 bg-muted rounded w-32 mb-2" />
+        <div className="h-10 bg-muted rounded" />
       </div>
     );
   }
@@ -91,90 +97,91 @@ export function AudioBackendSelector({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-gray-700">
-          System Audio Backend
-        </label>
-        <div className="relative">
-          <button
-            type="button"
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <Info className="h-4 w-4" />
-          </button>
-          {showTooltip && (
-            <div className="absolute z-10 left-6 top-0 w-64 p-3 text-xs bg-gray-900 text-white rounded-lg shadow-lg">
-              <p className="font-semibold mb-1">Audio Capture Methods:</p>
-              <ul className="space-y-1">
-                {backends.map((backend) => (
-                  <li key={backend.id}>
-                    <span className="font-medium">{backend.name}:</span> {backend.description}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-gray-300">
-                Try different backends to find which works best for your system.
-              </p>
-            </div>
-          )}
-        </div>
+        <span className="text-sm font-medium text-foreground">System Audio Backend</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="About audio capture methods"
+              className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            >
+              <Info className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-64 p-3 text-xs">
+            <p className="font-semibold mb-1">Audio Capture Methods</p>
+            <ul className="space-y-1">
+              {backends.map((backend) => (
+                <li key={backend.id}>
+                  <span className="font-medium">{backend.name}:</span> {backend.description}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-muted-foreground">
+              Try different backends to find which works best for your system.
+            </p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {error && (
-        <div className="p-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md">
+        <div
+          role="alert"
+          className="p-2 text-xs text-destructive bg-destructive/5 border border-destructive/30 rounded-md"
+        >
           {error}
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-2" role="radiogroup" aria-label="System audio backend">
         {backends.map((backend) => {
           // Disable Core Audio option
           const isCoreAudio = backend.id === 'screencapturekit';
           const isDisabled = disabled || isCoreAudio;
+          const isSelected = currentBackend === backend.id;
 
           return (
             <label
               key={backend.id}
-              className={`flex items-start p-3 border rounded-lg transition-all ${
-                currentBackend === backend.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-300 hover:border-gray-400 bg-white'
+              className={`flex items-start p-3 border rounded-md transition-colors ${
+                isSelected
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-foreground/20 bg-background'
               } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
               <input
                 type="radio"
                 name="audioBackend"
                 value={backend.id}
-                checked={currentBackend === backend.id}
+                checked={isSelected}
                 onChange={() => handleBackendChange(backend.id)}
                 disabled={isDisabled}
-                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                className="mt-1 h-4 w-4 accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
               <div className="ml-3 flex-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm font-medium text-foreground">
                     {backend.name}
                   </span>
-                  {currentBackend === backend.id && (
-                    <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+                  {isSelected && (
+                    <span className="text-xs font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
                       Active
                     </span>
                   )}
                   {isCoreAudio && (
-                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                    <span className="text-xs font-medium text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-md">
                       Disabled
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-gray-600">{backend.description}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{backend.description}</p>
               </div>
             </label>
           );
         })}
       </div>
 
-      <div className="text-xs text-gray-500 space-y-1">
+      <div className="text-xs text-muted-foreground space-y-1">
         <p>• Backend selection only affects system audio capture</p>
         <p>• Microphone always uses the default method</p>
         <p>• Changes apply to new recording sessions</p>

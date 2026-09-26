@@ -33,7 +33,7 @@ function ContextsListPage() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-screen bg-gray-50 overflow-y-auto custom-scrollbar"
+      className="h-screen bg-background overflow-y-auto custom-scrollbar"
     >
       <div className="max-w-5xl mx-auto px-8 py-8">
         <PageHeader
@@ -54,19 +54,19 @@ function ContextsListPage() {
             ))}
           </div>
         ) : error ? (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center">
-            <p className="text-sm text-gray-500">
+          <div className="bg-surface rounded-lg border border-border shadow-sm p-8 text-center">
+            <p className="text-sm text-muted-foreground">
               Could not load Contexts.
               {error ? ` ${error}` : ''}
             </p>
           </div>
         ) : contexts.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-10 flex flex-col items-center text-center">
-            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
-              <FolderPlus className="w-8 h-8 text-blue-600" />
+          <div className="bg-surface rounded-lg border border-border shadow-sm p-10 flex flex-col items-center text-center">
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/5 mb-4">
+              <FolderPlus className="w-8 h-8 text-primary" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900">No Contexts yet</h2>
-            <p className="text-sm text-gray-500 mt-1 mb-6 max-w-md">
+            <h2 className="text-lg font-semibold text-foreground">No Contexts yet</h2>
+            <p className="text-sm text-muted-foreground mt-1 mb-6 max-w-md">
               Create a Context to group related meetings — like a project, client, or ongoing
               initiative — and keep their decisions, action items, and questions together.
             </p>
@@ -82,36 +82,36 @@ function ContextsListPage() {
                 key={context.id}
                 type="button"
                 onClick={() => router.push(routes.context(context.id))}
-                className="group text-left bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+                className="group text-left bg-surface rounded-xl border border-border shadow-sm p-5 hover:shadow-md hover:border-primary/30 transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-blue-100">
-                      <Layers className="w-4 h-4 text-blue-600" />
+                    <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-primary/10">
+                      <Layers className="w-4 h-4 text-primary" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="font-semibold text-gray-900 truncate group-hover:text-blue-700 transition-colors">
+                      <h2 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                         {context.name}
                       </h2>
                       {context.description ? (
-                        <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{context.description}</p>
+                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{context.description}</p>
                       ) : null}
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-2 text-xs text-gray-500">
+                <div className="mt-4 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+                    <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                       {meetingCountLabel(context.meetingCount)}
                     </span>
                     {context.memoryItemCount > 0 && (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+                      <span className="px-2 py-0.5 rounded-full bg-primary/5 text-primary font-medium">
                         {context.memoryItemCount} saved note{context.memoryItemCount === 1 ? '' : 's'}
                       </span>
                     )}
                   </div>
                   {lastActivityLabel(context.updatedAt) && (
-                    <span className="text-gray-400">{lastActivityLabel(context.updatedAt)}</span>
+                    <span className="text-muted-foreground">{lastActivityLabel(context.updatedAt)}</span>
                   )}
                 </div>
               </button>
@@ -149,8 +149,8 @@ export default function ContextPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-screen bg-gray-50">
-          <LoaderIcon className="animate-spin size-6 text-gray-400" />
+        <div className="flex items-center justify-center h-screen bg-background">
+          <LoaderIcon className="animate-spin motion-reduce:animate-none size-6 text-muted-foreground" />
         </div>
       }
     >

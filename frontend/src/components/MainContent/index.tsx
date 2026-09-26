@@ -11,14 +11,14 @@ const MainContent: React.FC<MainContentProps> = ({ children }) => {
   const { isCollapsed } = useSidebar();
 
   return (
-    <main 
-      className={`flex-1 min-w-0 bg-background transition-all duration-300 ${
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className={`flex-1 min-w-0 bg-background transition-[margin] duration-300 motion-reduce:transition-none focus-visible:outline-none ${
         isCollapsed ? 'ml-16' : 'ml-64'
       }`}
     >
-      <div className="pl-8 pr-6 py-6">
-        {children}
-      </div>
+      <div className="px-8 py-6">{children}</div>
     </main>
   );
 };

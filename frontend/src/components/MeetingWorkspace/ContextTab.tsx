@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { contextService } from '@/services/contextService';
 import { routes } from '@/lib/routes';
+import { Button } from '@/components/ui/button';
 import {
   provenanceLinkForItem,
   rankContextMemoryItems,
@@ -153,11 +154,11 @@ export function ContextTab({ meeting }: ContextTabProps) {
       case 'decision':
         return <Bookmark className="h-3.5 w-3.5 text-primary" />;
       case 'action':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-amber-500" />;
+        return <CheckCircle2 className="h-3.5 w-3.5 text-warning" />;
       case 'question':
-        return <HelpCircle className="h-3.5 w-3.5 text-sky-500" />;
+        return <HelpCircle className="h-3.5 w-3.5 text-primary" />;
       case 'fact':
-        return <BookOpen className="h-3.5 w-3.5 text-emerald-500" />;
+        return <BookOpen className="h-3.5 w-3.5 text-success" />;
       case 'note':
       default:
         return <FileText className="h-3.5 w-3.5 text-muted-foreground" />;
@@ -169,14 +170,14 @@ export function ContextTab({ meeting }: ContextTabProps) {
     const lower = status.toLowerCase();
     let badgeClass = 'bg-muted text-muted-foreground border-border';
     if (lower === 'open') {
-      badgeClass = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      badgeClass = 'bg-warning/10 text-warning border-warning/20';
     } else if (lower === 'done' || lower === 'resolved') {
-      badgeClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+      badgeClass = 'bg-success/10 text-success border-success/20';
     } else if (lower === 'blocked') {
       badgeClass = 'bg-destructive/10 text-destructive border-destructive/20';
     }
     return (
-      <span className={`px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded border ${badgeClass}`}>
+      <span className={`px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-md border ${badgeClass}`}>
         {status}
       </span>
     );
@@ -196,18 +197,14 @@ export function ContextTab({ meeting }: ContextTabProps) {
   if (contextError) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-6 text-center bg-background">
-        <div role="alert" className="max-w-md w-full p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive flex flex-col items-center gap-3">
+        <div role="alert" className="max-w-md w-full p-4 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive flex flex-col items-center gap-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
             <span className="text-sm font-medium">{contextError}</span>
           </div>
-          <button
-            type="button"
-            onClick={loadContexts}
-            className="px-4 py-1.5 text-xs font-medium border border-destructive/40 bg-background rounded-md hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={loadContexts}>
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -217,8 +214,8 @@ export function ContextTab({ meeting }: ContextTabProps) {
     <div className="h-full flex flex-col bg-background">
       <div className="p-4 border-b border-border bg-background flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-medium text-foreground">Context Membership & Continuous Memory</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <h2 className="text-section-title text-foreground">Context Membership &amp; Continuous Memory</h2>
+          <p className="text-caption text-muted-foreground mt-0.5">
             Link this meeting to context threads to build cumulative cross-meeting knowledge.
           </p>
         </div>
@@ -258,7 +255,7 @@ export function ContextTab({ meeting }: ContextTabProps) {
               return (
                 <div
                   key={context.id}
-                  className={`rounded-lg border transition-all ${
+                  className={`rounded-lg border transition-colors ${
                     isSelected ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent/40'
                   }`}
                 >
@@ -279,16 +276,16 @@ export function ContextTab({ meeting }: ContextTabProps) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                        <span className="px-2 py-0.5 rounded-full bg-muted">
+                        <span className="px-2 py-0.5 rounded-md border border-border bg-muted text-muted-foreground">
                           {context.meetingCount} meeting{context.meetingCount !== 1 ? 's' : ''}
                         </span>
                         {context.memoryItemCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                          <span className="px-2 py-0.5 rounded-md border border-primary/20 bg-primary/10 text-primary">
                             {context.memoryItemCount} memor{context.memoryItemCount === 1 ? 'y' : 'ies'}
                           </span>
                         )}
                         {isInContext && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-medium">
+                          <span className="px-2 py-0.5 rounded-md border border-success/20 bg-success/10 text-success">
                             Member
                           </span>
                         )}
@@ -305,8 +302,8 @@ export function ContextTab({ meeting }: ContextTabProps) {
                         >
                           {isRemoving === context.id ? (
                             <>
-                              <Loader2 className="h-3 w-3 animate-spin mr-1 inline" />
-                              Removing...
+                              <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none mr-1 inline" />
+                              Removing…
                             </>
                           ) : (
                             'Remove'
@@ -321,8 +318,8 @@ export function ContextTab({ meeting }: ContextTabProps) {
                         >
                           {isAdding === context.id ? (
                             <>
-                              <Loader2 className="h-3 w-3 animate-spin mr-1 inline" />
-                              Adding...
+                              <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none mr-1 inline" />
+                              Adding…
                             </>
                           ) : (
                             'Add Meeting'
@@ -336,7 +333,7 @@ export function ContextTab({ meeting }: ContextTabProps) {
                     <div className="border-t border-border px-4 py-4 space-y-5 bg-background/50">
                       {isLoadingDetails ? (
                         <div className="py-6 flex items-center justify-center gap-2 text-muted-foreground text-sm" role="status">
-                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none text-primary" />
                           <span>Loading context memory and meetings...</span>
                         </div>
                       ) : (
@@ -438,7 +435,7 @@ export function ContextTab({ meeting }: ContextTabProps) {
                                       </span>
                                     </div>
                                     {m.id === meeting.id && (
-                                      <span className="px-2 py-0.5 text-[10px] font-semibold text-primary bg-primary/15 rounded-full flex-shrink-0">
+                                      <span className="px-2 py-0.5 text-[10px] font-semibold text-primary bg-primary/10 rounded-full flex-shrink-0">
                                         Current
                                       </span>
                                     )}

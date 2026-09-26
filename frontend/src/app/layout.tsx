@@ -260,6 +260,12 @@ export default function RootLayout({
                                 <OnboardingFlow onComplete={handleOnboardingComplete} />
                               ) : (
                                 <div className="flex">
+                                  <a
+                                    href="#main-content"
+                                    className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-sm"
+                                  >
+                                    Skip to content
+                                  </a>
                                   <Sidebar />
                                   <MainContent>{children}</MainContent>
                                 </div>
@@ -282,7 +288,7 @@ export default function RootLayout({
             </TranscriptProvider>
           </RecordingStateProvider>
 
-        <Toaster position="bottom-center" richColors closeButton />
+        <Toaster position="bottom-center" offset="5rem" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

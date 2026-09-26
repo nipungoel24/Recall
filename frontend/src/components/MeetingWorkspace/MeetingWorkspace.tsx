@@ -12,6 +12,18 @@ import {
   Layers,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+
+/** Shared tab-trigger treatment so density/active state stay consistent across all six sections. */
+const TAB_TRIGGER_CLASS =
+  'px-3 py-1 text-xs font-medium transition-colors data-[state=active]:bg-background ' +
+  'data-[state=active]:text-foreground data-[state=active]:font-semibold ' +
+  'data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 ' +
+  'focus-visible:ring-ring';
+
+/** Shared panel treatment: full-height flex column, no tab-stop focus ring on the container. */
+const TAB_PANEL_CLASS =
+  'flex-1 overflow-hidden m-0 flex-col data-[state=active]:flex ' +
+  'data-[state=inactive]:hidden focus-visible:outline-none focus-visible:ring-0';
 import { routes } from '@/lib/routes';
 import { Summary, SummaryResponse, TranscriptSegmentData } from '@/types';
 import { toast } from 'sonner';
@@ -191,9 +203,15 @@ export function MeetingWorkspace({
     : '';
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+    <Tabs
+      value={activeTab}
+      onValueChange={(val) => setActiveTab(val as WorkspaceSection)}
+      className="flex flex-col h-screen bg-background text-foreground overflow-hidden"
+    >
+      <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* 1. Desktop Orientation & Navigation Header */}
       <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 gap-4">
+        <h1 className="sr-only">{meeting.title}</h1>
         {/* Left: Home navigation and meeting identity */}
         <div className="flex items-center gap-3 min-w-0">
           <button
@@ -223,69 +241,43 @@ export function MeetingWorkspace({
         </div>
 
         {/* Right: Six Workspace Tabs Navigation */}
-        <Tabs
-          value={activeTab}
-          onValueChange={(val) => setActiveTab(val as WorkspaceSection)}
-          className="flex-shrink-0"
+        <TabsList
+          aria-label="Meeting workspace sections"
+          className="h-9 bg-muted p-1 rounded-md flex-shrink-0"
         >
-          <TabsList className="h-9 bg-muted p-1 rounded-md">
-            <TabsTrigger
-              value="overview"
-              className="px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="summary"
-              className="px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <FileText className="h-3.5 w-3.5 mr-1.5" />
-              Summary
-            </TabsTrigger>
-            <TabsTrigger
-              value="transcript"
-              className="px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-              Transcript
-            </TabsTrigger>
-            <TabsTrigger
-              value="tasks"
-              className="px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <CheckSquare2 className="h-3.5 w-3.5 mr-1.5" />
-              Tasks
-            </TabsTrigger>
-            <TabsTrigger
-              value="notes"
-              className="px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <NotebookPen className="h-3.5 w-3.5 mr-1.5" />
-              Notes
-            </TabsTrigger>
-            <TabsTrigger
-              value="context"
-              className="px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Layers className="h-3.5 w-3.5 mr-1.5" />
-              Context
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+          <TabsTrigger value="overview" className={TAB_TRIGGER_CLASS}>
+            <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="summary" className={TAB_TRIGGER_CLASS}>
+            <FileText className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Summary
+          </TabsTrigger>
+          <TabsTrigger value="transcript" className={TAB_TRIGGER_CLASS}>
+            <MessageSquare className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Transcript
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className={TAB_TRIGGER_CLASS}>
+            <CheckSquare2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Tasks
+          </TabsTrigger>
+          <TabsTrigger value="notes" className={TAB_TRIGGER_CLASS}>
+            <NotebookPen className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Notes
+          </TabsTrigger>
+          <TabsTrigger value="context" className={TAB_TRIGGER_CLASS}>
+            <Layers className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Context
+          </TabsTrigger>
+        </TabsList>
       </header>
 
       {/* 2. Workspace Body & Active Tab Panels */}
       <main className="flex-1 overflow-hidden relative flex flex-col">
-        <Tabs
-          value={activeTab}
-          onValueChange={(val) => setActiveTab(val as WorkspaceSection)}
-          className="flex-1 flex flex-col overflow-hidden m-0"
-        >
           {/* Overview */}
           <TabsContent
             value="overview"
-            className="flex-1 overflow-hidden m-0 data-[state=active]:flex data-[state=inactive]:hidden flex-col"
+            className={TAB_PANEL_CLASS}
           >
             <OverviewTab
               meeting={meeting}
@@ -298,7 +290,7 @@ export function MeetingWorkspace({
           {/* Summary */}
           <TabsContent
             value="summary"
-            className="flex-1 overflow-hidden m-0 data-[state=active]:flex data-[state=inactive]:hidden flex-col"
+            className={TAB_PANEL_CLASS}
           >
             <SummaryTab
               meeting={meeting}
@@ -342,7 +334,7 @@ export function MeetingWorkspace({
           {/* Transcript */}
           <TabsContent
             value="transcript"
-            className="flex-1 overflow-hidden m-0 data-[state=active]:flex data-[state=inactive]:hidden flex-col"
+            className={TAB_PANEL_CLASS}
           >
             <TranscriptTab
               meeting={meeting}
@@ -371,7 +363,7 @@ export function MeetingWorkspace({
           {/* Tasks */}
           <TabsContent
             value="tasks"
-            className="flex-1 overflow-hidden m-0 data-[state=active]:flex data-[state=inactive]:hidden flex-col"
+            className={TAB_PANEL_CLASS}
           >
             <TasksTab
               meeting={meeting}
@@ -383,20 +375,17 @@ export function MeetingWorkspace({
           {/* Notes */}
           <TabsContent
             value="notes"
-            className="flex-1 overflow-hidden m-0 data-[state=active]:flex data-[state=inactive]:hidden flex-col"
+            className={TAB_PANEL_CLASS}
           >
             <NotesTab meeting={meeting} />
           </TabsContent>
 
           {/* Context */}
-          <TabsContent
-            value="context"
-            className="flex-1 overflow-hidden m-0 data-[state=active]:flex data-[state=inactive]:hidden flex-col"
-          >
+          <TabsContent value="context" className={TAB_PANEL_CLASS}>
             <ContextTab meeting={meeting} />
           </TabsContent>
-        </Tabs>
       </main>
-    </div>
+      </div>
+    </Tabs>
   );
 }

@@ -157,9 +157,10 @@ describe('Phase 5 Gate 6 — Notes Persistence', () => {
 
         it('handles saving state with disabled button and spinner', () => {
             assert.ok(code.includes('isSaving'), 'must have isSaving state');
-            assert.ok(code.includes('disabled={isSaving}'), 'must disable button while saving');
-            assert.ok(code.includes('Saving...'), 'must show Saving... text');
+            assert.ok(/disabled=\{isSaving[^}]*\}/.test(code), 'must disable button while saving');
+            assert.ok(code.includes('Saving'), 'must show saving text');
             assert.ok(code.includes('Loader2'), 'must show spinner while saving');
+            assert.ok(code.includes('motion-reduce:animate-none'), 'spinner must respect reduced motion');
         });
 
         it('shows toast on save success and error', () => {
@@ -174,6 +175,27 @@ describe('Phase 5 Gate 6 — Notes Persistence', () => {
             assert.ok(code.includes('setNotesJson'), 'onSave must update notesJson');
         });
 
+        it('pulls the live editor document before persisting (no stale save)', () => {
+            assert.ok(code.includes('editorRef'), 'must hold the editor ref');
+            assert.ok(code.includes('editorRef.current'), 'must read the editor ref');
+            assert.ok(
+                /editor\?\.isDirty[\s\S]{0,120}saveSummary\(\)/.test(code),
+                'must flush the dirty editor via saveSummary() before invoking the save API'
+            );
+        });
+
+        it('parses persisted BlockNote JSON defensively instead of during render', () => {
+            assert.ok(!/summaryData=\{\{[^}]*JSON\.parse\(/.test(code), 'must not JSON.parse inside the summaryData prop');
+            assert.ok(code.includes('JSON.parse(rawJson)'), 'must parse persisted JSON inside a try/catch');
+            assert.ok(code.includes('Array.isArray(parsed)'), 'must validate the parsed shape');
+        });
+
+        it('renders an empty state instead of a blank editor', () => {
+            assert.ok(code.includes('hasNotes'), 'must derive an explicit has-content flag');
+            assert.ok(code.includes('No notes yet'), 'must show a truthful empty state');
+            assert.ok(code.includes('NotebookPen'), 'empty state must carry an icon');
+        });
+
         it('uses semantic design tokens (no hardcoded gray colors)', () => {
             assert.ok(!code.includes('bg-gray-'), 'must not use hardcoded gray backgrounds');
             assert.ok(!code.includes('text-gray-'), 'must not use hardcoded gray text');
@@ -181,8 +203,15 @@ describe('Phase 5 Gate 6 — Notes Persistence', () => {
             assert.ok(code.includes('bg-background'), 'must use semantic bg-background');
             assert.ok(code.includes('text-muted-foreground'), 'must use semantic text-muted-foreground');
             assert.ok(code.includes('border-border'), 'must use semantic border-border');
-            assert.ok(code.includes('bg-primary'), 'must use semantic bg-primary');
-            assert.ok(code.includes('text-primary-foreground'), 'must use semantic text-primary-foreground');
+            assert.ok(code.includes('bg-surface'), 'must use semantic bg-surface');
+            assert.ok(code.includes('text-destructive'), 'must use semantic destructive token');
+        });
+
+        it('delegates button styling to the shared Button primitive', () => {
+            assert.ok(
+                code.includes("from '@/components/ui/button'"),
+                'must import the shared Button primitive rather than hand-rolling button styles'
+            );
         });
 
         it('has no alert/confirm/window.prompt calls', () => {
@@ -196,8 +225,16 @@ describe('Phase 5 Gate 6 — Notes Persistence', () => {
             assert.ok(!code.includes('SELECT * FROM'), 'must not have raw SQL');
         });
 
-        it('has accessible toolbar button with focus-visible', () => {
-            assert.ok(code.includes('focus-visible:ring-2') || code.includes('focus-visible:ring-ring'), 'must have focus-visible styles');
+        it('announces loading and save state to assistive technology', () => {
+            assert.ok(code.includes('aria-live="polite"'), 'must expose a polite live region');
+            assert.ok(code.includes('role="status"'), 'loading/save state must use role=status');
+            assert.ok(code.includes('role="alert"'), 'error state must use role=alert');
+            assert.ok(code.includes('Unsaved changes'), 'must surface a truthful dirty indicator');
+        });
+
+        it('constrains the editor to a readable measure', () => {
+            assert.ok(code.includes('max-w-4xl'), 'editor must use an editorial max width');
+            assert.ok(code.includes('mx-auto'), 'editor must be centred within the measure');
         });
     });
 

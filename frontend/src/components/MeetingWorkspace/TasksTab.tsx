@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CheckSquare2, Loader2, MessageSquare, AlertCircle, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { meetingIntelligenceService } from '@/services/meetingIntelligenceService';
 import type { MeetingIntelligence, MeetingIntelligenceItem } from '@/types';
 
@@ -86,24 +87,21 @@ export function TasksTab({
     );
   }
 
-  // 2. Error State
-  if (error) {
+  // 2. Error State — only take over the panel when there is nothing to preserve.
+  //    Already-loaded action items must survive a failed refresh.
+  if (error && tasks.length === 0 && intelligence === null) {
     return (
       <div role="alert" className="flex-1 flex items-center justify-center p-6 bg-background">
         <div className="text-center max-w-md space-y-4">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive mx-auto">
-            <AlertCircle className="h-6 w-6" />
+            <AlertCircle className="h-6 w-6" aria-hidden="true" />
           </div>
-          <h3 className="text-base font-semibold text-foreground">Tasks Unavailable</h3>
+          <h2 className="text-base font-semibold text-foreground">Tasks Unavailable</h2>
           <p className="text-sm text-muted-foreground">{error}</p>
           <div className="pt-2">
-            <button
-              type="button"
-              onClick={loadTasks}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
+            <Button type="button" onClick={loadTasks}>
               Retry
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -154,7 +152,7 @@ export function TasksTab({
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-background">
       <div className="border-b border-border pb-4">
-        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+        <h2 className="text-page-title text-foreground flex items-center gap-2">
           <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
           Action Items
           {tasks.length > 0 && (
@@ -165,6 +163,19 @@ export function TasksTab({
           Action items are AI-extracted from meeting intelligence and may require verification.
         </p>
       </div>
+
+      {/* Non-destructive refresh failure: existing items stay on screen. */}
+      {error && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2"
+        >
+          <p className="text-xs text-destructive">{error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={loadTasks}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {tasks.length === 0 ? (
         // 4a. Intelligence ran but found no action items
@@ -188,7 +199,7 @@ export function TasksTab({
             return (
               <div
                 key={task.id}
-                className="p-4 rounded-lg border border-border bg-surface hover:border-border-strong transition-colors flex items-start justify-between gap-4"
+                className="p-4 rounded-lg border border-border bg-surface hover:border-foreground/20 transition-colors flex items-start justify-between gap-4"
               >
                 <div className="flex items-start gap-3 min-w-0">
                   <div className="mt-0.5 text-muted-foreground shrink-0">

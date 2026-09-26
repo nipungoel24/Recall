@@ -110,31 +110,31 @@ export function MeetingCard({ meeting, onOpen, defaultExpanded = false }: Meetin
   }, [meeting.id, transcripts.length]);
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+    <div className="border border-border rounded-lg bg-surface overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-background transition-colors"
         aria-expanded={expanded}
       >
         {expanded ? (
-          <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         ) : (
-          <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         )}
-        <div className="w-16 flex-shrink-0 flex items-center gap-1.5 text-sm font-medium text-gray-700 tabular-nums">
+        <div className="w-16 flex-shrink-0 flex items-center gap-1.5 text-sm font-medium text-foreground tabular-nums">
           {timeLabel ? (
             <>
-              <Clock className="h-3.5 w-3.5 text-gray-400" />
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
               {timeLabel}
             </>
           ) : (
-            <span className="text-gray-400">--:--</span>
+            <span className="text-muted-foreground">--:--</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="truncate font-medium text-gray-900">{meeting.title}</div>
-          <div className="text-xs text-gray-500">
+          <div className="truncate font-medium text-foreground">{meeting.title}</div>
+          <div className="text-xs text-muted-foreground">
             {meeting.durationSeconds > 0
               ? formatDuration(meeting.durationSeconds)
               : meeting.transcriptCount === 0
@@ -145,7 +145,7 @@ export function MeetingCard({ meeting, onOpen, defaultExpanded = false }: Meetin
           </div>
         </div>
         {meeting.transcriptCount !== null && meeting.transcriptCount > 0 && (
-          <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-400 flex-shrink-0">
+          <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
             <FileText className="h-3.5 w-3.5" />
             {meeting.transcriptCount}
           </span>
@@ -153,28 +153,28 @@ export function MeetingCard({ meeting, onOpen, defaultExpanded = false }: Meetin
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-4">
+        <div className="border-t border-border px-4 py-3 space-y-4">
           {/* Summary preview */}
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
               Summary
             </div>
             {summary.state === 'loading' && (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                 Loading summary...
               </div>
             )}
             {summary.state === 'error' && (
-              <p className="text-sm text-red-600">{summary.message}</p>
+              <p className="text-sm text-destructive">{summary.message}</p>
             )}
             {summary.state === 'none' && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 No summary yet. Open the meeting to generate one.
               </p>
             )}
             {summary.state === 'blocknote' && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 Summary available. Open the meeting to view it.
               </p>
             )}
@@ -188,9 +188,9 @@ export function MeetingCard({ meeting, onOpen, defaultExpanded = false }: Meetin
           {/* Transcript preview */}
           {meeting.transcriptCount !== 0 && (
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                 Transcript preview
-                <span className="ml-1 font-normal text-gray-400">
+                <span className="ml-1 font-normal text-muted-foreground">
                   {transcripts.length > 0
                     ? `(${transcripts.length} of ${transcriptTotal})`
                     : meeting.transcriptCount !== null
@@ -199,21 +199,21 @@ export function MeetingCard({ meeting, onOpen, defaultExpanded = false }: Meetin
                 </span>
               </div>
               {transcriptsLoading && transcripts.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   Loading transcript preview...
                 </div>
               ) : !transcriptsLoading && transcripts.length === 0 ? (
-                <p className="text-sm text-gray-500">No transcripts yet.</p>
+                <p className="text-sm text-muted-foreground">No transcripts yet.</p>
               ) : (
                 <>
                   <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                     {transcripts.map((segment) => (
                       <div key={segment.id} className="flex gap-2 text-sm">
-                        <span className="text-gray-400 tabular-nums flex-shrink-0 w-16 text-right">
+                        <span className="text-muted-foreground tabular-nums flex-shrink-0 w-16 text-right">
                           {segment.timestamp}
                         </span>
-                        <span className="text-gray-700">{segment.text}</span>
+                        <span className="text-foreground">{segment.text}</span>
                       </div>
                     ))}
                   </div>
@@ -225,7 +225,7 @@ export function MeetingCard({ meeting, onOpen, defaultExpanded = false }: Meetin
                       onClick={loadMoreTranscripts}
                       disabled={transcriptsLoading}
                     >
-                      {transcriptsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                      {transcriptsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none mr-1" aria-hidden="true" />}
                       Load more
                     </Button>
                   )}

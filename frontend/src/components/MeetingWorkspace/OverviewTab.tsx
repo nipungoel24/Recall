@@ -215,12 +215,12 @@ export function OverviewTab({
 
   // 4. Populated Overview
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-background text-foreground">
+    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-background text-foreground">
       {/* Overview Header & Metadata */}
       <div className="border-b border-border pb-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">{meeting.title}</h1>
+            <h2 className="text-page-title text-foreground">{meeting.title}</h2>
             <p className="text-xs text-muted-foreground mt-1">
               Held on {formatDate(meeting.created_at)}
             </p>
@@ -251,7 +251,7 @@ export function OverviewTab({
       {/* Abstract / What Happened */}
       {intelligence?.abstract_text && (
         <section aria-labelledby="overview-abstract-heading" className="space-y-2">
-          <h2 id="overview-abstract-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <h2 id="overview-abstract-heading" className="text-label text-muted-foreground flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />
             Executive Summary
           </h2>
@@ -266,7 +266,7 @@ export function OverviewTab({
         {/* Decisions */}
         {decisions.length > 0 && (
           <section aria-labelledby="overview-decisions-heading" className="space-y-3">
-            <h2 id="overview-decisions-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <h2 id="overview-decisions-heading" className="text-label text-muted-foreground flex items-center gap-1.5">
               <Bookmark className="h-3.5 w-3.5" />
               Decisions ({decisions.length})
             </h2>
@@ -286,7 +286,7 @@ export function OverviewTab({
         {/* Action Items */}
         {actions.length > 0 && (
           <section aria-labelledby="overview-actions-heading" className="space-y-3">
-            <h2 id="overview-actions-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <h2 id="overview-actions-heading" className="text-label text-muted-foreground flex items-center gap-1.5">
               <CheckSquare2 className="h-3.5 w-3.5" />
               Actions Required ({actions.length})
             </h2>
@@ -306,7 +306,7 @@ export function OverviewTab({
         {/* Key Topics */}
         {topics.length > 0 && (
           <section aria-labelledby="overview-topics-heading" className="space-y-3">
-            <h2 id="overview-topics-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <h2 id="overview-topics-heading" className="text-label text-muted-foreground flex items-center gap-1.5">
               <Hash className="h-3.5 w-3.5" />
               Topics Discussed ({topics.length})
             </h2>
@@ -326,7 +326,7 @@ export function OverviewTab({
         {/* Questions */}
         {questions.length > 0 && (
           <section aria-labelledby="overview-questions-heading" className="space-y-3">
-            <h2 id="overview-questions-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <h2 id="overview-questions-heading" className="text-label text-muted-foreground flex items-center gap-1.5">
               <HelpCircle className="h-3.5 w-3.5" />
               Open Questions ({questions.length})
             </h2>
@@ -346,7 +346,7 @@ export function OverviewTab({
         {/* Facts & Follow-ups */}
         {factsAndFollowUps.length > 0 && (
           <section aria-labelledby="overview-facts-heading" className="space-y-3 md:col-span-2">
-            <h2 id="overview-facts-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <h2 id="overview-facts-heading" className="text-label text-muted-foreground flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5" />
               Additional Observations ({factsAndFollowUps.length})
             </h2>
@@ -377,7 +377,7 @@ function ItemCard({ item, hasValidEvidence, onNavigateToEvidence }: ItemCardProp
   const canNavigate = hasValidEvidence ? hasValidEvidence(item) : Boolean(item.sources && item.sources.length > 0);
 
   return (
-    <div className="p-3 rounded-lg border border-border bg-surface hover:border-border-strong transition-colors flex items-start justify-between gap-3">
+    <div className="p-4 rounded-lg border border-border bg-surface hover:border-foreground/20 transition-colors flex items-start justify-between gap-4">
       <div className="flex-1 min-w-0 space-y-1">
         <p className="text-sm text-foreground leading-snug">{item.text}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

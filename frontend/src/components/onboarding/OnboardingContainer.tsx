@@ -43,7 +43,7 @@ export function OnboardingContainer({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 overflow-hidden">
+    <div className="fixed inset-0 bg-background flex items-center justify-center z-50 overflow-hidden">
       <div className={cn('w-full max-w-2xl h-full max-h-screen flex flex-col px-6 py-6', className)}>
         {/* Progress Indicator with Navigation - Fixed */}
         {step && !hideProgress && (
@@ -54,27 +54,29 @@ export function OnboardingContainer({
                 <button
                   onClick={handlePrevious}
                   disabled={!canGoPrevious || step === 1}
+                  aria-label="Previous step"
                   className={cn(
-                    'pointer-events-auto w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center transition-all duration-200',
+                    'pointer-events-auto w-8 h-8 rounded-full bg-surface border border-border shadow-sm flex items-center justify-center transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none',
                     canGoPrevious && step !== 1
-                      ? 'hover:bg-gray-50 hover:shadow-md hover:scale-110 text-gray-700'
+                      ? 'hover:bg-muted hover:shadow-md text-foreground'
                       : 'opacity-0 cursor-not-allowed'
                   )}
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                 </button>
 
                 <button
                   onClick={handleNext}
                   disabled={!canGoNext || step === totalSteps}
+                  aria-label="Next step"
                   className={cn(
-                    'pointer-events-auto w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center transition-all duration-200',
+                    'pointer-events-auto w-8 h-8 rounded-full bg-surface border border-border shadow-sm flex items-center justify-center transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none',
                     canGoNext && step !== totalSteps
-                      ? 'hover:bg-gray-50 hover:shadow-md hover:scale-110 text-gray-700'
+                      ? 'hover:bg-muted hover:shadow-md text-foreground'
                       : 'opacity-0 cursor-not-allowed'
                   )}
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -86,9 +88,9 @@ export function OnboardingContainer({
 
         {/* Header - Fixed */}
         <div className="mb-4 text-center space-y-3 flex-shrink-0">
-          <h1 className="text-4xl font-semibold text-gray-900 animate-fade-in-up">{title}</h1>
+          <h1 className="text-4xl font-semibold text-foreground animate-fade-in-up motion-reduce:animate-none">{title}</h1>
           {description && (
-            <p className="text-base text-gray-600 max-w-md mx-auto animate-fade-in-up delay-75">
+            <p className="text-base text-muted-foreground max-w-md mx-auto animate-fade-in-up delay-75 motion-reduce:animate-none">
               {description}
             </p>
           )}

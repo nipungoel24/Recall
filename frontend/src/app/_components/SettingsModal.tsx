@@ -4,6 +4,14 @@ import { DeviceSelection } from "@/components/DeviceSelection";
 import { LanguageSelection } from "@/components/LanguageSelection";
 import { TranscriptSettings } from "@/components/TranscriptSettings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useConfig } from "@/contexts/ConfigContext";
 import { useRecordingState } from "@/contexts/RecordingStateContext";
@@ -15,6 +23,11 @@ type modalType = "modelSettings" | "deviceSettings" | "languageSettings" | "mode
  *
  * All settings modals consolidated into a single component.
  * Uses ConfigContext and RecordingStateContext internally - no prop drilling needed!
+ *
+ * Every modal is built on the shared Radix `Dialog` primitive so that focus is
+ * trapped, Escape and scrim clicks dismiss, focus returns to the trigger on
+ * close, and the dialog is correctly exposed as `role="dialog" aria-modal="true"`
+ * with an accessible name.
  */
 
 interface SettingsModalsProps {
@@ -33,6 +46,9 @@ interface SettingsModalsProps {
   };
   onClose: (name: modalType) => void;
 }
+
+const SELECT_CLASS =
+  "px-3 py-2 text-sm bg-surface border border-border rounded-md shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring";
 
 export function SettingsModals({
   modals,
@@ -60,279 +76,269 @@ export function SettingsModals({
 
   return <>
     {/* Legacy Settings Modal */}
-    {modals.modelSettings && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="flex justify-between items-center p-6 border-b">
-            <h3 className="text-xl font-semibold text-gray-900">Preferences</h3>
-            <button
-              onClick={() => onClose("modelSettings")
-              }
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <Dialog
+      open={modals.modelSettings}
+      onOpenChange={(open) => { if (!open) onClose("modelSettings"); }}
+    >
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="p-6 border-b">
+          <DialogTitle className="text-xl font-semibold text-foreground">
+            Preferences
+          </DialogTitle>
+        </DialogHeader>
 
-          {/* Content - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-8">
-            {/* General Preferences Section */}
-            <PreferenceSettings />
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          {/* General Preferences Section */}
+          <PreferenceSettings />
 
-            {/* Divider */}
-            <div className="border-t pt-8">
-              <h4 className="text-lg font-semibold text-gray-900 mb-4">AI Model Configuration</h4>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Summarization Model
-                  </label>
-                  <div className="flex space-x-2">
-                    <select
-                      className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      value={modelConfig.provider}
-                      onChange={(e) => {
-                        const provider = e.target.value as ModelConfig['provider'];
-                        setModelConfig({
-                          ...modelConfig,
-                          provider,
-                          model: modelOptions[provider][0]
-                        });
-                      }}
-                    >
-                      <option value="builtin-ai">Built-in AI</option>
-                      <option value="claude">Claude</option>
-                      <option value="groq">Groq</option>
-                      <option value="ollama">Ollama</option>
-                      <option value="openrouter">OpenRouter</option>
-                      <option value="openai">OpenAI</option>
-                    </select>
+          {/* Divider */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold text-foreground mb-4">AI Model Configuration</h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="summarization-provider" className="block text-sm font-medium text-foreground mb-1">
+                  Summarization Model
+                </label>
+                <div className="flex space-x-2">
+                  <select
+                    id="summarization-provider"
+                    className={SELECT_CLASS}
+                    value={modelConfig.provider}
+                    onChange={(e) => {
+                      const provider = e.target.value as ModelConfig['provider'];
+                      setModelConfig({
+                        ...modelConfig,
+                        provider,
+                        model: modelOptions[provider][0]
+                      });
+                    }}
+                  >
+                    <option value="builtin-ai">Built-in AI</option>
+                    <option value="claude">Claude</option>
+                    <option value="groq">Groq</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
 
-                    <select
-                      className="flex-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      value={modelConfig.model}
-                      onChange={(e) => setModelConfig((prev: ModelConfig) => ({ ...prev, model: e.target.value }))}
-                    >
-                      {modelOptions[modelConfig.provider].map((model: string) => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    aria-label="Summarization model"
+                    className={`flex-1 ${SELECT_CLASS}`}
+                    value={modelConfig.model}
+                    onChange={(e) => setModelConfig((prev: ModelConfig) => ({ ...prev, model: e.target.value }))}
+                  >
+                    {modelOptions[modelConfig.provider].map((model: string) => (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                {modelConfig.provider === 'ollama' && (
-                  <div>
-                    <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
-                    {error && (
-                      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                        {error}
-                      </div>
-                    )}
-                    <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
-                      {models.map((model) => (
-                        <div
+              </div>
+              {modelConfig.provider === 'ollama' && (
+                <div>
+                  <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
+                  {error && (
+                    <div
+                      role="alert"
+                      className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-md mb-4"
+                    >
+                      {error}
+                    </div>
+                  )}
+                  <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
+                    {models.map((model) => {
+                      const isSelected = modelConfig.model === model.name;
+                      return (
+                        <button
+                          type="button"
                           key={model.id}
-                          className={`bg-white p-4 rounded-lg shadow cursor-pointer transition-colors ${modelConfig.model === model.name ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'
-                            }`}
+                          aria-pressed={isSelected}
+                          className={`bg-surface p-4 rounded-lg shadow text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            isSelected ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-background'
+                          }`}
                           onClick={() => setModelConfig((prev: ModelConfig) => ({ ...prev, model: model.name }))}
                         >
-                          <h3 className="font-bold">{model.name}</h3>
-                          <p className="text-gray-600">Size: {model.size}</p>
-                          <p className="text-gray-600">Modified: {model.modified}</p>
-                        </div>
-                      ))}
-                    </div>
+                          <span className="block font-bold">{model.name}</span>
+                          <span className="block text-muted-foreground">Size: {model.size}</span>
+                          <span className="block text-muted-foreground">Modified: {model.modified}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Footer */}
-          <div className="border-t p-6 flex justify-end">
-            <button
-              onClick={() => onClose('modelSettings')}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Done
-            </button>
-          </div>
         </div>
-      </div>
-    )}
+
+        {/* Footer */}
+        <DialogFooter className="border-t p-6">
+          <Button type="button" onClick={() => onClose('modelSettings')}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Device Settings Modal */}
-    {modals.deviceSettings && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Audio Device Settings</h3>
-            <button
-              onClick={() => onClose('deviceSettings')}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <Dialog
+      open={modals.deviceSettings}
+      onOpenChange={(open) => { if (!open) onClose('deviceSettings'); }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Audio Device Settings
+          </DialogTitle>
+        </DialogHeader>
 
-          <DeviceSelection
-            selectedDevices={selectedDevices}
-            onDeviceChange={setSelectedDevices}
-            disabled={isRecording}
-          />
+        <DeviceSelection
+          selectedDevices={selectedDevices}
+          onDeviceChange={setSelectedDevices}
+          disabled={isRecording}
+        />
 
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={() => {
-                const micDevice = selectedDevices.micDevice || 'Default';
-                const systemDevice = selectedDevices.systemDevice || 'Default';
-                toast.success("Devices selected", {
-                  description: `Microphone: ${micDevice}, System Audio: ${systemDevice}`
-                });
-                onClose('deviceSettings');
-              }}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
+        <DialogFooter>
+          <Button
+            type="button"
+            onClick={() => {
+              const micDevice = selectedDevices.micDevice || 'Default';
+              const systemDevice = selectedDevices.systemDevice || 'Default';
+              toast.success("Devices selected", {
+                description: `Microphone: ${micDevice}, System Audio: ${systemDevice}`
+              });
+              onClose('deviceSettings');
+            }}
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Language Settings Modal */}
-    {modals.languageSettings && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Language Settings</h3>
-            <button
-              onClick={() => onClose('languageSettings')}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <Dialog
+      open={modals.languageSettings}
+      onOpenChange={(open) => { if (!open) onClose('languageSettings'); }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Language Settings
+          </DialogTitle>
+        </DialogHeader>
 
-          <LanguageSelection
-            selectedLanguage={selectedLanguage}
-            onLanguageChange={setSelectedLanguage}
-            disabled={isRecording}
-            provider={transcriptModelConfig.provider}
-          />
+        <LanguageSelection
+          selectedLanguage={selectedLanguage}
+          onLanguageChange={setSelectedLanguage}
+          disabled={isRecording}
+          provider={transcriptModelConfig.provider}
+        />
 
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={() => onClose('languageSettings')}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
+        <DialogFooter>
+          <Button type="button" onClick={() => onClose('languageSettings')}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Model Selection Modal */}
-    {modals.modelSelector && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg max-w-4xl w-full mx-4 shadow-xl max-h-[90vh] flex flex-col">
-          {/* Fixed Header */}
-          <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {messages.modelSelector ? 'Speech Recognition Setup Required' : 'Transcription Model Settings'}
-            </h3>
-            <button
-              onClick={() => onClose('modelSelector')}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <Dialog
+      open={modals.modelSelector}
+      onOpenChange={(open) => { if (!open) onClose('modelSelector'); }}
+    >
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0">
+        {/* Fixed Header */}
+        <DialogHeader className="p-6 pb-4 border-b border-border">
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            {messages.modelSelector ? 'Speech Recognition Setup Required' : 'Transcription Model Settings'}
+          </DialogTitle>
+        </DialogHeader>
 
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-6 pt-4">
-            <TranscriptSettings
-              transcriptModelConfig={transcriptModelConfig}
-              setTranscriptModelConfig={setTranscriptModelConfig}
-              onModelSelect={() => onClose('modelSelector')}
-            />
-          </div>
-
-          {/* Fixed Footer */}
-          <div className="p-6 pt-4 border-t border-gray-200 flex items-center justify-between">
-            {/* Confidence Indicator Toggle */}
-            <div className="flex items-center gap-3">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showConfidenceIndicator}
-                  onChange={(e) => toggleConfidenceIndicator(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Show Confidence Indicators</p>
-                <p className="text-xs text-gray-500">Display colored dots showing transcription confidence quality</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => onClose('modelSelector')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-              {messages.modelSelector ? 'Cancel' : 'Done'}
-            </button>
-          </div>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6 pt-4">
+          <TranscriptSettings
+            transcriptModelConfig={transcriptModelConfig}
+            setTranscriptModelConfig={setTranscriptModelConfig}
+            onModelSelect={() => onClose('modelSelector')}
+          />
         </div>
-      </div>
-    )}
+
+        {/* Fixed Footer */}
+        <DialogFooter className="p-6 pt-4 border-t border-border">
+          {/* Confidence Indicator Toggle */}
+          <div className="flex items-center gap-3 mr-auto">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showConfidenceIndicator}
+                onChange={(e) => toggleConfidenceIndicator(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-ring rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-primary-foreground after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-surface after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-transform peer-checked:bg-primary"></div>
+            </label>
+            <div>
+              <p className="text-sm font-medium text-foreground">Show Confidence Indicators</p>
+              <p className="text-xs text-muted-foreground">Display colored dots showing transcription confidence quality</p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onClose('modelSelector')}
+          >
+            {messages.modelSelector ? 'Cancel' : 'Done'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Error Alert Modal */}
-    {modals.errorAlert && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <Alert className="max-w-md mx-4 border-red-200 bg-white shadow-xl">
-          <AlertTitle className="text-red-800">Recording Stopped</AlertTitle>
-          <AlertDescription className="text-red-700">
+    <Dialog
+      open={modals.errorAlert}
+      onOpenChange={(open) => { if (!open) onClose('errorAlert'); }}
+    >
+      <DialogContent className="max-w-md">
+        {/* The visible heading lives inside the Alert; this gives the dialog its
+            accessible name without changing what is rendered. */}
+        <DialogTitle className="sr-only">Recording Stopped</DialogTitle>
+        <Alert variant="destructive" className="border-destructive/30 bg-surface">
+          <AlertTitle>Recording Stopped</AlertTitle>
+          <AlertDescription>
             {messages.errorAlert}
-            <button
-              onClick={() => onClose('errorAlert')}
-              className="ml-2 text-red-600 hover:text-red-800 underline"
-            >
-              Dismiss
-            </button>
           </AlertDescription>
         </Alert>
-      </div>
-    )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onClose('errorAlert')}>
+            Dismiss
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Chunk Drop Warning Modal */}
-    {modals.chunkDropWarning && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <Alert className="max-w-lg mx-4 border-yellow-200 bg-white shadow-xl">
-          <AlertTitle className="text-yellow-800">Transcription Performance Warning</AlertTitle>
-          <AlertDescription className="text-yellow-700">
+    <Dialog
+      open={modals.chunkDropWarning}
+      onOpenChange={(open) => { if (!open) onClose('chunkDropWarning'); }}
+    >
+      <DialogContent className="max-w-lg">
+        <DialogTitle className="sr-only">Transcription Performance Warning</DialogTitle>
+        <Alert className="border-warning/30 bg-surface">
+          <AlertTitle className="text-warning">Transcription Performance Warning</AlertTitle>
+          <AlertDescription className="text-warning">
             {messages.chunkDropWarning}
-            <button
-              onClick={() => onClose('chunkDropWarning')}
-              className="ml-2 text-yellow-600 hover:text-yellow-800 underline"
-            >
-              Dismiss
-            </button>
           </AlertDescription>
         </Alert>
-      </div>
-    )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onClose('chunkDropWarning')}>
+            Dismiss
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </>
 }

@@ -141,7 +141,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
             role="region"
             aria-label={speakerLabel ? `${speakerLabel} at ${formatRecordingTime(timestamp)}` : `Transcript segment at ${formatRecordingTime(timestamp)}`}
             aria-current={isHighlighted ? 'true' : undefined}
-            className={`mb-2 rounded-lg border transition-all duration-200 p-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            className={`mb-2 rounded-lg border transition-colors duration-200 p-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isHighlighted
                     ? 'bg-accent/40 ring-2 ring-primary border-primary/40 shadow-sm'
                     : 'border-transparent hover:bg-muted/30'

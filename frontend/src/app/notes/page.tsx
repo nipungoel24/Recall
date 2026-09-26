@@ -129,37 +129,37 @@ function NotesPageContent() {
   const note = noteId ? SAMPLE_NOTES[noteId] : undefined;
 
   return (
-    <div className="h-screen bg-gray-50 overflow-y-auto custom-scrollbar">
+    <div className="h-screen bg-background overflow-y-auto custom-scrollbar">
       <div className="max-w-4xl mx-auto px-8 py-8">
         <button
           type="button"
           onClick={() => router.push(routes.home())}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
           Home
         </button>
 
         {!note ? (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-10 text-center">
-            <h1 className="text-lg font-semibold text-gray-900">Note not found</h1>
-            <p className="text-sm text-gray-500 mt-1 mb-6">
+          <div className="bg-surface rounded-lg border border-border shadow-sm p-10 text-center">
+            <h1 className="text-lg font-semibold text-foreground">Note not found</h1>
+            <p className="text-sm text-muted-foreground mt-1 mb-6">
               The note you are looking for does not exist or may have been removed.
             </p>
             <button
               type="button"
               onClick={() => router.push(routes.home())}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Home
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">{note.title}</h1>
+          <div className="bg-surface rounded-xl border border-border shadow-sm p-8">
+            <h1 className="text-2xl font-bold text-foreground mb-4">{note.title}</h1>
 
-            <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               {note.date && (
                 <div className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
@@ -184,7 +184,7 @@ function NotesPageContent() {
               {note.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium"
+                  className="flex items-center gap-1 bg-primary/5 text-primary px-2 py-1 rounded-full text-xs font-medium"
                 >
                   <Tag className="w-3 h-3" />
                   {tag}
@@ -206,8 +206,8 @@ export default function NotesPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-screen bg-gray-50">
-          <LoaderIcon className="animate-spin size-6 text-gray-400" />
+        <div className="flex items-center justify-center h-screen bg-background">
+          <LoaderIcon className="animate-spin motion-reduce:animate-none size-6 text-muted-foreground" />
         </div>
       }
     >

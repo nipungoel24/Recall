@@ -201,7 +201,9 @@ describe('Phase 5 Gate 7 — Workspace ContextTab Component Architecture & UX', 
   it('provides accessible loading and error states with role="status" and role="alert"', () => {
     assert.match(contextTabContent, /role="status"/);
     assert.match(contextTabContent, /role="alert"/);
-    assert.match(contextTabContent, /<button[^>]*onClick=\{loadContexts\}[^>]*>\s*Retry\s*<\/button>/);
+    // Element name is intentionally not asserted: the retry control may be a raw
+    // <button> or the shared <Button> primitive. What matters is that it retries.
+    assert.match(contextTabContent, /<(?:button|Button)[^>]*onClick=\{loadContexts\}[^>]*>\s*Retry\s*<\/(?:button|Button)>/);
   });
 
   it('provides empty state with link to manage contexts', () => {

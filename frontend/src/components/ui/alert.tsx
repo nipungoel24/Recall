@@ -10,7 +10,11 @@ const alertVariants = cva(
       variant: {
         default: "bg-background text-foreground",
         destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+          "border-destructive/50 text-destructive [&>svg]:text-destructive",
+        warning:
+          "border-warning/50 bg-warning/5 text-warning [&>svg]:text-warning",
+        success:
+          "border-success/50 bg-success/5 text-success [&>svg]:text-success",
       },
     },
     defaultVariants: {
@@ -33,7 +37,7 @@ const Alert = React.forwardRef<
 Alert.displayName = "Alert"
 
 const AlertTitle = React.forwardRef<
-  HTMLParagraphElement,
+  HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
   <h5

@@ -42,42 +42,42 @@ export function ContextTimeline({ meetings, onRemoveMeeting }: ContextTimelinePr
   const groups = groupMeetingsByLocalDay(meetings);
 
   return (
-    <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+    <section className="bg-surface rounded-lg border border-border shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-900">Meeting Timeline</h2>
+        <h2 className="text-sm font-semibold text-foreground">Meeting Timeline</h2>
       </div>
       {groups.length === 0 ? (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           No meetings yet. Add meetings to follow this Context over time.
         </p>
       ) : (
         <div className="space-y-4">
           {groups.map((group) => (
             <div key={group.dateKey}>
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 {group.label}
               </h3>
               <ul className="space-y-0.5">
                 {group.meetings.map((meeting) => (
                   <li key={meeting.id} className="group">
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-background transition-colors">
                       <button
                         type="button"
                         onClick={() => openMeeting(meeting)}
                         className="flex items-center flex-1 min-w-0 text-left"
                         title="Open meeting"
                       >
-                        <span className="flex-1 min-w-0 text-sm text-gray-700 truncate group-hover:text-blue-700">
+                        <span className="flex-1 min-w-0 text-sm text-foreground truncate group-hover:text-primary">
                           {meeting.title}
                         </span>
-                        <ChevronRight className="flex-shrink-0 h-4 w-4 text-gray-300 group-hover:text-blue-600" />
+                        <ChevronRight className="flex-shrink-0 h-4 w-4 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
                       </button>
                       {onRemoveMeeting && (
                         <button
                           type="button"
                           title="Remove from Context"
                           onClick={() => void handleRemove(meeting)}
-                          className="flex-shrink-0 p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="flex-shrink-0 p-1 rounded hover:bg-destructive/5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

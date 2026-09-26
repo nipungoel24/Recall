@@ -172,23 +172,23 @@ export function AddToContextButton({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[480px] bg-white text-gray-900">
+        <DialogContent className="sm:max-w-[480px] bg-surface text-foreground">
           <DialogHeader>
             <DialogTitle>Contexts</DialogTitle>
-            <DialogDescription className="text-gray-500 truncate">
+            <DialogDescription className="text-muted-foreground truncate">
               {meetingTitle} — a meeting can belong to multiple Contexts.
             </DialogDescription>
           </DialogHeader>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
-              <Loader2 className="animate-spin text-gray-400" />
+              <Loader2 className="animate-spin motion-reduce:animate-none text-muted-foreground" aria-hidden="true" />
             </div>
           ) : (
             <>
-              <div className="max-h-56 overflow-y-auto custom-scrollbar border border-gray-200 rounded-md divide-y divide-gray-100">
+              <div className="max-h-56 overflow-y-auto custom-scrollbar border border-border rounded-md divide-y divide-border">
                 {contexts.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-8 px-4">
+                  <p className="text-sm text-muted-foreground text-center py-8 px-4">
                     No Contexts yet. Create one below to group related meetings.
                   </p>
                 ) : (
@@ -203,28 +203,28 @@ export function AddToContextButton({
                         onClick={() => void toggleLink(context.id, isLinked)}
                         className={cn(
                           'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
-                          isLinked ? 'bg-blue-50' : 'hover:bg-gray-50',
+                          isLinked ? 'bg-primary/5' : 'hover:bg-background',
                           isBusy && 'opacity-60 cursor-wait',
                         )}
                       >
                         <span
                           className={cn(
                             'flex-shrink-0 flex items-center justify-center w-4 h-4 rounded border',
-                            isLinked ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white',
+                            isLinked ? 'bg-primary border-primary' : 'border-border bg-surface',
                           )}
                         >
                           {isLinked && (
-                            <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                            <svg className="w-3 h-3 text-primary-foreground" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                               <path d="M2.5 6.5L4.8 8.8L9.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           )}
                         </span>
                         <span className="flex-1 min-w-0">
-                          <span className={cn('block truncate text-sm', isLinked ? 'text-blue-700' : 'text-gray-700')}>
+                          <span className={cn('block truncate text-sm', isLinked ? 'text-primary' : 'text-foreground')}>
                             {context.name}
                           </span>
                         </span>
-                        {isBusy && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+                        {isBusy && <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none text-muted-foreground" aria-hidden="true" />}
                       </button>
                     );
                   })
@@ -251,14 +251,14 @@ export function AddToContextButton({
                   disabled={isCreating || !newContextName.trim()}
                   className="shrink-0"
                 >
-                  {isCreating ? <Loader2 className="animate-spin" /> : <Plus />}
+                  {isCreating ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Plus aria-hidden="true" />}
                   Create
                 </Button>
               </div>
 
               {showSummaryPicker && contexts.length > 0 && (
                 <div className="pt-1">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                     Use Context knowledge in AI summaries
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -273,8 +273,8 @@ export function AddToContextButton({
                           className={cn(
                             'px-3 py-1.5 rounded-full text-sm border transition-colors',
                             isSelected
-                              ? 'bg-blue-600 border-blue-600 text-white'
-                              : 'border-gray-300 text-gray-600 hover:bg-gray-50',
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-border text-muted-foreground hover:bg-background',
                           )}
                         >
                           {context.name}
@@ -282,7 +282,7 @@ export function AddToContextButton({
                       );
                     })}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1.5">
+                  <p className="text-xs text-muted-foreground mt-1.5">
                     Select up to {MAX_SUMMARY_CONTEXTS} Contexts to include their saved knowledge
                     when generating this meeting&apos;s summary. Each Context stays separate.
                   </p>
@@ -292,7 +292,7 @@ export function AddToContextButton({
           )}
 
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => router.push(routes.contexts())} className="text-gray-600">
+            <Button variant="ghost" size="sm" onClick={() => router.push(routes.contexts())} className="text-muted-foreground">
               Open Contexts <ArrowUpRight className="h-4 w-4" />
             </Button>
           </DialogFooter>

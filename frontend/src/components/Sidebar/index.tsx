@@ -25,12 +25,12 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { VisuallyHidden } from "@/components/ui/visually-hidden"
 
 import { MessageToast } from '../MessageToast';
 import Logo from '../Logo';
 import Info from '../Info';
 import { ComplianceNotification } from '../ComplianceNotification';
+import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group';
 
@@ -647,7 +647,7 @@ const Sidebar: React.FC = () => {
                 <button
                   onClick={() => openImportDialog()}
                   aria-label="Import Audio"
-                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-accent bg-accent/50 text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="p-2 rounded-lg transition-colors duration-150 text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Upload className="w-5 h-5" />
                 </button>
@@ -718,95 +718,98 @@ const Sidebar: React.FC = () => {
 
     if (isCollapsed) return null;
 
+    const rowTone =
+      item.type === 'folder' && depth === 0
+        ? 'p-3 text-sm font-medium h-10 mx-3 mt-3 rounded-lg'
+        : `px-3 py-2 my-0.5 rounded-md text-sm ${
+            isActive
+              ? 'bg-accent text-accent-foreground font-medium'
+              : hasTranscriptMatch
+                ? 'bg-warning/10'
+                : 'text-foreground hover:bg-accent/50'
+          } cursor-pointer`;
+
     return (
-      <div key={item.id}>
+      <div key={item.id} className="group">
         <div
-          className={`flex items-center transition-all duration-150 group ${item.type === 'folder' && depth === 0
-            ? 'p-3 text-sm font-medium h-10 mx-3 mt-3 rounded-lg'
-            : `px-3 py-2 my-0.5 rounded-md text-sm ${isActive ? 'bg-accent text-accent-foreground font-medium' :
-              hasTranscriptMatch ? 'bg-warning/10' : 'text-foreground hover:bg-accent/50'
-            } cursor-pointer`
-            }`}
+          className={`flex items-center transition-colors duration-150 ${rowTone}`}
           style={item.type === 'folder' && depth === 0 ? {} : { paddingLeft }}
-          onClick={() => {
-            if (item.type === 'folder') {
-              toggleFolder(item.id);
-            } else {
-              setCurrentMeeting({ id: item.id, title: item.title });
-              const basePath = item.id.startsWith('intro-call')
-                ? routes.home()
-                : routes.meeting(item.id);
-              router.push(basePath);
-            }
-          }}
         >
           {item.type === 'folder' ? (
-            <>
-              {item.id === 'meetings' ? (
-                <Calendar className="w-4 h-4 mr-2" />
-              ) : item.id === 'notes' ? (
-                <Calendar className="w-4 h-4 mr-2" />
+            <button
+              type="button"
+              onClick={() => toggleFolder(item.id)}
+              aria-expanded={isExpanded}
+              className="flex min-w-0 flex-1 items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            >
+              {item.id === 'meetings' || item.id === 'notes' ? (
+                <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
               ) : null}
               <span className={depth === 0 ? "" : "font-medium"}>{item.title}</span>
-              <div className="ml-auto">
+              <span className="ml-auto">
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 )}
-              </div>
-              {searchQuery && item.id === 'meetings' && isSearching && (
-                <span className="ml-2 text-xs text-primary animate-pulse">Searching...</span>
-              )}
-            </>
+              </span>
+            </button>
           ) : (
-            <div className="flex flex-col w-full">
-              <div className="flex items-center w-full">
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentMeeting({ id: item.id, title: item.title });
+                  const basePath = item.id.startsWith('intro-call')
+                    ? routes.home()
+                    : routes.meeting(item.id);
+                  router.push(basePath);
+                }}
+                aria-current={isActive ? 'page' : undefined}
+                className="flex min-w-0 flex-1 items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+              >
                 {isMeetingItem ? (
-                  <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-muted">
-                    <File className="w-3.5 h-3.5 text-muted-foreground" />
-                  </div>
+                  <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-muted">
+                    <File className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                  </span>
                 ) : (
-                  <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-primary/10">
-                    <Plus className="w-3.5 h-3.5 text-primary" />
-                  </div>
+                  <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-primary/10">
+                    <Plus className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+                  </span>
                 )}
                 <span className="flex-1 break-words">{item.title}</span>
-                {isMeetingItem && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditStart(item.id, item.title);
-                      }}
-                      className="hover:text-primary p-1 rounded-md hover:bg-accent flex-shrink-0"
-                      aria-label="Edit meeting title"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteModalState({ isOpen: true, itemId: item.id });
-                      }}
-                      className="hover:text-destructive p-1 rounded-md hover:bg-destructive/10 flex-shrink-0"
-                      aria-label="Delete meeting"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Show transcript match snippet if available */}
-              {hasTranscriptMatch && (
-                <div className="mt-1 ml-8 text-xs text-muted-foreground bg-warning/10 p-1.5 rounded border border-warning/20 line-clamp-2">
-                  <span className="font-medium text-warning">Match:</span> {matchingResult.matchContext}
+              </button>
+              {isMeetingItem && (
+                <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+                  <button
+                    type="button"
+                    onClick={() => handleEditStart(item.id, item.title)}
+                    className="hover:text-primary p-1 rounded-md hover:bg-accent flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Edit title for ${item.title}`}
+                  >
+                    <Pencil className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteModalState({ isOpen: true, itemId: item.id })}
+                    className="hover:text-destructive p-1 rounded-md hover:bg-destructive/10 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Delete ${item.title}`}
+                  >
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                  </button>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
+        {item.type === 'file' && hasTranscriptMatch && matchingResult && (
+          <div
+            className="mt-1 ml-8 text-xs text-muted-foreground bg-warning/10 p-1.5 rounded-md border border-warning/20 line-clamp-2"
+            style={depth === 0 ? {} : { marginLeft: `${depth * 12 + 44}px` }}
+          >
+            <span className="font-medium text-warning">Match:</span> {matchingResult.matchContext}
+          </div>
+        )}
         {item.type === 'folder' && isExpanded && item.children && (
           <div className="ml-1">
             {item.children.map(child => renderItem(child, depth + 1))}
@@ -837,7 +840,7 @@ const Sidebar: React.FC = () => {
           }`}
       >
         {/*  Header with traffic light spacing */}
-        <div className="flex-shrink-0 h-22 flex items-center">
+        <div className="flex-shrink-0 h-20 flex items-center">
 
           {/* Title container */}
 
@@ -846,9 +849,6 @@ const Sidebar: React.FC = () => {
           <div className="flex-1">
             {!isCollapsed && (
               <div className="p-3">
-                {/* <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
-                  <span>Recall</span>
-                </span> */}
                 <Logo isCollapsed={isCollapsed} />
 
                 <div className="relative mb-1">
@@ -865,8 +865,11 @@ const Sidebar: React.FC = () => {
                       <InputGroupAddon align={'inline-end'}>
                         <InputGroupButton
                           onClick={() => handleSearchChange('')}
+                          size="sm"
+                          aria-label="Clear search"
+                          title="Clear search"
                         >
-                          <X />
+                          <X aria-hidden="true" />
                         </InputGroupButton>
                       </InputGroupAddon>
                     }
@@ -892,7 +895,7 @@ const Sidebar: React.FC = () => {
                   <Home className="w-4 h-4 mr-2" />
                   <span>Home</span>
                 </button>
-                <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="mx-5 mt-4 mb-1 text-label text-muted-foreground">
                   Meetings
                 </div>
                 <button
@@ -920,7 +923,7 @@ const Sidebar: React.FC = () => {
                   <Sun className="w-4 h-4 mr-2" />
                   <span>Daily</span>
                 </button>
-                <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="mx-5 mt-4 mb-1 text-label text-muted-foreground">
                   Knowledge
                 </div>
                 <button
@@ -941,7 +944,7 @@ const Sidebar: React.FC = () => {
                   <LayoutTemplate className="w-4 h-4 mr-2" />
                   <span>Templates</span>
                 </button>
-                <div className="mx-5 mt-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="mx-5 mt-4 mb-1 text-label text-muted-foreground">
                   System
                 </div>
                 <button
@@ -971,7 +974,7 @@ const Sidebar: React.FC = () => {
                       <NotebookPen className="w-4 h-4 mr-2 text-muted-foreground" />
                       <span className="text-foreground">{item.title}</span>
                       {searchQuery && item.id === 'meetings' && isSearching && (
-                        <span className="ml-2 text-xs text-primary animate-pulse">Searching...</span>
+                        <span className="ml-2 text-xs text-primary animate-pulse motion-reduce:animate-none">Searching...</span>
                       )}
                     </div>
                   </div>
@@ -996,7 +999,7 @@ const Sidebar: React.FC = () => {
                         {historyGroups
                           ? historyGroups.map(group => (
                               <div key={group.label}>
-                                <div className="px-3 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                <div className="px-3 pt-3 pb-1 text-label text-muted-foreground">
                                   {group.label}
                                 </div>
                                 {group.items.map(child => renderItem(child, 1))}
@@ -1016,18 +1019,19 @@ const Sidebar: React.FC = () => {
 
           <div className="flex-shrink-0 p-2 border-t border-border">
             <button
+              type="button"
               onClick={handleRecordingToggle}
               disabled={isRecording}
-              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-primary-foreground ${isRecording ? 'bg-destructive/50 cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-lg transition-colors shadow-sm`}
+              className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-primary-foreground bg-destructive hover:bg-destructive/90 disabled:bg-destructive/50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {isRecording ? (
                 <>
-                  <Square className="w-4 h-4 mr-2" />
-                  <span>Recording in progress...</span>
+                  <Square className="w-4 h-4 mr-2" aria-hidden="true" />
+                  <span>Recording in progress…</span>
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 mr-2" />
+                  <Mic className="w-4 h-4 mr-2" aria-hidden="true" />
                   <span>Start Recording</span>
                 </>
               )}
@@ -1035,19 +1039,26 @@ const Sidebar: React.FC = () => {
 
             {betaFeatures.importAndRetranscribe && (
               <button
+                type="button"
                 onClick={() => openImportDialog()}
-                className="w-full flex items-center justify-center px-3 py-2 mt-1 text-sm font-medium text-foreground bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shadow-sm"
+                className="w-full flex items-center justify-center px-3 py-2 mt-1 text-sm font-medium text-foreground bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Upload className="w-4 h-4 mr-2" />
+                <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
                 <span>Import Audio</span>
               </button>
             )}
 
             <button
+              type="button"
               onClick={() => router.push('/settings')}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors shadow-sm"
+              aria-current={pathname === '/settings' ? 'page' : undefined}
+              className={`w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                pathname === '/settings'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-foreground bg-muted hover:bg-muted/80'
+              }`}
             >
-              <Settings className="w-4 h-4 mr-2" />
+              <Settings className="w-4 h-4 mr-2" aria-hidden="true" />
               <span>Settings</span>
             </button>
             <Info isCollapsed={isCollapsed} />
@@ -1070,49 +1081,37 @@ const Sidebar: React.FC = () => {
       <Dialog open={editModalState.isOpen} onOpenChange={(open) => {
         if (!open) handleEditCancel();
       }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <VisuallyHidden>
-            <DialogTitle>Edit Meeting Title</DialogTitle>
-          </VisuallyHidden>
-          <div className="py-4">
-            <h3 className="text-lg font-semibold mb-4">Edit Meeting Title</h3>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="meeting-title" className="block text-sm font-medium text-foreground mb-2">
-                  Meeting Title
-                </label>
-                <input
-                  id="meeting-title"
-                  type="text"
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleEditConfirm();
-                    } else if (e.key === 'Escape') {
-                      handleEditCancel();
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-surface text-foreground"
-                  placeholder="Enter meeting title"
-                  autoFocus
-                />
-              </div>
+        <DialogContent className="sm:max-w-md">
+          <div className="py-2">
+            <DialogTitle className="text-section-title text-foreground">Edit Meeting Title</DialogTitle>
+            <div className="mt-4">
+              <label htmlFor="meeting-title" className="block text-label text-muted-foreground mb-2">
+                Meeting Title
+              </label>
+              <Input
+                id="meeting-title"
+                type="text"
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleEditConfirm();
+                  } else if (e.key === 'Escape') {
+                    handleEditCancel();
+                  }
+                }}
+                placeholder="Enter meeting title"
+                autoFocus
+              />
             </div>
           </div>
           <DialogFooter>
-            <button
-              onClick={handleEditCancel}
-              className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted/80 rounded-md transition-colors"
-            >
+            <Button type="button" variant="secondary" onClick={handleEditCancel}>
               Cancel
-            </button>
-            <button
-              onClick={handleEditConfirm}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
-            >
+            </Button>
+            <Button type="button" onClick={handleEditConfirm} disabled={editingTitle.trim() === ''}>
               Save
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

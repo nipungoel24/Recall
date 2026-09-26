@@ -218,7 +218,7 @@ export function TemplateEditor({
                 placeholder="e.g. weekly_review"
                 aria-invalid={!!idError}
               />
-              {idError && <p className="text-[0.8rem] font-medium text-red-600">{idError}</p>}
+              {idError && <p className="text-[0.8rem] font-medium text-destructive">{idError}</p>}
             </div>
           )}
 
@@ -242,7 +242,7 @@ export function TemplateEditor({
               placeholder="e.g. Weekly Review"
               aria-invalid={!!fieldErrors.name}
             />
-            {fieldErrors.name && <p className="text-[0.8rem] font-medium text-red-600">{fieldErrors.name}</p>}
+            {fieldErrors.name && <p className="text-[0.8rem] font-medium text-destructive">{fieldErrors.name}</p>}
           </div>
 
           <div className="space-y-2">
@@ -256,7 +256,7 @@ export function TemplateEditor({
               aria-invalid={!!fieldErrors.description}
             />
             {fieldErrors.description && (
-              <p className="text-[0.8rem] font-medium text-red-600">{fieldErrors.description}</p>
+              <p className="text-[0.8rem] font-medium text-destructive">{fieldErrors.description}</p>
             )}
           </div>
 
@@ -267,17 +267,17 @@ export function TemplateEditor({
                 <Plus /> Add section
               </Button>
             </div>
-            {fieldErrors.form && <p className="text-[0.8rem] font-medium text-red-600">{fieldErrors.form}</p>}
+            {fieldErrors.form && <p className="text-[0.8rem] font-medium text-destructive">{fieldErrors.form}</p>}
 
             {state.definition.sections.map((section, index) => {
               const sectionErrors: SectionFieldErrors | null | undefined = fieldErrors.sections?.[index];
               return (
                 <div
                   key={index}
-                  className="rounded-md border border-gray-200 p-4 space-y-3 bg-gray-50/50"
+                  className="rounded-md border border-border p-4 space-y-3 bg-muted/30"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Section {index + 1}</span>
+                    <span className="text-sm font-medium text-foreground">Section {index + 1}</span>
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"
@@ -307,7 +307,7 @@ export function TemplateEditor({
                         disabled={state.definition.sections.length <= 1}
                         title="Remove section"
                       >
-                        <Trash2 className="text-red-600" />
+                        <Trash2 className="text-destructive" />
                       </Button>
                     </div>
                   </div>
@@ -322,7 +322,7 @@ export function TemplateEditor({
                       aria-invalid={!!sectionErrors?.title}
                     />
                     {sectionErrors?.title && (
-                      <p className="text-[0.8rem] font-medium text-red-600">{sectionErrors.title}</p>
+                      <p className="text-[0.8rem] font-medium text-destructive">{sectionErrors.title}</p>
                     )}
                   </div>
 
@@ -337,7 +337,7 @@ export function TemplateEditor({
                       aria-invalid={!!sectionErrors?.instruction}
                     />
                     {sectionErrors?.instruction && (
-                      <p className="text-[0.8rem] font-medium text-red-600">{sectionErrors.instruction}</p>
+                      <p className="text-[0.8rem] font-medium text-destructive">{sectionErrors.instruction}</p>
                     )}
                   </div>
 
@@ -360,7 +360,7 @@ export function TemplateEditor({
                         </SelectContent>
                       </Select>
                       {sectionErrors?.format && (
-                        <p className="text-[0.8rem] font-medium text-red-600">{sectionErrors.format}</p>
+                        <p className="text-[0.8rem] font-medium text-destructive">{sectionErrors.format}</p>
                       )}
                     </div>
 
@@ -385,35 +385,35 @@ export function TemplateEditor({
             })}
           </div>
 
-          <section aria-labelledby="template-structure-preview" className="rounded-md border border-blue-100 bg-blue-50/50 p-4">
+          <section aria-labelledby="template-structure-preview" className="rounded-md border border-primary/30 bg-primary/5 p-4">
             <div className="mb-3">
-              <h3 id="template-structure-preview" className="text-sm font-semibold text-gray-900">
+              <h3 id="template-structure-preview" className="text-sm font-semibold text-foreground">
                 Template structure preview
               </h3>
-              <p className="mt-1 text-xs text-gray-600">
+              <p className="mt-1 text-xs text-muted-foreground">
                 A local preview of the headings and instructions this template provides. No AI is run.
               </p>
             </div>
-            <div className="space-y-3 rounded bg-white p-3 shadow-sm">
+            <div className="space-y-3 rounded-md bg-background p-3 border border-border">
               <div>
-                <div className="text-base font-semibold text-gray-900">{preview.name}</div>
-                {preview.description && <p className="mt-0.5 text-xs text-gray-500">{preview.description}</p>}
+                <div className="text-base font-semibold text-foreground">{preview.name}</div>
+                {preview.description && <p className="mt-0.5 text-xs text-muted-foreground">{preview.description}</p>}
               </div>
               {preview.sections.map((section, index) => (
-                <div key={`${section.title}-${index}`} className="border-t border-gray-100 pt-3 first:border-t-0 first:pt-0">
+                <div key={`${section.title}-${index}`} className="border-t border-border pt-3 first:border-t-0 first:pt-0">
                   <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-sm font-medium text-gray-800">{section.title}</h4>
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600">{section.format}</span>
+                    <h4 className="text-sm font-medium text-foreground">{section.title}</h4>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{section.format}</span>
                   </div>
-                  <p className="mt-1 text-xs text-gray-600">{section.instruction}</p>
-                  {section.itemFormat && <p className="mt-1 font-mono text-[11px] text-gray-500">{section.itemFormat}</p>}
+                  <p className="mt-1 text-xs text-muted-foreground">{section.instruction}</p>
+                  {section.itemFormat && <p className="mt-1 font-mono text-[11px] text-muted-foreground">{section.itemFormat}</p>}
                 </div>
               ))}
             </div>
           </section>
 
           {formError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
               {formError}
             </div>
           )}
@@ -424,7 +424,7 @@ export function TemplateEditor({
             Cancel
           </Button>
           <Button type="button" onClick={handleSubmit} disabled={isSaving}>
-            {isSaving && <Loader2 className="animate-spin" />}
+            {isSaving && <Loader2 className="animate-spin motion-reduce:animate-none" />}
             {mode === 'create' ? 'Create template' : 'Save changes'}
           </Button>
         </DialogFooter>

@@ -224,7 +224,7 @@ export function SummaryTemplateManager() {
                           title={`Delete ${template.name}`}
                           aria-label={`Delete ${template.name}`}
                         >
-                          <Trash2 className="text-red-600" />
+                          <Trash2 className="text-destructive" aria-hidden="true" />
                         </Button>
                       </div>
                     </li>
@@ -298,6 +298,8 @@ export function SummaryTemplateManager() {
 
       <ConfirmationModal
         isOpen={templateToDelete !== null}
+        title="Delete Template"
+        confirmLabel="Delete Template"
         text={
           templateToDelete
             ? `Delete the custom template "${templateToDelete.name}"? Summaries already generated with it are not affected, but it will no longer be available for new summaries.`

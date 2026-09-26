@@ -115,6 +115,23 @@ Concise, factual working memory. Updated after every completed task, major decis
     - Accessibility: eliminated nested `<button>` inside `role="button"` container; added accessible keyboard navigation, visible focus rings, loading spinner with `role="status"`, error banner with `role="alert"` and actionable Retry, and empty state with link to manage contexts.
     - Semantic design tokens exclusively; zero hardcoded gray/blue palette classes; zero `alert()`/`confirm()`/`window.prompt()`; zero raw content logging; zero direct SQL in component.
   - Tests: `tests/lib/phase5-context-deepening.test.mjs` (19/19 PASS), `tests/lib/context.test.mjs` (PASS). All Phase 5 suites pass (167/167 PASS). Next.js build compiles 12/12 pages. Rust: fmt/check/clippy/test all PASS (348 tests, 8 new unit tests in `model.rs` and `render.rs`). Contract audit 80 passed, 0 violations. Full regression suites pass.
+- Phase 5 Gate 8: Polish verified (on `phase/5-meeting-workspace-provenance`)
+  - Scope: visual/UI polish only. No new features, backend, database, context intelligence, or task lifecycle. Gate 7 scoring/ranking/merge/pruning logic untouched (regression-asserted).
+  - Semantic design tokens: migrated every hardcoded Tailwind palette class across the audited UI surface to semantic tokens (`background`/`surface`/`surface-raised`/`muted`/`foreground`/`primary`/`success`/`warning`/`destructive` + `-foreground` pairs). This closes the previously-deferred `TemplateEditor.tsx` and `SummaryTemplateManager.tsx` hardcoded-gray debt. Dark mode now follows the theme for all of these surfaces.
+  - Fixed mechanical-migration defects found in diff audit: invalid double-opacity classes (`primary/5/60`), a toggle knob whose `after:transition-colors` had killed its slide animation (now `after:transition-transform`), `bg-primary` paired with a leftover `hover:bg-blue-700`, and six no-op hovers collapsed to the same token in both states.
+  - Dialogs rebuilt on Radix primitives (focus trap, Escape, scrim dismiss, focus restore, `aria-modal`, accessible name):
+    - `SettingsModal.tsx`: all six hand-rolled modals (Preferences, Device, Language, Model Selector, error alert, chunk-drop warning) converted from `bg-black bg-opacity-50` divs to the shared `Dialog`. The Ollama model picker changed from `<div onClick>` to real `<button aria-pressed>` so it is keyboard reachable. The two alert modals carry an `sr-only` `DialogTitle` so each dialog has an accessible name without changing what is rendered.
+    - `ConfirmationModel/confirmation-modal.tsx`: `role="alertdialog"`, titled, destructive icon, semantic buttons.
+  - `MeetingWorkspace.tsx`: collapsed two competing `Tabs` roots into one, with the tab list in the header and shared `TAB_TRIGGER_CLASS` / `TAB_PANEL_CLASS` so density and active state stay consistent across all six sections.
+  - `NotesTab.tsx`: the Save button previously persisted stale state because it never consulted the editor. It now flushes the live document via the editor ref's `saveSummary()` before invoking the save API, surfaces a truthful dirty indicator ("Unsaved changes" / "Saved"), disables Save when there is nothing to save, parses persisted BlockNote JSON inside a guarded `try/catch` with an `Array.isArray` shape check instead of `JSON.parse` during render, and renders a real "No notes yet" empty state rather than a blank editor.
+  - `TasksTab.tsx`: a failed refresh no longer replaces already-loaded action items; the error degrades to a non-destructive inline `role="alert"` banner with Retry.
+  - `RecordingStatusBar.tsx`: state transitions are announced through a polite `role="status"` live region, while the per-second clock is exposed as `role="timer"` with a spoken label and the visible ticking text is `aria-hidden` — so a screen reader hears "Recording in progress" once instead of once per second.
+  - Shell: skip-to-content link targeting `#main-content`; sidebar rows are real buttons with `aria-expanded`/`aria-current` and focus-within action reveal; invalid `h-22` corrected to `h-20`; icon-only controls across Logo/Info/ModelSettings/TranscriptSettings/ComplianceNotification now carry accessible names; `focus:` normalized to `focus-visible:` on the shared input/textarea/select/accordion/badge primitives and the dialog/sheet close buttons.
+  - Reduced motion: every spinner/pulse in the touched surface (16 sites across 11 files) now pairs its animation with `motion-reduce:animate-none` or `motion-safe:animate-*`. This included a malformed `motion-reduce animate-none` whose variant syntax never applied. Per project decision, this stays opt-out per element rather than a blanket `* { animation: none }`.
+  - Typography: introduced the `text-page-title` / `text-section-title` / `text-label` / `text-caption` scale to Overview, Tasks, Notes, and Context so section hierarchy is consistent instead of ad-hoc `text-lg`/`text-xs`.
+  - Tests: new `tests/lib/gate8-polish.test.mjs` (52 assertions) locks the Gate 8 polish contract — zero hardcoded palette, zero malformed opacity, zero no-op hovers, Radix dialogs, skip link, single Tabs root, truthful empty/error states, reduced-motion pairing, and an explicit guard that Gate 7 ranking/provenance helpers are still delegated. Two existing suites were updated where they pinned old implementation details rather than intent: the retry-control assertion in `phase5-context-deepening.test.mjs` is now element-agnostic (`<button>` or `<Button>`), and `phase5-notes-persistence.test.mjs` gained 5 stronger assertions (editor flush before save, guarded JSON parse, empty state, live regions, editorial measure) while dropping assertions on literal class strings that the shared `Button` primitive now owns.
+  - Tests: all Phase 5 suites pass (172/172 PASS), Gate 8 suite 52/52 PASS. Next.js build compiles successfully. Rust unchanged: fmt/check/clippy (0 errors)/test all PASS (348 + 1 doc passed, 0 failed, 2 ignored). Contract audit 80 passed, 0 violations. Full JS suite 457/459 with the 2 known pre-existing failures unchanged (`checkPermissions` Phase 4 baseline; `qa-routes.test.mjs` is a Bun-only suite). Lint: 131 errors / 163 warnings — all Gate 8 hand-authored files lint clean; the movement versus the recorded 128/153 sits in pre-existing large files, not Gate 8 code.
+  - NOT performed: native GUI / recording workflow QA (Windows CLI host only). All visual and interaction changes are unverified by eye and need a human pass.
 
 # Decisions
 
@@ -135,6 +152,12 @@ Concise, factual working memory. Updated after every completed task, major decis
 - Phase 4 stop: SQLite save runs on any successful stop even if transcription timed out; no cancel/discard primitive
 - Phase 4 single source of truth: `RecordingStateContext` owns recording state + `isRecordingDisabled`; events drive it
 - Phase 4 honesty: frontend cannot query OS permission grants; device availability ≠ permission, copy says so
+- Phase 5 Gate 8: bulk class-string migration must be diff-audited, not trusted. Mechanical replacement produced invalid utilities (`primary/5/60`), killed a `transition-transform` animation, and created no-op hovers. Every bulk edit is now verified by scanning the diff for malformed opacity, palette leakage, and identical-state hovers.
+- Phase 5 Gate 8: prefer the shared `Button`/`Dialog` primitives over hand-rolled equivalents. Six SettingsModal modals had no `role="dialog"`, `aria-modal`, focus trap, or Escape handling purely because they were hand-rolled.
+- Phase 5 Gate 8: an `sr-only` `DialogTitle` is the way to name a dialog whose visible heading lives inside other markup (the alert modals) without changing the visual design.
+- Phase 5 Gate 8: a Save action must read live state from its editor, not mirror props into a local copy. `NotesTab` could report success while persisting stale notes; it now flushes the editor before invoking the API.
+- Phase 5 Gate 8: the per-second recording clock must not sit in a live region. Announce state transitions via `role="status"`; expose the clock as `role="timer"` with a label and hide the visible ticking text.
+- Phase 5 Gate 8: PowerShell single-element arrays silently flatten, so `$pair[0]` became a `[char]` and `String.Replace` stripped every `:` in a file. Use the edit tool or a Node script for file rewrites on this host, and re-scan for `U+FFFD` plus colon-density afterwards.
 
 # Phase 4 Test Commands (final closure)
 
@@ -157,22 +180,21 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Known Problems
 
-- Frontend source lint debt: 128 errors / 153 warnings (pre-existing; deferred to quality phase)
+- Frontend source lint debt: 131 errors / 163 warnings (pre-existing; deferred to quality phase). All Phase 5 Gate 8 hand-authored files lint clean.
 - Bun-only test suites cannot run on this machine (NOT AVAILABLE)
 - Parakeet v3 models + ffmpeg binaries hosted on upstream infra (MUST MIGRATE BEFORE RELEASE)
 - `com.meetily.ai` migration not yet designed/tested
 - Main branch protection: recommended but not enabled (direct push succeeded)
-- TemplateEditor.tsx: 15+ hardcoded gray references (deferred to screen redesign)
-- SummaryTemplateManager.tsx: remaining hardcoded gray (deferred to screen redesign)
 - Per-meeting summary failure attention signals require bulk query API (deferred to appropriate later intelligence/action phase)
 - Native GUI/macOS recording QA NOT performed (Windows-only environment; macOS backend assertion cached)
+- Gate 8 visual/interaction changes are unverified by eye — all six rewritten SettingsModal dialogs, the NotesTab save/empty states, the collapsed MeetingWorkspace Tabs, and the recording live regions need a human GUI pass.
 - `simple_level_monitor.rs` is a fake sine-wave stub; real `level_monitor.rs` exists but is not wired (double-capture risk)
 
 # Next Exact Step
 
-1. Gates 1 through 7 complete — proceed to Gate 8: Polish.
-2. After Gate 8: Gate 9 (tests + docs).
-3. All gates verified → final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
+1. Gates 1 through 8 complete — proceed to Gate 9 (tests + docs).
+2. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
+3. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
 
 # Blockers
 

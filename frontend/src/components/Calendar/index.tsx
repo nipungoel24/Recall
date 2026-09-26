@@ -210,13 +210,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
   const selectedDateKey = selectedDate ? localDateKey(selectedDate) : null;
 
   return (
-    <div className="h-screen overflow-y-auto custom-scrollbar bg-gray-50">
+    <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
       <div className="w-full max-w-[1280px] mx-auto px-6 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-2xl font-bold text-foreground">Calendar</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               {monthAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
             </p>
           </div>
@@ -240,15 +240,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
           {/* Month grid */}
           <section className="lg:col-span-3">
             <div
-              className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               role="grid"
               aria-label={`Calendar grid for ${monthAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}. Use arrow keys to move the selected day.`}
               tabIndex={0}
               onKeyDown={handleGridKeyDown}
             >
-              <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50">
+              <div className="grid grid-cols-7 border-b border-border bg-background">
                 {weekdayLabels.map(label => (
-                  <div key={label} className="py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div key={label} className="py-2.5 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     {label}
                   </div>
                 ))}
@@ -269,19 +269,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
                       aria-label={`${day.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}${count > 0 ? `, ${count} meeting${count === 1 ? '' : 's'}` : ''}${isToday ? ', today' : ''}`}
                       aria-pressed={isSelected}
                       className={cn(
-                        'relative flex flex-col items-center justify-start pt-2 pb-2 min-h-14 lg:min-h-24 border-b border-r border-gray-100 transition-colors',
+                        'relative flex flex-col items-center justify-start pt-2 pb-2 min-h-14 lg:min-h-24 border-b border-r border-border transition-colors',
                         isLastRow && 'border-b-0',
                         isLastColumn && 'border-r-0',
-                        inMonth ? 'hover:bg-blue-50/60' : 'bg-gray-50/60 hover:bg-gray-100',
-                        isSelected ? 'bg-blue-600 hover:bg-blue-600' : '',
+                        inMonth ? 'hover:bg-primary/5' : 'bg-background/60 hover:bg-muted',
+                        isSelected ? 'bg-primary text-primary-foreground hover:bg-primary/90' : '',
                       )}
                     >
                       <span
                         className={cn(
                           'inline-flex items-center justify-center w-7 h-7 rounded-full text-sm lg:w-8 lg:h-8 lg:text-base',
-                          inMonth ? 'text-gray-800' : 'text-gray-400',
-                          isToday && !isSelected && 'ring-1 ring-blue-400 text-blue-600 font-semibold bg-blue-50',
-                          isSelected && 'text-white font-semibold',
+                          inMonth ? 'text-foreground' : 'text-muted-foreground',
+                          isToday && !isSelected && 'ring-1 ring-ring text-primary font-semibold bg-primary/5',
+                          isSelected && 'text-primary-foreground font-semibold',
                         )}
                       >
                         {day.getDate()}
@@ -292,7 +292,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
                           <span
                             className={cn(
                               'flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-4',
-                              isSelected ? 'bg-white text-blue-700' : 'bg-blue-500 text-white',
+                              isSelected ? 'bg-surface text-primary' : 'bg-primary text-primary-foreground',
                               count === 1 && 'w-2 h-2 px-0',
                             )}
                           >
@@ -305,20 +305,20 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
                 })}
               </div>
             </div>
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-muted-foreground">
               Tip: select a day to see its meetings, or use arrow keys to move around the grid.
             </p>
           </section>
 
           {/* Day agenda */}
           <aside className="lg:col-span-2">
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col min-h-[320px]">
-              <div className="border-b border-gray-100 px-5 py-4">
-                <h2 className="text-sm font-semibold text-gray-900">
+            <div className="rounded-xl border border-border bg-surface shadow-sm flex flex-col min-h-[320px]">
+              <div className="border-b border-border px-5 py-4">
+                <h2 className="text-sm font-semibold text-foreground">
                   {selectedDate ? selectedDateLabel : 'Select a day'}
                 </h2>
                 {selectedDate && selectedDayMeetings.length > 0 && (
-                  <p className="mt-0.5 text-xs text-gray-500">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {selectedDayMeetings.length} meeting{selectedDayMeetings.length === 1 ? '' : 's'}
                   </p>
                 )}
@@ -327,7 +327,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
               <div className="flex-1 px-3 py-3">
                 {error ? (
                   <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
-                    <p className="text-sm text-gray-500">Failed to load meetings: {error}</p>
+                    <p className="text-sm text-muted-foreground">Failed to load meetings: {error}</p>
                     <Button variant="outline" size="sm" onClick={() => loadMonth(monthAnchor)}>
                       <RefreshCw className="w-3.5 h-3.5 mr-1" />
                       Retry
@@ -341,16 +341,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
                   </div>
                 ) : !selectedDate ? (
                   <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
-                    <CalendarDays className="h-8 w-8 text-gray-300 mb-2" />
-                    <p className="text-sm text-gray-500">
+                    <CalendarDays className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
+                    <p className="text-sm text-muted-foreground">
                       Pick a day on the calendar to see its meetings here.
                     </p>
                   </div>
                 ) : selectedDayMeetings.length === 0 ? (
                   <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
-                    <CalendarDays className="h-8 w-8 text-gray-300 mb-2" />
-                    <p className="text-sm font-medium text-gray-700">No meetings on this day</p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <CalendarDays className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
+                    <p className="text-sm font-medium text-foreground">No meetings on this day</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Meetings recorded on this day will appear here.
                     </p>
                   </div>
@@ -360,22 +360,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
                       <li key={meeting.id}>
                         <button
                           onClick={() => router.push(routes.meeting(meeting.id))}
-                          className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-blue-50/60"
+                          className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-primary/5"
                         >
-                          <span className="w-16 flex-shrink-0 text-sm font-medium text-gray-600 tabular-nums">
+                          <span className="w-16 flex-shrink-0 text-sm font-medium text-muted-foreground tabular-nums">
                             {formatMeetingTime(meeting.created_at)}
                           </span>
                           <span className="flex-1 min-w-0">
-                            <span className="block truncate text-sm font-medium text-gray-900">
+                            <span className="block truncate text-sm font-medium text-foreground">
                               {meeting.title}
                             </span>
-                            <span className="block text-xs text-gray-400">
+                            <span className="block text-xs text-muted-foreground">
                               {typeof meeting.duration_seconds === 'number' && meeting.duration_seconds > 0
                                 ? formatDuration(meeting.duration_seconds)
                                 : 'No duration yet'}
                             </span>
                           </span>
-                          <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-300" />
+                          <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
                         </button>
                       </li>
                     ))}
@@ -384,14 +384,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
               </div>
 
               {selectedDateKey && selectedDayMeetings.length > 0 && (
-                <div className="border-t border-gray-100 px-5 py-3">
+                <div className="border-t border-border px-5 py-3">
                   <Button
                     variant="outline"
                     size="sm"
                     className="w-full"
                     onClick={() => router.push(routes.daily(selectedDateKey))}
                   >
-                    <Sun className="h-3.5 w-3.5 text-gray-500" />
+                    <Sun className="h-3.5 w-3.5 text-muted-foreground" />
                     Open Daily View
                   </Button>
                 </div>

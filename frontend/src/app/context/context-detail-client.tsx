@@ -94,7 +94,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
 
   if (context.isLoading) {
     return (
-      <div className="h-screen bg-gray-50 overflow-y-auto custom-scrollbar">
+      <div className="h-screen bg-background overflow-y-auto custom-scrollbar">
         <div className="max-w-4xl mx-auto px-8 py-8">
           <Skeleton className="h-4 w-40 mb-4" />
           <Skeleton className="h-8 w-64 mb-2" />
@@ -108,11 +108,11 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
 
   if (!context.detail) {
     return (
-      <div className="h-screen bg-gray-50 overflow-y-auto custom-scrollbar">
+      <div className="h-screen bg-background overflow-y-auto custom-scrollbar">
         <div className="max-w-3xl mx-auto px-8 py-8">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-10 text-center">
-            <h1 className="text-lg font-semibold text-gray-900">Context not found</h1>
-            <p className="text-sm text-gray-500 mt-1 mb-6">
+          <div className="bg-surface rounded-lg border border-border shadow-sm p-10 text-center">
+            <h1 className="text-lg font-semibold text-foreground">Context not found</h1>
+            <p className="text-sm text-muted-foreground mt-1 mb-6">
               It may have been deleted.
               {context.error ? ` ${context.error}` : ''}
             </p>
@@ -130,13 +130,13 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-screen bg-gray-50 overflow-y-auto custom-scrollbar"
+      className="h-screen bg-background overflow-y-auto custom-scrollbar"
     >
       <div className="max-w-4xl mx-auto px-8 py-8">
         <button
           type="button"
           onClick={() => router.push(routes.contexts())}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Contexts
@@ -152,7 +152,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
               onChange={setTitle}
             />
             {context.detail.description ? (
-              <p className="text-sm text-gray-500 mt-1 whitespace-pre-wrap">
+              <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
                 {context.detail.description}
               </p>
             ) : null}
@@ -169,7 +169,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
               disabled={isRebuilding}
               title="Rebuild Context Memory"
             >
-              <RefreshCw className={isRebuilding ? 'animate-spin' : ''} />
+              <RefreshCw className={isRebuilding ? 'animate-spin motion-reduce:animate-none' : ''} />
               <span className="hidden sm:inline">Rebuild Memory</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)} title="Rename Context">
@@ -183,11 +183,11 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
         </div>
 
         <div className="mb-6 flex items-center gap-2">
-          <span className="inline-flex px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+          <span className="inline-flex px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium">
             {meetingCountLabel(context.meetings.length)}
           </span>
           {context.detail.updatedAt && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-muted-foreground">
               Updated{' '}
               {new Date(context.detail.updatedAt).toLocaleDateString(undefined, {
                 month: 'short',
@@ -228,10 +228,10 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
       />
 
       <Dialog open={rebuildOpen} onOpenChange={(open) => !isRebuilding && setRebuildOpen(open)}>
-        <DialogContent className="sm:max-w-[440px] bg-white text-gray-900">
+        <DialogContent className="sm:max-w-[440px] bg-surface text-foreground">
           <DialogHeader>
             <DialogTitle>Rebuild Context Memory?</DialogTitle>
-            <DialogDescription className="text-gray-500">
+            <DialogDescription className="text-muted-foreground">
               Rebuild saved decisions, actions and context from meetings currently in this
               Context. Your meetings and transcripts will not be changed. This uses your
               configured summary provider and may take a few minutes.
@@ -247,7 +247,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
               Cancel
             </Button>
             <Button variant="default" size="sm" onClick={() => void handleRebuildConfirm()} disabled={isRebuilding}>
-              {isRebuilding ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+              {isRebuilding ? <RefreshCw className="animate-spin motion-reduce:animate-none" /> : <RefreshCw />}
               {isRebuilding ? 'Rebuilding…' : 'Rebuild Memory'}
             </Button>
           </DialogFooter>

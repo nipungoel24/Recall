@@ -54,12 +54,12 @@ export function DailyBriefSection({
   };
 
   return (
-    <section className="border border-gray-200 rounded-lg bg-white">
+    <section className="border border-border rounded-lg bg-surface">
       {brief.status === 'completed' && brief.markdown ? (
         <div className="p-4">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-              <Sparkles className="h-4 w-4 text-purple-500" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
               Daily Brief
             </h2>
             <div className="flex items-center gap-1">
@@ -74,8 +74,8 @@ export function DailyBriefSection({
           </div>
           <MarkdownRenderer markdown={brief.markdown} />
           {brief.sources.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-gray-100">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+            <div className="mt-4 pt-3 border-t border-border">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                 Source meetings
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -84,7 +84,7 @@ export function DailyBriefSection({
                     key={source.meetingId}
                     type="button"
                     onClick={() => onOpenMeeting(source.meetingId)}
-                    className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-primary/5 hover:border-primary/30 hover:text-primary transition-colors"
                   >
                     {source.title}
                   </button>
@@ -95,11 +95,11 @@ export function DailyBriefSection({
         </div>
       ) : brief.status === 'error' ? (
         <div className="p-4">
-          <div className="flex items-start gap-2 text-red-700">
+          <div className="flex items-start gap-2 text-destructive">
             <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium">Daily brief failed</div>
-              <p className="text-sm text-red-600 mt-0.5 break-words">{brief.error}</p>
+              <p className="text-sm text-destructive mt-0.5 break-words">{brief.error}</p>
             </div>
           </div>
           <div className="mt-3">
@@ -112,10 +112,10 @@ export function DailyBriefSection({
         <div className="p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none text-primary" aria-hidden="true" />
               <div>
-                <div className="text-sm font-medium text-gray-900">Generating daily brief...</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-sm font-medium text-foreground">Generating daily brief...</div>
+                <div className="text-xs text-muted-foreground">
                   Combining {meetingsCount} meeting{meetingsCount === 1 ? '' : 's'} for this day
                 </div>
               </div>
@@ -130,13 +130,13 @@ export function DailyBriefSection({
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               {brief.status === 'loading' ? (
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none text-muted-foreground" aria-hidden="true" />
               ) : (
-                <Sparkles className="h-4 w-4 text-purple-500" />
+                <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
               )}
               <div>
-                <div className="text-sm font-medium text-gray-900">Daily Brief</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-sm font-medium text-foreground">Daily Brief</div>
+                <div className="text-xs text-muted-foreground">
                   Combine this day&apos;s meetings into one polished brief.
                 </div>
               </div>

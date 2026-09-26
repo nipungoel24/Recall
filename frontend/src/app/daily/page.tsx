@@ -41,7 +41,7 @@ function DailyPageContent() {
   }, [searchParams]);
 
   return (
-    <div className="h-screen overflow-y-auto custom-scrollbar bg-gray-50">
+    <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
       <div className="max-w-4xl mx-auto px-6 py-6">
         <DailyMeetingView date={date ?? undefined} dateRange={range ?? undefined} />
       </div>
@@ -54,7 +54,7 @@ export default function DailyPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center h-screen">
-          <LoaderIcon className="animate-spin size-6" />
+          <LoaderIcon className="animate-spin motion-reduce:animate-none size-6" />
         </div>
       }
     >
