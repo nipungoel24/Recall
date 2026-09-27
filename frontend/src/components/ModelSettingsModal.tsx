@@ -310,21 +310,12 @@ export function ModelSettingsModal({
     fetchModelConfig();
   }, [skipInitialFetch]);
 
-  // Fetch auto-generate setting on mount
-  useEffect(() => {
-    const fetchAutoGenerateSetting = async () => {
-      try {
-        const enabled = (await invoke('api_get_auto_generate_setting')) as boolean;
-        setAutoGenerateEnabled(enabled);
-        console.log('Auto-generate setting loaded:', enabled);
-      } catch (err) {
-        console.error('Failed to fetch auto-generate setting:', err);
-        // Keep default value (true) on error
-      }
-    };
-
-    fetchAutoGenerateSetting();
-  }, []);
+  // NOTE: the backend `api_get_auto_generate_setting` / `api_save_auto_generate_setting`
+  // commands were removed (see the commented-out entries in src-tauri/src/lib.rs).
+  // The previous fetch-on-mount therefore always rejected and only wrote a
+  // console error, so it was removed rather than left to fail. The auto-generate
+  // checkbox below is still local-only state with no persistence — that is
+  // pre-existing and tracked separately; it needs a real setting to be honest.
 
   // Sync ollamaEndpoint state when modelConfig.ollamaEndpoint changes from parent
   useEffect(() => {

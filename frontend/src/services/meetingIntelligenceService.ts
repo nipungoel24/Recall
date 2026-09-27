@@ -117,9 +117,14 @@ export class MeetingIntelligenceService {
       facts: IntelligenceItemResponse[];
       follow_ups: IntelligenceItemResponse[];
     }>('api_generate_meeting_intelligence', {
-      meetingId,
-      customPrompt,
-      templateId: templateId ?? 'standard_meeting',
+      // The Rust command takes a single `request: GenerateIntelligenceRequest`
+      // parameter, not flat arguments. Sending them flat makes Tauri reject the
+      // call with a missing-argument error, so the payload has to be nested.
+      request: {
+        meetingId,
+        customPrompt,
+        templateId: templateId ?? 'standard_meeting',
+      },
     });
 
     return {

@@ -642,6 +642,16 @@ pub fn run() {
             summary::commands::api_save_meeting_detected_summary_language,
             summary::commands::api_detect_transcript_summary_language,
             summary::commands::api_cancel_summary,
+            // Meeting intelligence commands (§6.1). These existed in
+            // src/summary/intelligence_commands.rs since Phase 4 but were never
+            // added to this handler, so every invoke() from the frontend threw
+            // "unknown command" and the workspace reported intelligence as
+            // unavailable for every meeting.
+            summary::intelligence_commands::api_get_meeting_intelligence,
+            summary::intelligence_commands::api_get_meeting_intelligence_items,
+            summary::intelligence_commands::api_generate_meeting_intelligence,
+            summary::intelligence_commands::api_get_transcript_segment,
+            summary::intelligence_commands::api_get_transcript_segment_position,
             // Calendar range commands (§3.1)
             api::calendar::api_get_meetings_by_range,
             api::calendar::api_get_dates_with_meetings,
