@@ -4,8 +4,8 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1-8 complete; design-system remediation landed `4e6d081`; Gate 9 still pending)
-- Branch: `phase/5-meeting-workspace-provenance` (9 commits ahead of origin, NOT PUSHED)
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1-8 complete; design-system remediation `4e6d081`; Phase 0 intelligence fix `a3c196b`; Phase A1 navigation foundation landed; Gate 9 still pending)
+- Branch: `phase/5-meeting-workspace-provenance` (14 commits ahead of origin, NOT PUSHED)
 - Base: `80a1485` (Phase 4 merged to main)
 
 # Completed
@@ -409,6 +409,119 @@ Also visually confirmed: the active nav row and the RECALL wordmark both render
 **lime** (`--accent` misuse), and focus rings now show the correct
 `ring-offset-background` behaviour in dark mode (blue ring, no white halo) from
 `4e6d081`.
+
+# Phase A1 — Navigation Foundation (feat(ui): establish canonical navigation foundation)
+
+A1 is **foundation only**. Its purpose is to make A2 safe: A2 rewrites a
+1174-line sidebar, and doing that while the same knowledge is duplicated four
+ways would mean guessing. A1 makes it explicit and singular.
+
+**No visual redesign.** The archive, the floating collapse control, the
+duplicate "Record / New Meeting" row and the current footer are all still
+present on purpose. No radius, spacing, card, dialog, settings or workspace
+change. Zero Rust, zero migrations, zero persistence changes.
+
+## Canonical navigation model — `src/lib/nav.ts`
+
+One data-driven model of every **destination**, grouped per `PRD.md`:
+
+| Group | Items |
+|---|---|
+| PRIMARY | Home, Meetings, Calendar, Daily |
+| KNOWLEDGE | Contexts, Templates, Meeting Notes |
+| SYSTEM | Settings |
+
+Deliberately **not** destinations, because you cannot *be* at them:
+`Record / New Meeting` and `Start Recording` (actions), `Import Audio`
+(action), `About` (identity surface).
+
+The model is data only — no JSX, no rendering, no styling. It is the only file
+permitted to declare the navigation list, enforced by test. Every `href`
+resolves through `lib/routes.ts`. `isNavItemActive()` matches
+exact-or-descendant, so `/` does not swallow `/settings`.
+
+Note: the current sidebar labels its first group **"MEETINGS"** while it
+contains Home/Record/Calendar/Daily. A1's model labels it PRIMARY; the sidebar
+still renders the old label until A2 adopts the model.
+
+## Route integrity
+
+- `routes.meetings()` added so the destination is canonical before the screen
+  exists. **A1 deliberately adds no placeholder page** — a test enforces that
+  `/meetings` has no `page.tsx` yet.
+- `routes.notes()` now takes an **optional** id so navigation can link to the
+  bare `/notes` screen.
+
+## `ui/list-row.tsx`
+
+Shared row for navigation and list UI. Built but **not yet adopted** —
+migrating existing screens is deferred so no behaviour changes alongside the
+primitive.
+
+- rest `transparent` · hover `bg-muted` · active `bg-muted` + 2px `bg-primary`
+  indicator · focus `ring-ring` with `ring-offset-background` (correct in dark)
+- The indicator is absolutely positioned, so selecting a row cannot shift layout.
+- **Hover deliberately does not use the lime `accent`.**
+- Renders `<a>` or `<button>` per usage; `aria-current` when active,
+  `aria-disabled` when disabled, `href` dropped on a disabled link, and in
+  collapsed/icon-only mode the label becomes the accessible name plus a tooltip.
+
+## `ui/nav-section.tsx`
+
+One canonical section label, replacing the two competing recipes the sidebar
+carried (`px-3 pt-5 pb-1.5` and `px-3 pt-3 pb-1`). Uses `text-label` +
+muted-ink, aligns to the row inset, `role="group"` named by its visible label.
+Deliberately quieter than the rows it introduces.
+
+## Sidebar width — one source of truth
+
+The same two numbers were restated **four times**: `w-16`/`w-64` on the panel,
+`ml-16`/`ml-64` on the main offset, and `4rem`/`16rem` inline in two overlays.
+
+Now declared once in `globals.css` as `--recall-sidebar-width-expanded`
+(16rem) / `--recall-sidebar-width-collapsed` (4rem), read through
+`src/lib/sidebar-layout.ts`, and consumed by `sidebarWidth()` from the sidebar
+panel, `MainContent`, `StatusOverlays` and the Home recording controls.
+
+**Gotcha learned:** a CSS comment containing `w-*/ml-*` terminates the comment
+early and the remainder is parsed as CSS, failing the webpack build with a
+confusing postcss-loader trace. Never write `*/` inside a CSS comment.
+
+## Default state
+
+`isCollapsed` default flipped `true` → `false`. Recall now launches **expanded**;
+the rail stays one control away and the toggle still flips rather than forces.
+
+## Tests
+
+New `tests/lib/nav-ia.test.mjs` — 28 assertions. Covers: single model, no JSX,
+the three groups and exact membership, actions/utility absent as destinations,
+routes helpers resolve to real pages, `/meetings` has no placeholder yet,
+both primitives exist with no raw palette, no lime hover, one width source with
+no consumer restating it, and expanded default.
+
+**Intentional contract change** in `sidebar-polish.test.mjs`: two assertions
+required the panel and offset to restate widths inline and then agree — which
+is the bug, not the guard. They now require both to resolve from the shared
+source and forbid the literals returning. Documented in place. Nothing was
+weakened or deleted.
+
+## Validation
+
+`tsc` src/ clean · `cargo fmt --check` clean · JS 541 tests / 539 pass / 2 known
+· nav-ia 28/28 · sidebar-polish 32/32 · design-token 12/12 · tauri-reg 5/5 ·
+Gate 8 52/52 · design-system 20/20 · branding 5/5 · production build succeeded,
+installed. Visual smoke at 1100×700 (dark): app launches, sidebar starts
+expanded, navigation renders, main-content offset correct, meeting data intact.
+User data **byte-identical**: sha256 `4911B87F…` unchanged, 51 meetings, 7627
+transcripts, 0 audio files, no recording started.
+
+## Still open for A2
+
+Remove the archive · build `/meetings` · make `/notes` reachable · move the
+collapse control inside the surface · drop the duplicate Record row · re-tier
+the footer. The expanded sidebar still **overflows a 737px window**, so the
+archive and footer sit below the fold — A2 fixes that.
 
 # Next Exact Step
 
