@@ -15,7 +15,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 /** Shared tab-trigger treatment so density/active state stay consistent across all six sections. */
 const TAB_TRIGGER_CLASS =
-  'px-3 py-1 text-xs font-medium transition-colors data-[state=active]:bg-background ' +
+  // shrink-0 and whitespace-nowrap are deliberate: a tab label is the affordance,
+  // so it must never compress or wrap. The surrounding TabsList is the element
+  // that shrinks, and it scrolls rather than hiding a section.
+  'shrink-0 whitespace-nowrap px-3 py-1 text-xs font-medium transition-colors data-[state=active]:bg-background ' +
   'data-[state=active]:text-foreground data-[state=active]:font-semibold ' +
   'data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 ' +
   'focus-visible:ring-ring';
@@ -231,18 +234,18 @@ export function MeetingWorkspace({
     <Tabs
       value={activeTab}
       onValueChange={(val) => setActiveTab(val as WorkspaceSection)}
-      className="flex flex-col h-screen bg-background text-foreground overflow-hidden"
+      className="flex flex-col h-full bg-background text-foreground overflow-hidden"
     >
-      <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
       {/* 1. Desktop Orientation & Navigation Header */}
       <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 gap-4">
         <h1 className="sr-only">{meeting.title}</h1>
         {/* Left: Home navigation and meeting identity */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"
             onClick={() => router.push(routes.home())}
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Back to Home"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -266,9 +269,13 @@ export function MeetingWorkspace({
         </div>
 
         {/* Right: Six Workspace Tabs Navigation */}
+        {/* The tab strip may shrink and scroll rather than push past the window.
+            A flex-shrink-0 strip made the last tab (Context) permanently unreachable
+            behind the shell clip at narrow desktop widths. Nothing is hidden: it
+            scrolls to its own content, and tab labels never compress. */}
         <TabsList
           aria-label="Meeting workspace sections"
-          className="h-9 bg-muted p-1 rounded-md flex-shrink-0"
+          className="custom-scrollbar h-9 max-w-full shrink-0 overflow-x-auto overflow-y-hidden bg-muted p-1 rounded-md"
         >
           <TabsTrigger value="overview" className={TAB_TRIGGER_CLASS}>
             <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />

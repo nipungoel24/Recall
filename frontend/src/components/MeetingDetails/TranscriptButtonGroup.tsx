@@ -69,7 +69,7 @@ export function TranscriptButtonGroup({
           <Button
             size="sm"
             variant="outline"
-            className="border-border hover:bg-accent hover:text-accent-foreground xl:px-4"
+            className="border-border hover:bg-muted hover:text-foreground xl:px-4"
             onClick={() => {
               setShowRetranscribeDialog(true);
             }}

@@ -17,7 +17,7 @@ export default function CalendarPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex h-full items-center justify-center">
           <LoaderIcon className="animate-spin size-6" />
         </div>
       }

@@ -142,6 +142,12 @@
 
   html {
     color-scheme: light;
+    /* The root element must have a DEFINITE height. Without one, the
+       `height: 100%` on body resolves against an auto-height root and therefore
+       against its own content -- so `overflow: hidden` clips nothing and the
+       document grows past the window. Pinning the root to the viewport also
+       makes every `h-full` in the shell resolve to real viewport height. */
+    height: 100%;
   }
 
   .dark html,
@@ -151,6 +157,9 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Intentional clipping boundary for a desktop application window: the shell owns
+       the viewport and the page scroller owns vertical overflow, so the document
+       itself never scrolls. */
     overflow: hidden;
     height: 100%;
   }

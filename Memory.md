@@ -637,22 +637,234 @@ of synthetic typing or coordinate clicks. Note the collapse control has **no**
 - Meeting search in the sidebar writes to the shared query but the meetings page
   has no explicit loading/error state yet.
 
+
+# Phase B - Desktop layout foundation
+
+Phase B fixed the application's **global layout foundation** (viewport ownership,
+main-content geometry, scroll ownership, content width) without redesigning any
+individual feature. It changes zero Rust source and zero database code.
+
+## Root cause of the 748px document
+
+Measured on the real Tauri app at 1100x700 via CDP, before the fix:
+
+```
+documentElement.scrollHeight 748   clientHeight 700
+window.scrollTo(0, 400) -> window.scrollY === 48      (the document really scrolled)
+```
+
+Three compounding defects, none of which was "a page that is too tall":
+
+1. **`html` had no height.** `globals.css` set `body { height: 100% }`, but with
+   an auto-height root, `100%` resolved against *body's own content* (748), not
+   the viewport. So `body`'s `overflow: hidden` clipped nothing, and the
+   `documentElement` (whose `overflow` is `visible`) stayed scrollable.
+2. **The shell row had no height.** `layout.tsx` rendered
+   `<div className="flex">` around Sidebar + MainContent, so the row was
+   content-driven rather than viewport-bounded.
+3. **Every page claimed the viewport itself.** Nine page roots declared
+   `h-screen` and the shell then added `py-6` *around* that already-full-height
+   child: `700 (h-screen) + 24 + 24 = 748`. The gutter padding was being added to
+   a child that had already consumed the whole viewport.
+
+`MAIN` at 748 was not the culprit -- it was faithfully filling a container that
+was 48px too tall to begin with.
+
+## The fix
+
+```
+html            height: 100%                     <- definite root
+body            overflow: hidden; height: 100%   <- intentional desktop clip
+div.flex        flex h-dvh overflow-hidden       <- shell owns the viewport
+  nav           position: fixed, h-dvh           <- no flow slot, as before
+  main          min-h-0 min-w-0 flex-1 flex-col overflow-hidden
+    gutter      flex min-h-0 flex-1 flex-col px-8 py-6     <- the ONLY gutter
+      scroller  data-slot="page-scroll" min-h-0 flex-1 overflow-y-auto overflow-x-hidden
+```
+
+- **One viewport owner.** The shell is `h-dvh`; `overflow-hidden` there is an
+  intentional clipping boundary, not a cover-up -- nothing inside it overflows now.
+- **One scroll owner.** `MainContent` owns the single `page-scroll` region, and it
+  is the only `overflow-y-auto` in the shell. Pages no longer install their own.
+- **Page contract.** A page that fills the shell uses `h-full` (Home, Settings,
+  Meeting Workspace, meeting-details). A page that flows simply grows and lets the
+  shell scroller scroll (Meetings, Notes, Daily, Contexts, Calendar, context
+  detail). Nine `h-screen` roots and six centred `h-screen` states were converted.
+- **Gutters stay in one place.** `px-8 py-6` is still declared only in
+  `MainContent`; no page invented its own.
+- `overflow-x-hidden` on the page scroller is deliberate: the shell does not scroll
+  sideways. A feature that genuinely needs horizontal scrolling must own its own
+  container.
+- The sidebar was switched from `h-screen` to `h-dvh` so the viewport vocabulary is
+  single. `OnboardingContainer` keeps `max-h-screen` -- that is a ceiling on a
+  centred dialog, not a viewport claim.
+
+After: `scrollHeight === clientHeight` and `window.scrollTo(0,400)` leaves
+`scrollY === 0` at **every** tested size.
+
+## B3 horizontal geometry - measured, all clean
+
+| client | hOverflow | vOverflow | document scrolls | sidebar | main |
+|--------|-----------|-----------|------------------|---------|------|
+| 1100x700 | 0 | 0 | no | 256 | 845 |
+| 1280x720 | 0 | 0 | no | 256 | 1025 |
+| 1366x768 | 0 | 0 | no | 256 | 1111 |
+| 1600x900 | 0 | 0 | no | 256 | 1345 |
+| 1920x1080 | 0 | 0 | no | 256 | 1665 |
+| 2545x1400 | 0 | 0 | no | 256 | 2290 |
+
+2560x1440 was requested; the host's physical display is 2560x1440, so a window of
+that outer size cannot exist. The largest honest client is **2545x1400**, which is
+what was measured. Sidebar width is a stable 256 at every size and comes from
+`lib/sidebar-layout.ts` alone.
+
+## B11 workspace tab strip
+
+At 1100x700 all six tabs (Overview, Summary, Transcript, Tasks, Notes, Context)
+sit at natural width, 12px type, none truncated. Below ~880px viewport the last tab
+was **permanently unreachable**: the strip had `flex-shrink-0`, the header overflowed,
+and the shell clipped it. Fixed with three cooperating changes:
+
+- `TAB_TRIGGER_CLASS` gains `shrink-0 whitespace-nowrap` -- a tab label is the
+  affordance and must never compress or wrap (verified: `truncated: false` on all
+  six at every size tested).
+- The identity block becomes `flex-1 min-w-0` so it yields before the strip does.
+- `TabsList` becomes `max-w-full shrink-0 overflow-x-auto`, so it keeps its natural
+  width when there is room and scrolls to its own content when there is not.
+
+Measured: `fits` at 1000/1100/1366/1920; at 820x600 (below the new minimum) it
+`scrolls` with 0 truncated labels. A `minWidth: 1000` / `minHeight: 640` was added
+to `tauri.conf.json` so the shell is not asked to work below its design minimum.
+Enforcement of that minimum by a user-driven resize drag was **not** independently
+verified (a programmatic `MoveWindow` bypasses it); the layout does not depend on it.
+
+## B7 lime accent retired as a generic hover
+
+`accent` is Recall's brand lime. It was being used as the hover surface on 11
+ordinary controls (rows, ghost/outline buttons, the workspace Home button, toolbar
+buttons), which made the brand accent compete with the selected/active state --
+exactly what `sidebar-polish.test.mjs` already forbade for `ListRow`. All 11 now use
+the neutral `hover:bg-muted` / `hover:text-foreground` treatment.
+
+This required **realigning one existing test deliberately**:
+`phase5-transcript-integration.test.mjs` asserted
+`cleanBtnGroup.includes('hover:bg-accent')`. Its protective intent was "use a
+semantic hover token, never a hardcoded colour", so the assertion was tightened
+rather than deleted: it now requires `hover:bg-muted` **and** forbids
+`hover:bg-accent`. Recorded here because the instruction is to change such tests
+deliberately and visibly, never silently.
+
+## Encoding incident (self-inflicted, caught and fully reverted)
+
+While applying the page-root edits, PowerShell `Get-Content -Raw` /
+`[System.IO.File]::WriteAllText` round-tripped UTF-8 through the console code page
+and corrupted every non-ASCII character in the files it rewrote -- em dashes became
+`Aˢ�?`, and a repair script that treated legitimate `�` and `.` as mojibake then
+damaged six files that were never meant to change.
+
+Resolution, in order:
+1. Preserved the work (`git diff` patch + safety tag `phase-b-wip-backup`).
+2. Restored all 32 affected files to `HEAD` with explicit paths (not `checkout -- .`).
+3. Re-applied every change through a **byte-safe** patcher that reads and writes via
+   ISO-8859-1 (a byte<->codepoint bijection for 0..255) and auto-detects CRLF.
+4. Added `audit-bytes.ps1`, which compares every maximal non-ASCII byte run in the
+   working tree against `HEAD`. It now reports: *"all modified files preserve their
+   non-ASCII bytes exactly"*.
+
+**Standing rule for this repo: never edit a source file from PowerShell text
+cmdlets.** Use the editor tools, or the Latin-1 byte-safe patcher, and re-run
+`audit-bytes.ps1` afterwards. Comment text added by these scripts is deliberately
+ASCII-only.
+
+## Tests
+
+- `frontend/tests/lib/layout-foundation.test.mjs` (new, 16 assertions) guards the
+  contract rather than exact syntax: definite root height, body clipping, shell
+  `h-dvh`, `main` bounded with `min-h-0`/`overflow-hidden`, exactly one page
+  scroller, single gutter declaration, no page claiming `h-screen` (only the fixed
+  sidebar and the standalone onboarding flow may), fill pages use `h-full`, flowing
+  pages install no scroller, sidebar independence, tab strip shrinks/scrolls with all
+  six sections declared, window minimum size, and no `hover:bg-accent` anywhere.
+- Full JS suite **559 tests / 557 pass / 2 known failures** (Phase 4
+  `checkPermissions`, Bun-only `qa-routes`). Layout foundation 16/16.
+- Regression gates unchanged: Phase 5 172/172, Gate 8 52/52, design-system 20/20,
+  design-token 12/12, nav-ia 30/30, sidebar-polish 32/32, phase3 32/32, branding
+  5/5, tauri-reg 5/5.
+- `tsc` src clean. `cargo test --workspace`: 348 + 2 + 1 passed, 0 failed.
+- User data **byte-identical**: sha256 `4911B87F...`, 4,632,576 bytes, empty WAL,
+  0 audio files, no recording started, no meeting created or modified.
+
+## Visual QA (CDP, the authoritative method)
+
+36 captures in `%TEMP%/opencode/phaseB/`: Home, Settings and Meeting Workspace at
+1100x700, 1280x720, 1366x768, 1600x900, 1920x1080 and 2545x1400, in **both** light
+and dark. Theme was switched by writing `localStorage['recall-theme']` and
+reloading -- toggling the `dark` class alone does **not** work, because
+`ThemeProvider` owns the state and re-applies it on re-render. (An earlier light
+capture set was dark for exactly this reason and was discarded and retaken.)
+
+Measured on the real app, not inferred: zero horizontal overflow, zero vertical
+document overflow, `documentScrolls: false`, and a clean `navigator`-free a11y
+probe (one `h1`, skip link present, `main` + `nav[Primary]` landmarks, no
+icon-only control without an accessible name, no raw palette classes on Home).
+
+## Found, documented, NOT fixed (out of Phase B scope)
+
+- **CSP blocks every Tauri IPC call.** The console shows
+  `IPC custom protocol failed, Tauri will now use the postMessage interface` and
+  then ~15 `http://ipc.localhost/... violates Content Security Policy` errors.
+  `connect-src` in `tauri.conf.json` lists `'self'` and three `localhost` provider
+  ports but not `ipc.localhost`. The app still works because Tauri falls back to
+  postMessage, so this is noisy rather than fatal -- but it is a real
+  configuration defect and Agent Forge's "fix console errors before release" rule
+  applies to it. Pre-existing: Phase B's only `tauri.conf.json` change is
+  `minWidth`/`minHeight`. Belongs to a Tauri-config pass, not a layout pass.
+- **16 pre-existing `transition-all`** usages (`Block.tsx`, `tabs.tsx`,
+  `progress.tsx`, `PermissionRow`, the download progress components,
+  `RetranscribeDialog`). Phase B added none; rewriting the motion system is
+  explicitly out of scope.
+- **133 raw-palette classes** remain across `app/` + `components/`
+  (`ChunkProgressDisplay` 21, `Calendar/index` 14, `ModelDownloadProgress` 9, ...).
+  A global palette migration is explicitly out of scope. Home and Settings measure
+  clean.
+- **Double gutters on some pages.** The shell provides `px-8 py-6`, and Home adds
+  `max-w-[1080px] px-8 py-8` and Settings adds `max-w-6xl px-8 py-6` on top, so
+  those two screens carry 56-64px side gutters instead of 32px. Harmless for
+  overflow, but it is the "each screen invents its own geometry" problem Phase B4
+  was meant to address; resolving it means per-screen padding decisions, which is
+  a content-width pass rather than a layout-foundation pass.
+- **`/notes` still looks like `/meetings`** (carried over from A2) and the meetings
+  page still has no explicit loading/error state.
+- **Collapsed logo is still a lime raster asset** (`/logo-collapsed.png`).
+- At 1920x1080 and above, Home's `max-w-[1080px]` column leaves a large empty band
+  on wide monitors. That is a content-density decision, not a layout defect.
+
 # Next Exact Step
 
-1. Gates 1 through 8 complete. Phase 0 (meeting intelligence) landed `a3c196b`.
-   Phase A1 (navigation foundation) landed `5df672a`. **Phase A2 (navigation
-   rebuild) is complete in the working tree** — sidebar, `/meetings`, `/notes`,
-   plus three defects found by visual QA (nav vertical overflow, nav horizontal
-   scrollbar, collapsed rail rendering no destinations). Awaiting commit.
-2. Then Phase B (workspace header/tabs/states) — **start here**, and it should
-   absorb the 48px `MAIN` overflow recorded as still-open above, since that is the
-   same page-shell surface. Then Phase C (design system), Phase D (interaction),
-   Phase E (secondary screens), Phase F (visual QA).
-3. When visual QA resumes, use the CDP path in the A2 section, not the BitBlt
-   recipe — the BitBlt path reports false "element is missing" results after a
-   programmatic resize.
-4. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
-5. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
+1. Gates 1 through 8 complete. Phase 0 landed `a3c196b`, Phase A1 `5df672a`,
+   Phase A2 `4a89d1f`, and **Phase B (desktop layout foundation) is complete**.
+   The 48px document overflow is fixed at the root: `html` now has a definite
+   height, the shell owns the viewport with `h-dvh`, `MainContent` owns the only
+   page scroller, and no page claims `h-screen`. Measured zero horizontal and
+   zero vertical document overflow at six desktop sizes, light and dark.
+2. **Phase C (design system) is next**, and is the tranche deliberately held
+   back: the 133 raw-palette classes, the 16 `transition-all` usages, and the
+   per-screen gutter invention (Home and Settings double their padding) belong
+   there, not in a layout pass. Do not change the radius scale.
+3. A Tauri-config defect surfaced during Phase B visual QA and is not a layout
+   problem: `connect-src` omits `ipc.localhost`, so every IPC call logs a CSP
+   violation before Tauri falls back to postMessage. Fix alongside other config
+   work; the app is functional meanwhile.
+4. Visual QA must use the CDP path (see the A2 and Phase B sections). Two traps
+   worth remembering: the BitBlt screen-capture recipe reports false "element is
+   missing" results after a programmatic resize, and toggling the `dark` class
+   does not change theme because `ThemeProvider` owns the state. Write
+   `localStorage["recall-theme"]` and reload instead.
+5. **Never edit a source file from PowerShell text cmdlets.** They corrupt UTF-8
+   through the console code page. Use the editor tools or the Latin-1 byte-safe
+   patcher, then run `audit-bytes.ps1` to prove non-ASCII bytes are unchanged.
+6. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
+7. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
 
 # Blockers
 

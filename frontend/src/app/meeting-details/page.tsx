@@ -325,7 +325,7 @@ function MeetingDetailsContent() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex h-full items-center justify-center bg-background">
             <div className="text-center bg-surface rounded-xl border border-border shadow-sm p-10 max-w-md">
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
           <button
@@ -343,7 +343,7 @@ function MeetingDetailsContent() {
   // Show skeleton layout while initial data loads
   if ((isLoading || isLoadingTranscripts) || !meetingDetails) {
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-full bg-background">
         <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
           <button
             type="button"
@@ -378,7 +378,7 @@ function MeetingDetailsContent() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-full bg-background">
       <MeetingWorkspace
         meeting={meetingDetails}
         summaryData={meetingSummary}
@@ -402,7 +402,7 @@ function MeetingDetailsContent() {
 export default function MeetingDetails() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex h-full items-center justify-center">
         <LoaderIcon className="animate-spin size-6" />
       </div>
     }>

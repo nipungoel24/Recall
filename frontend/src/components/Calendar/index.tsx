@@ -210,7 +210,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
   const selectedDateKey = selectedDate ? localDateKey(selectedDate) : null;
 
   return (
-    <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
+    <div className="bg-background">
       <div className="w-full max-w-[1280px] mx-auto px-6 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

@@ -151,7 +151,7 @@ const Sidebar: React.FC = () => {
 
   return (
     <div
-      className="fixed left-0 top-0 z-40 h-screen"
+      className="fixed left-0 top-0 z-40 h-dvh"
       // Width comes from lib/sidebar-layout.ts, the single shared source.
       style={{ width: sidebarWidth(isCollapsed) }}
     >

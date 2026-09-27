@@ -259,7 +259,13 @@ export default function RootLayout({
                               {showOnboarding ? (
                                 <OnboardingFlow onComplete={handleOnboardingComplete} />
                               ) : (
-                                <div className="flex">
+                                <div className="flex h-dvh overflow-hidden">
+                                  {/* The application shell owns the viewport. h-dvh bounds the
+                                      row to the window so no descendant can grow the document, and
+                                      overflow-hidden is an intentional clipping boundary: page-level
+                                      scrolling belongs to the page scroller inside MainContent. The
+                                      sidebar is position:fixed and takes no flow slot; MainContent
+                                      clears it using the canonical sidebar width. */}
                                   <a
                                     href="#main-content"
                                     className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-sm"

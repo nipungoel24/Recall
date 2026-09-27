@@ -83,7 +83,7 @@ const NotesIndexPage: React.FC = () => {
   }, [meetings, now]);
 
   return (
-    <div className="custom-scrollbar h-screen overflow-y-auto bg-background">
+    <div className="bg-background">
       <div className="mx-auto max-w-4xl px-8 py-8">
         <PageHeader
           title="Meeting Notes"

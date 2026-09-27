@@ -366,7 +366,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                         disabled={isPausing || isResuming || isStopping}
                         aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
                         aria-pressed={!isPaused}
-                        className="w-10 h-10 flex items-center justify-center border border-border bg-background text-foreground hover:bg-accent rounded-lg transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="w-10 h-10 flex items-center justify-center border border-border bg-background text-foreground hover:bg-muted rounded-lg transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         {isPaused ? <Play size={16} /> : <Pause size={16} />}
                         {(isPausing || isResuming) && (

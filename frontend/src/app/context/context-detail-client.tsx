@@ -94,7 +94,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
 
   if (context.isLoading) {
     return (
-      <div className="h-screen bg-background overflow-y-auto custom-scrollbar">
+      <div className="bg-background">
         <div className="max-w-4xl mx-auto px-8 py-8">
           <Skeleton className="h-4 w-40 mb-4" />
           <Skeleton className="h-8 w-64 mb-2" />
@@ -108,7 +108,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
 
   if (!context.detail) {
     return (
-      <div className="h-screen bg-background overflow-y-auto custom-scrollbar">
+      <div className="bg-background">
         <div className="max-w-3xl mx-auto px-8 py-8">
           <div className="bg-surface rounded-lg border border-border shadow-sm p-10 text-center">
             <h1 className="text-lg font-semibold text-foreground">Context not found</h1>
@@ -130,7 +130,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-screen bg-background overflow-y-auto custom-scrollbar"
+      className="bg-background"
     >
       <div className="max-w-4xl mx-auto px-8 py-8">
         <button

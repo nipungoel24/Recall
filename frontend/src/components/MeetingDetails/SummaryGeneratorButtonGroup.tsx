@@ -261,7 +261,7 @@ export function SummaryGeneratorButtonGroup({
         <Button
           variant="outline"
           size="sm"
-          className="border-border text-foreground hover:bg-accent xl:px-4"
+          className="border-border text-foreground hover:bg-muted xl:px-4"
           onClick={() => {
             checkOllamaModelsAndGenerate();
           }}

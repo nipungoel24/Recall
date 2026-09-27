@@ -256,7 +256,7 @@ export function ContextTab({ meeting }: ContextTabProps) {
                 <div
                   key={context.id}
                   className={`rounded-lg border transition-colors ${
-                    isSelected ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent/40'
+                    isSelected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'
                   }`}
                 >
                   <div className="p-4 flex items-start justify-between gap-4">

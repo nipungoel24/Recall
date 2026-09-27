@@ -158,7 +158,7 @@ export function HomeDashboard() {
   const briefFailed = brief?.status === 'failed' || brief?.status === 'cancelled';
 
   return (
-    <div className="h-screen overflow-y-auto custom-scrollbar bg-background">
+    <div className="bg-background">
       <div className="max-w-[1080px] mx-auto px-8 py-8 pb-12">
         {/* ── Hero ─────────────────────────────────────────────── */}
         <section className="border border-border">
@@ -269,7 +269,7 @@ export function HomeDashboard() {
                         <button
                           type="button"
                           onClick={() => openMeeting(meeting.id)}
-                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-accent/50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left rounded-md hover:bg-muted transition-colors"
                         >
                           <span className="flex w-16 flex-shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground tabular-nums">
                             <Clock className="h-3.5 w-3.5" />
@@ -332,7 +332,7 @@ export function HomeDashboard() {
                           <button
                             type="button"
                             onClick={() => openMeeting(meeting.id)}
-                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left hover:bg-accent/50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left hover:bg-muted transition-colors"
                           >
                             <span className="flex-1 min-w-0 truncate text-sm font-medium text-foreground group-hover:text-primary">
                               {meeting.title}
@@ -522,7 +522,7 @@ export function HomeDashboard() {
                         <button
                           type="button"
                           onClick={() => router.push(routes.context(context.id))}
-                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left hover:bg-accent/50 transition-colors"
+                          className="group flex w-full items-center gap-3 px-2 py-2.5 text-left hover:bg-muted transition-colors"
                         >
                           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
                             <Layers className="h-4 w-4 text-primary" />

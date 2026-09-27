@@ -33,7 +33,7 @@ function ContextsListPage() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-screen bg-background overflow-y-auto custom-scrollbar"
+      className="bg-background"
     >
       <div className="max-w-5xl mx-auto px-8 py-8">
         <PageHeader
@@ -149,7 +149,7 @@ export default function ContextPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-screen bg-background">
+        <div className="flex h-full items-center justify-center bg-background">
           <LoaderIcon className="animate-spin motion-reduce:animate-none size-6 text-muted-foreground" />
         </div>
       }

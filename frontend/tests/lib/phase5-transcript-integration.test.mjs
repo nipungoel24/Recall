@@ -44,7 +44,13 @@ describe('Phase 5 Gate 4 — Semantic Tokens & Design System Compliance', () => 
   it('TranscriptButtonGroup contains ZERO hardcoded gradients or color borders', () => {
     assert.doesNotMatch(cleanBtnGroup, /bg-gradient-to-r/, 'Must not use raw bg-gradient-to-r');
     assert.doesNotMatch(cleanBtnGroup, /border-blue-200/, 'Must not use hardcoded border-blue-200');
-    assert.ok(cleanBtnGroup.includes('hover:bg-accent'), 'Enhance button must use semantic hover:bg-accent');
+    // This assertion used to pin hover:bg-accent. Phase B7 retired lime-as-generic-hover:
+    // accent is Recall brand lime, and using it for a routine hover made the brand accent
+    // compete with the selected/active state. The gate protective intent -- a *semantic*
+    // hover token, never a hardcoded colour -- is preserved and tightened, matching the
+    // rule sidebar-polish.test.mjs already enforces for ListRow.
+    assert.ok(cleanBtnGroup.includes('hover:bg-muted'), 'Enhance button must use the semantic neutral hover (hover:bg-muted)');
+    assert.doesNotMatch(cleanBtnGroup, /hover:bg-accent/, 'Enhance button must not use the lime accent as a generic hover');
   });
 
   it('VirtualizedTranscriptView uses semantic foreground and muted tokens', () => {

@@ -165,7 +165,7 @@ export default function PageContent({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col h-screen bg-background"
+      className="flex flex-col h-full bg-background"
     >
       <div className="flex flex-1 overflow-hidden">
         <TranscriptPanel
