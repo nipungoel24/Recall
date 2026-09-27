@@ -49,6 +49,14 @@ export const routes = {
   meeting: (meetingId: string, source?: string | null): string =>
     withQuery('/meeting-details', { id: meetingId, source }),
 
+  /**
+   * Deep-link into a specific meeting workspace section, e.g. its Notes tab.
+   * `MeetingWorkspace` reads `tab` on mount, so `/notes` can send the user
+   * straight to where the notes actually live instead of the Overview.
+   */
+  meetingSection: (meetingId: string, tab: string): string =>
+    withQuery('/meeting-details', { id: meetingId, tab }),
+
   templates: (): string => '/templates',
 
   /**

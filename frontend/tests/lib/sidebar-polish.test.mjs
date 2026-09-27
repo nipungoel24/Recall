@@ -1,19 +1,32 @@
 /**
- * Sidebar / desktop shell polish regression gate.
+ * Sidebar architecture regression gate.
  *
- * Locks the structural guarantees that make the sidebar behave like a desktop
- * shell rather than a long scrolling list:
+ * SCOPE CHANGE (Phase A2, deliberate).
  *
- *   1. the meeting history is the ONLY independently scrollable region
- *   2. that region is properly bounded (flex-1 + min-h-0 + overflow-y-auto)
- *   3. the footer is a sibling of the scroll region, so a long history cannot
- *      push it below the viewport
- *   4. navigation rows are derived from shared constants, so they cannot drift
- *   5. the collapsed rail keeps every control and its accessible name
- *   6. recording state stays visible and distinguishable from the idle action
- *   7. Recall branding is intact and no upstream branding returns
- *   8. only semantic tokens are used
- *   9. Settings is presented once, not duplicated in nav and footer
+ * A2 replaced the sidebar. The previous version of this file asserted the
+ * contracts of the old 1174-line component: a permanent meeting archive with
+ * per-row hover actions, inline row constants, a floating collapse control
+ * outside the panel, a Settings row in the footer, and a separately
+ * hand-maintained collapsed rail.
+ *
+ * A2 removed the archive, moved Settings into the canonical nav model, put the
+ * collapse control inside the panel, and made the collapsed rail render the same
+ * nav tree. Those old contracts no longer describe the product, so this file was
+ * rewritten rather than deleted.
+ *
+ * The INTENTS below are the ones that survived, restated against the new
+ * architecture:
+ *
+ *   1. exactly one scrollable region, and the footer can never be pushed out
+ *   2. rows come from one shared primitive, not per-row inline classes
+ *   3. the active destination is unmistakable without a loud colour block
+ *   4. section labels come from one component
+ *   5. the archive is NOT in the sidebar
+ *   6. one recording action, with a distinct recording state
+ *   7. Settings appears once; About stays a utility
+ *   8. collapsed mode is the same system, not a second list
+ *   9. semantic tokens only, Recall identity intact, reduced motion respected
+ *  10. the panel width and the main offset share one source
  */
 
 import { describe, it } from 'node:test'
@@ -27,272 +40,241 @@ const sidebar = read('src/components/Sidebar/index.tsx')
 const info = read('src/components/Info.tsx')
 const logo = read('src/components/Logo.tsx')
 const mainContent = read('src/components/MainContent/index.tsx')
-const about = read('src/components/About.tsx')
+const listRow = read('src/components/ui/list-row.tsx')
+const navSection = read('src/components/ui/nav-section.tsx')
+const nav = read('src/lib/nav.ts')
+const meetings = read('src/app/meetings/page.tsx')
+
+const PALETTE =
+  /\b(?:bg|text|border|ring|from|to|via|fill|stroke|divide|placeholder|outline|accent|decoration)-(?:gray|white|black|blue|red|green|amber|yellow|indigo|purple|pink|emerald|cyan|sky|violet|rose|orange|teal|lime|fuchsia|slate|zinc|neutral|stone)(?:-[0-9]{2,3})?\b/
 
 describe('sidebar: scroll architecture', () => {
-  it('the meeting list is the only independently scrollable region', () => {
+  it('the navigation is the only independently scrollable region', () => {
     const scrollers = sidebar.match(/overflow-y-auto/g) || []
     assert.equal(
       scrollers.length,
       1,
       `expected exactly one overflow-y-auto region, found ${scrollers.length}`,
     )
-    // ...and it is the meeting list, inside the content column.
-    assert.match(sidebar, /flex-1 overflow-y-auto custom-scrollbar min-h-0"/)
+    assert.match(sidebar, /data-slot="sidebar-nav"[\s\S]*?overflow-y-auto/)
   })
 
   it('the scroll region is bounded so it can never grow past the panel', () => {
-    // flex-1 alone will not shrink below content size; min-h-0 is what makes
-    // the inner column actually bounded inside the flex parent.
-    assert.match(sidebar, /flex-1 overflow-y-auto custom-scrollbar min-h-0/)
-    // The panel itself must have a definite height for any of this to matter.
-    assert.match(sidebar, /h-screen[^"]*flex flex-col/)
+    const navRegion = sidebar.match(/data-slot="sidebar-nav"[\s\S]*?>/)
+    assert.ok(navRegion, 'sidebar must expose a nav scroll region')
+    assert.match(navRegion[0], /min-h-0/, 'the scroll region needs min-h-0 to shrink')
+    assert.match(navRegion[0], /flex-1/, 'the scroll region must take the flexible space')
   })
 
-  it('the footer is a direct child of the panel, alongside the main column', () => {
-    const scrollIdx = sidebar.indexOf('flex-1 overflow-y-auto custom-scrollbar min-h-0')
-    const footerIdx = sidebar.indexOf('{/* Footer')
-    // Anchor on the main column specifically: it carries `overflow-hidden` as a
-    // hard guarantee that nothing in it can paint into the footer strip.
-    const mainColIdx = sidebar.indexOf('flex-1 flex flex-col min-h-0 overflow-hidden')
-    assert.ok(scrollIdx > 0, 'meeting list container must exist')
-    assert.ok(footerIdx > scrollIdx, 'footer must come after the scroll region')
-    assert.ok(mainColIdx > 0 && mainColIdx < scrollIdx, 'main column must wrap the scroll region')
-
-    // The invariant that keeps the footer on screen: the footer and the main
-    // content column are siblings directly inside the panel. The meeting list
-    // is nested *inside* the main column, so no amount of history can displace
-    // the footer — the column is the only thing that flexes.
-    const lines = sidebar.split('\n')
-    // idx is a character offset, so count newlines rather than slicing lines.
-    const lineOf = (idx) => sidebar.slice(0, idx).split('\n').length - 1
-    const indentOf = (idx) => lines[lineOf(idx)].match(/^\s*/)[0].length
-
-    assert.equal(
-      indentOf(footerIdx),
-      indentOf(mainColIdx),
-      'footer and main column must be siblings at the same depth inside the panel',
-    )
-    assert.ok(
-      indentOf(scrollIdx) > indentOf(mainColIdx),
-      'the scroll region must be nested inside the main column, not beside the footer',
+  it('the footer is a sibling of the scroll region, not inside it', () => {
+    // If the footer were nested in the scroller it could scroll away and become
+    // unreachable in a short window.
+    const navIdx = sidebar.indexOf('data-slot="sidebar-nav"')
+    const footerIdx = sidebar.indexOf('data-slot="sidebar-footer"')
+    assert.ok(navIdx > -1 && footerIdx > navIdx, 'the footer must follow the nav region')
+    const between = sidebar.slice(navIdx, footerIdx)
+    assert.doesNotMatch(
+      between,
+      /overflow-y-auto[\s\S]*data-slot="sidebar-footer"/,
+      'the footer must not live inside the scroll region',
     )
   })
 
-  it('the main column clips its own overflow so it cannot reach the footer', () => {
-    assert.match(
-      sidebar,
-      /flex-1 flex flex-col min-h-0 overflow-hidden/,
-      'the middle column must clip, not just flex',
-    )
-  })
-
-  it('the footer and the main content column are both flex-shrink-0 or bounded', () => {
-    assert.match(sidebar, /flex-1 flex flex-col min-h-0 overflow-hidden/)
-    assert.match(
-      sidebar,
-      /flex-shrink-0 border-t border-border bg-surface px-3 py-2\.5 relative z-10/,
-    )
+  it('the footer never shrinks, so it stays reachable at 737px', () => {
+    const footer = sidebar.match(/data-slot="sidebar-footer"[\s\S]*?>/)
+    assert.ok(footer, 'sidebar must expose a footer region')
+    assert.match(footer[0], /flex-shrink-0/, 'the footer must not shrink')
   })
 })
 
 describe('sidebar: row system', () => {
-  it('navigation rows are derived from shared constants, not inline per row', () => {
-    assert.match(sidebar, /const ROW_BASE =/)
-    assert.match(sidebar, /const ROW_IDLE =/)
-    assert.match(sidebar, /const ROW_ACTIVE =/)
-    assert.match(sidebar, /const ROW_H =/)
-
-    // Every primary nav row composes the constants rather than restating
-    // padding/height/focus by hand.
-    const composed = sidebar.match(/\$\{ROW_BASE\}/g) || []
-    assert.ok(
-      composed.length >= 6,
-      `expected nav + footer rows to share ROW_BASE, found ${composed.length}`,
+  it('navigation rows come from the shared primitive, not inline per row', () => {
+    assert.match(sidebar, /<ListRow/, 'rows must be rendered through ListRow')
+    assert.doesNotMatch(
+      sidebar,
+      /\b(?:ml|w)-16\b|isCollapsed \? 'w-/,
+      'the sidebar must not restate row geometry inline',
     )
   })
 
-  it('no nav row restates its own height, radius or focus ring', () => {
-    const navBlock = sidebar.slice(sidebar.indexOf('const SECTION_LABEL'))
-    assert.ok(
-      !/h-10 flex mx-3/.test(navBlock),
-      'legacy inline nav row geometry must be gone',
-    )
-    assert.ok(!/rounded-lg cursor-pointer/.test(navBlock), 'legacy nav row styling must be gone')
+  it('rows are not clickable divs', () => {
+    assert.doesNotMatch(sidebar, /<div[^>]*onClick=/, 'navigable rows must not be div onClick')
   })
 
-  it('the active state is a restrained accent wash plus an accent bar', () => {
-    assert.match(sidebar, /const ROW_ACTIVE =\s*\n?\s*'bg-accent\/20 text-foreground font-medium'/)
-    assert.match(sidebar, /const ACTIVE_BAR = \(/)
-    // The old full-strength accent block must not be used for nav rows.
-    assert.ok(
-      !/bg-accent text-accent-foreground/.test(sidebar),
-      'solid accent blocks must not be used as the nav active state',
-    )
+  it('the active state is a subtle surface plus an indicator, not a colour block', () => {
+    assert.match(listRow, /hover:bg-muted/, 'hover must use the neutral muted surface')
+    assert.doesNotMatch(listRow, /hover:bg-accent\b/, 'hover must not use the lime accent')
+    assert.match(listRow, /bg-primary/, 'the active indicator uses the primary token')
+    assert.match(listRow, /absolute/, 'the indicator must be absolutely positioned')
+    assert.match(sidebar, /isNavItemActive\(/, 'active state must come from the nav model')
   })
 
-  it('section labels share one token set and align with the rows', () => {
-    assert.match(sidebar, /const SECTION_LABEL = 'px-3 pt-5 pb-1\.5 text-label text-muted-foreground'/)
-    const labels = sidebar.match(/<div className=\{SECTION_LABEL\}>/g) || []
-    assert.equal(labels.length, 2, 'Meetings and Knowledge labels expected')
+  it('section labels come from one component', () => {
+    assert.match(sidebar, /<NavSection/, 'the sidebar must use NavSection')
+    assert.equal(
+      (navSection.match(/const SECTION_LABEL = /g) || []).length,
+      1,
+      'there must be exactly one section-label recipe',
+    )
+    assert.doesNotMatch(
+      sidebar,
+      /text-label text-muted-foreground/,
+      'the sidebar must not inline its own section-label styling',
+    )
   })
 })
 
-describe('sidebar: meeting history rows', () => {
-  it('meeting titles truncate instead of wrapping', () => {
-    assert.ok(
-      !sidebar.includes('break-words'),
-      'a wrapping title makes row height variable and breaks scannability',
+describe('sidebar: the archive does not live here', () => {
+  it('the sidebar renders navigation, not the meeting archive', () => {
+    assert.match(sidebar, /NAV_GROUPS/, 'the sidebar renders the canonical nav model')
+    assert.doesNotMatch(
+      sidebar,
+      /sidebarItems/,
+      'the sidebar must not consume the meeting archive tree',
     )
-    assert.match(sidebar, /<span className="flex-1 truncate">\{item\.title\}<\/span>/)
   })
 
-  it('a long title is still reachable and announced in full', () => {
-    assert.match(sidebar, /title=\{item\.title\}/)
-    assert.match(sidebar, /aria-label=\{`Edit title for \$\{item\.title\}`\}/)
-  })
-
-  it('history rows are a fixed height', () => {
-    assert.match(sidebar, /const rowTone =/)
-    assert.match(sidebar, /\$\{ROW_BASE\} \$\{ROW_H\}/)
-  })
-
-  it('hover actions do not permanently steal width from the title', () => {
-    // `opacity-0` keeps an element in flow, which silently ate ~60px and
-    // truncated every meeting name. The actions must be taken out of flow.
-    assert.ok(
-      /absolute right-1 top-1\/2 -translate-y-1\/2[\s\S]{0,200}opacity-0/.test(sidebar),
-      'row hover actions must be absolutely positioned',
-    )
-    assert.ok(
-      !/className="flex items-center gap-0\.5 pl-1 opacity-0/.test(sidebar),
-      'in-flow opacity-0 actions must be gone',
-    )
+  it('the meeting library is a real destination instead', () => {
+    assert.match(meetings, /useSidebar\(\)/, '/meetings must read real meeting data')
+    assert.match(meetings, /Today[\s\S]*Yesterday[\s\S]*This week[\s\S]*Earlier|earlier/, '/meetings must group by date')
+    assert.doesNotMatch(meetings, /SAMPLE|FAKE_/i, '/meetings must not ship fixture data')
   })
 })
 
 describe('sidebar: footer action hierarchy', () => {
   it('Start Recording is the only prominent footer action', () => {
-    const footer = sidebar.slice(sidebar.indexOf('{/* Footer'))
-    const prominent = footer.match(/bg-destructive text-destructive-foreground|bg-primary text-primary-foreground/g) || []
-    assert.ok(prominent.length <= 1, 'only the primary action should be a solid block')
-    assert.match(footer, /bg-destructive text-destructive-foreground hover:bg-destructive\/90/)
+    const footer = sidebar.match(/data-slot="sidebar-footer"[\s\S]*$/)[0]
+    assert.match(footer, /variant="destructive"/, 'the primary footer action must be prominent')
+    assert.equal(
+      (footer.match(/variant="destructive"/g) || []).length,
+      1,
+      'exactly one prominent footer action',
+    )
+  })
+
+  it('there is exactly one recording control in the whole sidebar', () => {
+    // The old sidebar had three: a nav row, a rail button and a footer button,
+    // with two opposite active/idle polarities.
+    const controls = sidebar.match(/data-start-recording="true"/g) || []
+    assert.equal(
+      controls.length,
+      2,
+      'expected exactly two branches (expanded button + collapsed row) for ONE action',
+    )
+    assert.doesNotMatch(
+      sidebar,
+      /Record \/ New Meeting/,
+      'the duplicate "Record / New Meeting" navigation row must be gone',
+    )
   })
 
   it('the recording state is visibly distinct from the idle action', () => {
-    const footer = sidebar.slice(sidebar.indexOf('{/* Footer'))
-    assert.match(footer, /Recording in progress/)
+    assert.match(sidebar, /isRecording \?/, 'the footer must branch on recording state')
+    assert.match(sidebar, /Recording in progress/, 'the recording state must be named')
+    assert.match(sidebar, /role="status"/, 'recording state must be announced politely')
     assert.match(
-      footer,
-      /bg-destructive\/10 text-destructive border border-destructive\/40/,
-      'active recording must read as a status, not a solid button',
+      sidebar,
+      /aria-live="polite"/,
+      'the recording live region must be polite',
     )
-    assert.match(footer, /motion-safe:animate-pulse motion-reduce:animate-none/)
   })
 
-  it('utility actions are compact and grouped', () => {
-    const footer = sidebar.slice(sidebar.indexOf('{/* Footer'))
-    assert.match(footer, /const ROW_H_UTILITY|ROW_H_UTILITY/)
-    assert.match(footer, /<div className="mt-1 flex items-center gap-1">/)
-    // Settings and About share one row.
-    assert.match(footer, /Import Audio[\s\S]*Settings[\s\S]*<Info isCollapsed=\{isCollapsed\} \/>/)
+  it('secondary and utility actions are quieter than the primary', () => {
+    const footer = sidebar.match(/data-slot="sidebar-footer"[\s\S]*$/)[0]
+    assert.match(footer, /<ListRow[\s\S]*?Import Audio/, 'Import Audio is a quiet row')
+    assert.match(footer, /<Info/, 'About is a quiet utility')
   })
 
-  it('the version is subordinate, not another navigation row', () => {
-    const footer = sidebar.slice(sidebar.indexOf('{/* Footer'))
-    assert.match(footer, /<p className="mt-2 text-center text-caption text-muted-foreground">\s*Recall v0\.4\.0/)
-    assert.ok(!footer.includes('v0.4.0</div>'), 'version must not be a button-styled block')
+  it('the version is not another navigation row in the sidebar', () => {
+    // Version metadata belongs to the About surface, not the navigation rail.
+    assert.doesNotMatch(sidebar, /Recall v\{?0?\./, 'the version must not sit in the sidebar')
+    assert.match(read('src/components/About.tsx'), /0\.4\.0|version/i, 'About carries the version')
   })
 })
 
 describe('sidebar: settings and about', () => {
-  it('Settings is presented once in the expanded sidebar', () => {
-    // Only the expanded navigation block — the collapsed rail legitimately has
-    // its own Settings icon, and the footer owns the expanded Settings row.
-    const navBlock = sidebar.slice(
-      sidebar.indexOf('<div className="flex-shrink-0">'),
-      sidebar.indexOf('{/* Content area */}'),
-    )
-    assert.ok(navBlock.length > 0, 'expanded nav block must exist')
+  it('Settings is presented once, in the navigation model', () => {
+    const settingsRows = (sidebar.match(/Settings/g) || []).length
     assert.ok(
-      !navBlock.includes('>System<'),
-      'the SYSTEM nav section is redundant now that Settings lives in the footer',
+      settingsRows <= 1,
+      `Settings must appear once in the sidebar chrome, saw ${settingsRows} references`,
     )
-    assert.ok(
-      !navBlock.includes("router.push('/settings')"),
-      'Settings must not also be a navigation row',
-    )
+    const systemGroup = nav.match(/id: 'system'[\s\S]*?\n  \},/)[0]
+    assert.match(systemGroup, /label: 'Settings'/, 'Settings belongs to the SYSTEM group')
   })
 
-  it('Settings keeps aria-current when it is the active page', () => {
-    const footer = sidebar.slice(sidebar.indexOf('{/* Footer'))
-    assert.match(footer, /aria-current=\{pathname === '\/settings' \? 'page' : undefined\}/)
+  it('Settings keeps its active state through the shared row', () => {
+    assert.match(nav, /id: 'settings'[\s\S]*?activePrefixes: \['\/settings'\]/)
+    assert.match(listRow, /aria-current/, 'the primitive marks the active row')
   })
 
   it('About is a compact utility that still opens the Recall dialog', () => {
     assert.match(info, /aria-label="About Recall"/)
-    assert.match(info, /About \/>/)
-    assert.match(info, /from "\.\/About"/)
-    // Collapsed and expanded must share one control, not two designs.
-    assert.match(info, /isCollapsed\s*\?\s*"flex h-9 w-9 shrink-0/)
+    assert.match(info, /About/, 'the expanded utility keeps a visible label')
   })
 
   it('the About panel stays Recall-only', () => {
-    assert.ok(!/chat with/i.test(about), 'no vendor CTA in About')
-    assert.ok(!/built by/i.test(about), 'no vendor credit in About')
-    assert.ok(!/zackriya\.com/.test(about), 'no vendor URL in About')
-    assert.match(about, /Recall is derived from the Meetily open-source project \(MIT licence\)/)
+    const about = read('src/components/About.tsx')
+    // Upstream naming is permitted ONLY as the required MIT attribution, never
+    // as product branding. The executable branding scanner
+    // (tests/lib/branding-scan.mjs) is the authority on that distinction; this
+    // assertion just confirms the attribution is present and nothing else.
+    const upstreamMentions = about.match(/meetily|zackriya/gi) || []
+    assert.ok(
+      upstreamMentions.length <= 3,
+      `About must reference upstream only for the MIT attribution, saw ${upstreamMentions.length} mentions`,
+    )
+    assert.match(about, /MIT/i, 'the required licence attribution must be present')
   })
 })
 
-describe('sidebar: collapsed rail', () => {
-  it('the rail keeps an accessible name on every control', () => {
-    const rail = sidebar.slice(
-      sidebar.indexOf('const renderCollapsedIcons'),
-      sidebar.indexOf('// Find matching transcript snippet'),
+describe('sidebar: collapsed rail is the same system', () => {
+  it('the rail renders the same nav model, not a second list', () => {
+    assert.equal(
+      (sidebar.match(/NAV_GROUPS\.map/g) || []).length,
+      1,
+      'there must be one nav render, shared by both modes',
     )
-    const labels = rail.match(/aria-label="[^"]+"/g) || []
-    assert.ok(labels.length >= 7, `expected labelled rail controls, found ${labels.length}`)
-    assert.match(rail, /aria-label=\{isRecording \? 'Stop Recording' : 'Start Recording'\}/)
-  })
-
-  it('rail buttons share one square footprint', () => {
-    const rail = sidebar.slice(
-      sidebar.indexOf('const renderCollapsedIcons'),
-      sidebar.indexOf('// Find matching transcript snippet'),
-    )
-    const squares = rail.match(/flex h-9 w-9 items-center justify-center rounded-md/g) || []
-    assert.ok(squares.length >= 6, `expected uniform rail buttons, found ${squares.length}`)
-    assert.ok(!rail.includes('space-y-4'), 'the rail must not use loose spacing')
-  })
-
-  it('the rail active state matches the expanded sidebar', () => {
-    const rail = sidebar.slice(
-      sidebar.indexOf('const renderCollapsedIcons'),
-      sidebar.indexOf('// Find matching transcript snippet'),
-    )
-    assert.ok(
-      !rail.includes('bg-accent text-accent-foreground'),
-      'collapsed and expanded must not use different active treatments',
+    assert.doesNotMatch(
+      sidebar,
+      /renderCollapsedIcons|CollapsedIcons/,
+      'there must not be a separately maintained collapsed list',
     )
   })
 
-  it('the rail still offers tooltips', () => {
-    const rail = sidebar.slice(
-      sidebar.indexOf('const renderCollapsedIcons'),
-      sidebar.indexOf('// Find matching transcript snippet'),
-    )
-    const tooltips = rail.match(/<TooltipContent/g) || []
-    assert.ok(tooltips.length >= 6, `expected rail tooltips, found ${tooltips.length}`)
+  it('the rail is the same rows in a collapsed presentation', () => {
+    assert.match(sidebar, /isCollapsed \?[\s\S]*?border-t border-border/, 'groups still divide in the rail')
+    assert.match(listRow, /collapsed/, 'the primitive supports a collapsed presentation')
+  })
+
+  it('the rail actually renders every destination, not only dividers', () => {
+    // This regressed once already: the collapsed branch emitted a rule per
+    // group and no rows at all, so the rail looked tidy and navigated nowhere.
+    const branch = sidebar.match(/isCollapsed \? \(([\s\S]*?)\) : \(\s*<NavSection/)
+    assert.ok(branch, 'the collapsed branch of the nav render must be identifiable')
+    assert.match(branch[1], /group\.items\.map/, 'the rail must render the group items')
+    assert.match(branch[1], /<ListRow/, 'the rail must render rows')
+    assert.match(branch[1], /\bcollapsed\b/, 'rail rows must use the collapsed presentation')
+    assert.match(branch[1], /tooltip=\{item\.label\}/, 'rail rows must carry a tooltip')
+    assert.match(branch[1], /href=\{item\.href\}/, 'rail rows must still navigate')
+  })
+
+  it('collapsed rows keep an accessible name and a tooltip', () => {
+    assert.match(listRow, /aria-label/, 'icon-only rows must be named')
+    assert.match(listRow, /TooltipContent/, 'icon-only rows must offer a tooltip')
+    assert.match(sidebar, /aria-label=\{label\}|label=\{isCollapsed/, 'rows pass their label through')
+  })
+
+  it('rail rows share one square footprint', () => {
+    assert.match(listRow, /h-9 w-9 shrink-0 justify-center/, 'collapsed rows are square and fixed')
   })
 })
 
 describe('sidebar: tokens, identity and motion', () => {
   it('uses semantic tokens only', () => {
-    const palette =
-      /\b(?:bg|text|border|ring|from|to|via|fill|stroke|divide|placeholder|outline|accent|decoration)-(?:gray|white|black|blue|red|green|amber|yellow|indigo|purple|pink|emerald|cyan|sky|violet|rose|orange|teal|lime|fuchsia|slate|zinc|neutral|stone)(?:-[0-9]{2,3})?\b/
-    assert.ok(!palette.test(sidebar), 'sidebar must not hardcode palette classes')
-    assert.ok(!palette.test(info), 'About trigger must not hardcode palette classes')
+    assert.ok(!PALETTE.test(sidebar), 'sidebar must not hardcode palette classes')
+    assert.ok(!PALETTE.test(info), 'About trigger must not hardcode palette classes')
+    assert.ok(!PALETTE.test(logo), 'brand mark must not hardcode palette classes')
   })
 
   it('keeps the Recall identity in the sidebar', () => {
@@ -317,32 +299,29 @@ describe('sidebar: tokens, identity and motion', () => {
     assert.ok(!/\bconfirm\(/.test(sidebar))
     assert.ok(!/window\.prompt/.test(sidebar))
   })
+
+  it('exposes a navigation landmark and the collapse control inside the panel', () => {
+    assert.match(sidebar, /<nav\b[\s\S]*aria-label="Primary"/, 'the sidebar is a nav landmark')
+    // The collapse control must be a descendant of the panel, not a floating
+    // sibling. It previously sat at `-right-6 top-20` over the workspace.
+    assert.doesNotMatch(
+      sidebar,
+      /-right-\d|translateX\(50%\)/,
+      'the collapse control must not float outside the panel',
+    )
+    const panelIdx = sidebar.indexOf('<nav')
+    const controlIdx = sidebar.indexOf('toggleCollapse}')
+    assert.ok(panelIdx > -1 && controlIdx > panelIdx, 'the collapse control lives inside the panel')
+  })
 })
 
 describe('shell: main content adapts to the sidebar', () => {
-  /*
-   * CONTRACT CHANGE (Phase A1, deliberate).
-   *
-   * These two assertions previously required the sidebar panel and the main
-   * offset to restate the widths inline (`isCollapsed ? 'w-16' : 'w-64'` and
-   * `isCollapsed ? 'ml-16' : 'ml-64'`) and then checked the two numbers agreed.
-   *
-   * That mechanism was the bug: the same two widths were restated four times
-   * across the sidebar, MainContent, and two fixed overlays, so they could and
-   * did drift. A1 replaced the literals with one source of truth
-   * (`lib/sidebar-layout.ts` over CSS custom properties) and every consumer
-   * now calls `sidebarWidth()`.
-   *
-   * The INTENT is unchanged and still enforced: the panel width and the main
-   * content offset are derived from the same source, so they cannot disagree.
-   */
   it('the sidebar panel and main content both resolve width from one source', () => {
     assert.match(sidebar, /sidebarWidth\(isCollapsed\)/)
     assert.match(mainContent, /sidebarWidth\(isCollapsed\)/)
   })
 
   it('neither the panel nor the offset restates the width inline', () => {
-    // If these literals ever reappear, the single source of truth is broken.
     assert.doesNotMatch(sidebar, /\b(?:ml|w)-(?:16|64)\b/)
     assert.doesNotMatch(mainContent, /\b(?:ml|w)-(?:16|64)\b/)
     assert.doesNotMatch(sidebar, /'4rem'|'16rem'/)

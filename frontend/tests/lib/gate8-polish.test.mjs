@@ -172,12 +172,21 @@ describe('Gate 8: keyboard and screen-reader access', () => {
     assert.ok(/tabIndex={-1}/.test(main), 'skip target must be programmatically focusable')
   })
 
-  it('sidebar rows are real buttons, not clickable divs', () => {
+it('sidebar rows are real buttons, not clickable divs', () => {
     const src = stripComments(read('src/components/Sidebar/index.tsx'))
     assert.ok(!/<div[^>]*onClick=\{\(\) => (handleSelect|setActiveMeeting|toggle)/.test(src),
-      'navigable rows must not be div onClick')
-    assert.ok(src.includes('aria-expanded'), 'folders must expose expansion state')
-    assert.ok(src.includes('aria-current'), 'the active meeting must be marked')
+    'navigable rows must not be div onClick')
+    assert.ok(src.includes('aria-expanded'), 'the collapse control must expose expansion state')
+    /*
+     * A2 moved row semantics into the shared ListRow primitive. The guarantee
+     * is unchanged — the active destination is still marked for assistive
+     * technology — but it is now produced by the primitive from the `active`
+     * prop the sidebar derives from the canonical nav model. Both halves are
+     * asserted so the chain cannot silently break.
+     */
+    assert.ok(src.includes('isNavItemActive('), 'the sidebar must derive active state from the nav model')
+    const listRow = stripComments(read('src/components/ui/list-row.tsx'))
+    assert.ok(listRow.includes('aria-current'), 'ListRow must mark the active row with aria-current')
   })
 
   it('recording status announces transitions without spamming the timer', () => {

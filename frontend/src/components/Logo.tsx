@@ -17,7 +17,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
             ref={ref}
             type="button"
             aria-label="About Recall"
-            className="flex items-center justify-start mb-2 cursor-pointer bg-transparent border-none p-0 rounded-md hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
           >
             <Image src="/logo-collapsed.png" alt="" width={26} height={26} />
           </button>
@@ -28,7 +28,10 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
             ref={ref}
             type="button"
             aria-label="About Recall"
-            className="text-label text-foreground text-center border border-border rounded-full bg-accent font-semibold mb-2 block items-center cursor-pointer hover:bg-accent/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            /* A bordered wordmark, not a filled pill: the brand should read as
+               an identity label, not an accent-coloured button competing with
+               the navigation beneath it. */
+            className="flex h-9 items-center rounded-md border border-border px-2.5 text-label text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
           >
             <span>Recall</span>
           </button>

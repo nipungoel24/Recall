@@ -44,6 +44,13 @@ interface SidebarContextType {
   searchTranscripts: (query: string) => Promise<void>;
   searchResults: TranscriptSearchResult[];
   isSearching: boolean;
+  /**
+   * The live meeting-search query. Owned here rather than in the sidebar so
+   * /meetings — the single search surface — can read the same value the
+   * sidebar input writes, instead of keeping a private copy.
+   */
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
   setServerAddress: (address: string) => void;
   serverAddress: string;
   transcriptServerAddress: string;
@@ -79,8 +86,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // recording state, bridged below, so a WebView refresh during an active
   // recording restores the "recording" sidebar state instead of resetting it.
   const [meetingActiveOverride, setMeetingActiveOverride] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
   const [serverAddress, setServerAddress] = useState('');
   const [transcriptServerAddress, setTranscriptServerAddress] = useState('');
   const [activeSummaryPolls, setActiveSummaryPolls] = useState<Map<string, NodeJS.Timeout>>(new Map());
@@ -328,10 +336,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     isMeetingActive,
     setIsMeetingActive,
     handleRecordingToggle,
-    searchTranscripts,
-    searchResults,
-    isSearching,
-    setServerAddress,
+      searchTranscripts,
+      searchResults,
+      isSearching,
+      searchQuery,
+      setSearchQuery,
+      setServerAddress,
     serverAddress,
     transcriptServerAddress,
     setTranscriptServerAddress,
@@ -347,10 +357,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     meetings,
     isMeetingActive,
     handleRecordingToggle,
-    searchTranscripts,
-    searchResults,
-    isSearching,
-    serverAddress,
+      searchTranscripts,
+      searchResults,
+      isSearching,
+      searchQuery,
+      serverAddress,
     transcriptServerAddress,
     activeSummaryPolls,
     startSummaryPolling,

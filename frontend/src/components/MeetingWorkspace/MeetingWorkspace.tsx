@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -48,6 +48,16 @@ import { NotesTab } from './NotesTab';
 import { ContextTab } from './ContextTab';
 
 export type WorkspaceSection = 'overview' | 'summary' | 'transcript' | 'tasks' | 'notes' | 'context';
+
+/** Every valid `?tab=` value, used to validate deep links. */
+const WORKSPACE_SECTIONS: readonly WorkspaceSection[] = [
+  'overview',
+  'summary',
+  'transcript',
+  'tasks',
+  'notes',
+  'context',
+];
 
 export interface MeetingWorkspaceProps {
   meeting: {
@@ -97,6 +107,21 @@ export function MeetingWorkspace({
 }: MeetingWorkspaceProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceSection>('overview');
+
+  /*
+   * Deep-link support: `/meeting-details?id=…&tab=notes` opens that section
+   * directly, so the Meeting Notes destination can send the user to the notes
+   * instead of the Overview. Read from `window.location` on mount rather than
+   * via useSearchParams, which would require a Suspense boundary and would
+   * break the static export this app ships as.
+   */
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (requested && WORKSPACE_SECTIONS.includes(requested as WorkspaceSection)) {
+      setActiveTab(requested as WorkspaceSection);
+    }
+  }, []);
+
 
   // Shared meeting data and operations
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });

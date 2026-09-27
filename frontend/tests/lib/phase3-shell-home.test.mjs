@@ -48,9 +48,27 @@ describe('Phase 3 — shell tokens', () => {
     assert.deepEqual(violations, [], 'sidebar must use semantic tokens, not raw Tailwind colors')
   })
 
-  it('sidebar uses bg-accent for active nav items', () => {
+  /*
+   * CONTRACT CHANGE (Phase A2, deliberate).
+   * The old assertion required the literal `bg-accent` in the sidebar, which is
+   * how the active row ended up lime. A2 moved row presentation into the shared
+   * ListRow primitive and deliberately stopped using the lime accent as an
+   * active/hover surface. The INTENT — the active destination must be visibly
+   * distinct — is unchanged and is now asserted where the styles actually live,
+   * together with the guarantee that hover never uses the accent either.
+   */
+  it('sidebar marks the active destination without using the lime accent', () => {
     const src = read('components/Sidebar/index.tsx')
-    assert.ok(src.includes('bg-accent'), 'sidebar must use bg-accent for active state')
+    const listRow = read('components/ui/list-row.tsx')
+    assert.match(src, /isNavItemActive\(/, 'active state must be derived from the nav model')
+    assert.ok(
+      !/bg-accent/.test(src),
+      'the sidebar chrome must not paint surfaces with the lime accent',
+    )
+    // Distinctness comes from a selected surface plus an indicator.
+    assert.match(listRow, /bg-muted/, 'rows need a selected/idle surface')
+    assert.match(listRow, /bg-primary/, 'the active indicator uses the primary token')
+    assert.doesNotMatch(listRow, /hover:bg-accent\b/, 'hover must never be the lime accent')
   })
 
   it('MainContent wrapper uses bg-background', () => {
@@ -62,31 +80,51 @@ describe('Phase 3 — shell tokens', () => {
 // ── Sidebar accessibility ─────────────────────────────────
 
 describe('Phase 3 — sidebar accessibility', () => {
-  it('expanded nav items are <button> elements, not <div>', () => {
+  /*
+   * CONTRACT CHANGE (Phase A2, deliberate).
+   * This used to slice the sidebar looking for a "Fixed navigation items"
+   * comment and assert no div carried a router.push onClick. A2 removed that
+   * hand-written block entirely: navigation is now rendered from the canonical
+   * model through ListRow, which emits a real anchor. The INTENT — navigation
+   * must be reachable elements, never clickable divs — is asserted directly.
+   */
+  it('expanded nav items are real elements, not clickable divs', () => {
     const src = read('components/Sidebar/index.tsx')
-    // Find expanded nav section (after "Fixed navigation items" comment)
-    const navStart = src.indexOf('Fixed navigation items')
-    assert.ok(navStart > 0, 'nav section must exist')
-    const navSection = src.slice(navStart, navStart + 3000)
-    // Should NOT have div with onClick for route navigation
-    const divWithOnClick = navSection.match(/<div[^>]*onClick[^>]*router\.push/g)
     assert.ok(
-      !divWithOnClick || divWithOnClick.length === 0,
-      'expanded nav items must be <button>, not <div> with onClick',
+      !/<div[^>]*onClick[^>]*router\.push/.test(src),
+      'expanded nav items must be real elements, not <div> with onClick',
     )
+    assert.match(src, /as="a"/, 'navigation rows must render as anchors via ListRow')
+    assert.match(src, /href=\{item\.href\}/, 'each row must carry its destination')
   })
 
+  /*
+   * CONTRACT CHANGE (Phase A2, deliberate).
+   * aria-current moved from hand-written per-row attributes into the ListRow
+   * primitive, which sets it from the `active` prop. The INTENT — every
+   * navigation destination is marked when current — is now asserted across the
+   * whole chain: the model supplies activePrefixes for all destinations, the
+   * sidebar derives `active` from the model, and the primitive emits the
+   * attribute. That is a stronger guarantee than counting literals in one file.
+   */
   it('sidebar has aria-current="page" on active nav items', () => {
     const src = read('components/Sidebar/index.tsx')
-    assert.ok(
-      src.includes("aria-current="),
-      'sidebar must use aria-current on active nav items',
-    )
-    // Should have aria-current on at least 4 items (Home, Calendar, Daily, Contexts/Templates/Settings)
-    const ariaCurrentCount = (src.match(/aria-current=/g) || []).length
-    assert.ok(
-      ariaCurrentCount >= 4,
-      `sidebar should have aria-current on multiple nav items (found ${ariaCurrentCount})`,
+    const listRow = read('components/ui/list-row.tsx')
+    const nav = read('lib/nav.ts')
+
+    assert.match(listRow, /aria-current/, 'ListRow must emit aria-current for the active row')
+    assert.match(src, /isNavItemActive\(/, 'the sidebar must derive active state from the nav model')
+
+    // Every destination in the model declares the prefixes used to mark it.
+    // Counted inside the model data only, so the NavItem type declaration
+    // (which also names the field) is not counted as a destination.
+    const modelData = nav.slice(nav.indexOf('export const NAV_GROUPS'))
+    const prefixes = (modelData.match(/activePrefixes:/g) || []).length
+    const destinations = (modelData.match(/href:\s*routes\./g) || []).length
+    assert.equal(
+      prefixes,
+      destinations,
+      'every navigation destination must declare activePrefixes so it can be marked current',
     )
   })
 
@@ -142,21 +180,41 @@ describe('Phase 3 — sidebar accessibility', () => {
 
   it('Import Audio button has aria-label', () => {
     const src = read('components/Sidebar/index.tsx')
-    assert.ok(
-      src.includes('aria-label="Import Audio"'),
-      'Import Audio button must have aria-label',
+    /*
+     * CONTRACT CHANGE (Phase A2, deliberate).
+     * Import Audio is now a ListRow. A row takes its accessible name from
+     * `label`: visible text when expanded, and `aria-label` when collapsed to
+     * icon-only. Asserting the literal attribute here would test the wrong
+     * layer, so the name is checked where it is actually supplied and where it
+     * is actually applied.
+     */
+    assert.match(
+      src,
+      /label="Import Audio"/,
+      'Import Audio must supply its accessible name through the row label',
+    )
+    const listRow = read('components/ui/list-row.tsx')
+    assert.match(
+      listRow,
+      /aria-label/,
+      'ListRow must apply the label as the accessible name in collapsed mode',
     )
   })
 
   it('sidebar collapse/expand button has focus-visible ring', () => {
     const src = read('components/Sidebar/index.tsx')
-    // Find the collapse toggle button (has toggleCollapse onClick + aria-label containing "sidebar")
-    const collapseIdx = src.indexOf("isCollapsed ? 'Expand sidebar'")
-    assert.ok(collapseIdx > 0, 'collapse button with aria-label must exist')
-    const surroundingCode = src.slice(collapseIdx, collapseIdx + 400)
+    const listRow = read('components/ui/list-row.tsx')
+    // The control is a ListRow now, so its focus ring comes from the primitive.
+    // The sidebar must still name the control and wire it to the toggle.
     assert.ok(
-      surroundingCode.includes('focus-visible:ring'),
-      'collapse/expand button must have focus-visible ring',
+      src.includes("'Expand sidebar'") || src.includes('Expand sidebar'),
+      'collapse button must provide an accessible name',
+    )
+    assert.match(src, /onClick=\{toggleCollapse\}/, 'collapse control must drive the toggle')
+    assert.match(
+      listRow,
+      /focus-visible:ring/,
+      'rows must carry a focus-visible ring',
     )
   })
 })

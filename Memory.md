@@ -281,7 +281,17 @@ Nothing below has been implemented:
   signature found` line is the expected no-certificate skip.
 - User data untouched: `meeting_minutes.sqlite` byte-identical at 4,632,576 bytes.
 
-## Visual QA — WORKING (recipe corrected in `a3c196b` session)
+## Visual QA — capture works, but do NOT trust it for layout (corrected in `a3c196b`, superseded in A2)
+
+> **Superseded.** This section's `BitBlt` recipe obtains real pixels but
+> **cannot be trusted to decide whether an element exists**: after a
+> programmatic resize the WebView2 keeps a stale paint buffer and a `SW_RESTORE`
+> desyncs the reported viewport, producing screenshots with blank regions that
+> look exactly like a missing-element bug. In A2 this produced a false
+> "the footer and Settings are missing" conclusion that cost real time.
+> **Use the CDP path documented in the A2 section** (`Page.captureScreenshot` +
+> `Runtime.evaluate` geometry against the app's own WebView2), and confirm any
+> "element is absent" claim with `getBoundingClientRect()` before acting on it.
 
 The earlier "not capturable" conclusion was **wrong** and is retracted. WebView2
 pixels *are* obtainable on this host. Two mistakes caused the earlier failures:
@@ -516,29 +526,131 @@ expanded, navigation renders, main-content offset correct, meeting data intact.
 User data **byte-identical**: sha256 `4911B87F…` unchanged, 51 meetings, 7627
 transcripts, 0 audio files, no recording started.
 
-## Still open for A2
+# Phase A2 — Navigation Rebuild (sidebar, `/meetings`, `/notes`)
 
-Remove the archive · build `/meetings` · make `/notes` reachable · move the
-collapse control inside the surface · drop the duplicate Record row · re-tier
-the footer. The expanded sidebar still **overflows a 737px window**, so the
-archive and footer sit below the fold — A2 fixes that.
+Rebuilt the sidebar as a small composition driven by the A1 primitives, moved the
+meeting archive to a real destination, and made Meeting Notes a first-class page.
+`frontend/src/components/Sidebar/index.tsx` went 1174 → ~365 lines.
+
+## What shipped
+
+- **Sidebar = `nav > header + nav + footer`.** The `nav` region is the *only*
+  scrollable area; the footer is a non-shrinking sibling. Expanded and collapsed
+  render the *same* `NAV_GROUPS` model two ways — there is no second list.
+- **Archive removed** from the sidebar → real `/meetings`
+  (`src/app/meetings/page.tsx`), chronological with TODAY / YESTERDAY / THIS WEEK /
+  EARLIER buckets, driven by the provider's real meeting list.
+- **`/notes` is real** (`src/app/notes/page.tsx`). The fake `SAMPLE_NOTES` payload
+  is gone. It is a per-meeting index that deep-links into a meeting's Notes tab via
+  `routes.meetingSection(id, 'notes')`; `MeetingWorkspace` reads `?tab=` on mount.
+  No fake data, no placeholder rows.
+- **Collapse control lives inside the panel** and carries `aria-expanded` +
+  `aria-controls="recall-sidebar-navigation"`.
+- **One recording action.** The duplicate "Record / New Meeting" row and the old
+  opposite-polarity control are gone. Footer is Start Recording (primary) →
+  Import Audio (secondary) → About (utility).
+- **Identity:** expanded Recall wordmark is a bordered label, not a lime pill.
+  Collapsed mark uses the same bordered container.
+- Search is provider-owned (`searchQuery` / `setSearchQuery`, 250 ms debounce) and
+  is shared by the sidebar field and the meetings list.
+
+## Three real defects found by visual QA and fixed
+
+1. **Nav overflowed its region** — `navScrollHeight 456` vs `navClientHeight 428`
+   at 700 css px, clipping the Settings row. `SECTION_LABEL` carried `pt-5` (20px)
+   on all three groups including the first. Fixed: `pt-3`, plus a new `flush` prop
+   that drops the top padding on the first section in the scroll region.
+2. **Horizontal scrollbar in the nav.** Rows are `w-full` *and* carried `mx-1`, so
+   they overflowed the content box by 4px; `overflow-y-auto` forces the other axis
+   to compute to `auto`, so a horizontal scrollbar appeared and cut the rounded
+   right corners of active/hover rows. Fixed: horizontal inset moved to the nav
+   (`px-1`) and `mx-1` dropped from the row — padding, not margin, is
+   scrollbar-safe.
+3. **The collapsed rail rendered no destinations at all.** The `isCollapsed`
+   branch emitted one divider per group and *no rows*, so the rail looked tidy and
+   navigated nowhere. The existing tests passed 31/31 because they only asserted
+   that the rail *had* a collapsed presentation. Fixed to render each group's
+   items as icon rows with tooltips, and `sidebar-polish.test.mjs` gained a
+   regression guard (`the rail actually renders every destination, not only
+   dividers`).
+
+## Visual QA — the BitBlt recipe lies about layout
+
+The screen-capture path (foreground → topmost → `BitBlt`) reported the footer and
+Settings as *missing* at several window sizes. They were present the whole time.
+
+**Cause:** after a programmatic resize the WebView2 surface keeps a stale paint
+buffer, and a `SW_RESTORE` in the capture helper desynchronised the reported
+viewport from the visible client area. Screenshots taken in that state show blank
+sidebar below the last painted row — indistinguishable from a real layout bug.
+
+**Reliable path (use this):** launch with
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`, then talk CDP
+to the app's own WebView2 — still the real Tauri app, real backend, real data:
+
+- `http://localhost:9222/json/list` — **`localhost`, not `127.0.0.1`**; the latter
+  returns 404 for every path.
+- `Page.captureScreenshot` returns the composited WebView surface, immune to the
+  stale-buffer problem.
+- `Runtime.evaluate` with `getBoundingClientRect()` / `scrollHeight` /
+  `clientWidth` gives exact geometry. Prefer measuring over squinting at pixels.
+
+Corollary: never conclude "the element is missing" from a BitBlt screenshot alone.
+Confirm with `getBoundingClientRect()` first.
+
+Helpers live outside the repo in
+`%TEMP%/opencode/recall-visual-qa/` (`capture-cdp.ps1`, `overflow.ps1`,
+`window placement`, pixel samplers). CDP also makes navigation deterministic —
+`document.querySelector('a[href="/meetings"]').click()` on a real element instead
+of synthetic typing or coordinate clicks. Note the collapse control has **no**
+`aria-label`; its accessible name comes from `sr-only` text, so select it with
+`button[aria-controls="recall-sidebar-navigation"]`.
+
+## Validation
+
+- `tsc` src/ clean.
+- JS suite **543 tests / 541 pass / 2 known failures** — Phase 4 `checkPermissions`
+  (pre-existing) and Bun-only `qa-routes`.
+- Gates: nav-ia 30/30 · sidebar-polish 32/32 · Gate 8 52/52 · phase3 32/32 ·
+  design-system 20/20 · design-token 12/12 · branding 5/5 · tauri-reg 5/5.
+- Production build succeeded (MSI + NSIS), installed, verified in the real app.
+- Visual: expanded (all 8 destinations, 3 labels, full footer, no scrollbars),
+  collapsed (all 8 icon rows + dividers, active state), `/meetings`, `/notes`.
+- Geometry at 1100×700: `navClientWidth == navScrollWidth == 255`,
+  `navClientHeight == navScrollHeight == 475` — no overflow on either axis.
+- User data **byte-identical**: sha256 `4911B87F823B6751576C15D96DE19B194B91B22AA121E859787B7BD3EB19BA51`,
+  4,632,576 bytes, 51 meetings, 7627 transcripts, empty WAL. No recording started.
+
+## Still open (not A2 scope)
+
+- **The main content overflows the viewport by 48px** (`docScrollHeight 748` vs
+  `docClientHeight 700`), so the whole page scrolls. It is `MAIN` / the home
+  shell, not the sidebar. Pre-existing from A1; belongs to the Phase B
+  workspace/page-shell pass.
+- **`/notes` is visually indistinguishable from `/meetings`** — both list meetings
+  by date. The DB has 0 note rows, so there is nothing to differentiate yet. A
+  future phase should surface note presence/preview (e.g. "notes" affordance per
+  meeting) so the two destinations earn their separate existence.
+- **Collapsed logo mark is still a lime raster asset** (`/logo-collapsed.png`).
+  The container now matches the expanded bordered treatment, but the asset itself
+  is brand-owned and was deliberately left alone.
+- Meeting search in the sidebar writes to the shared query but the meetings page
+  has no explicit loading/error state yet.
 
 # Next Exact Step
 
 1. Gates 1 through 8 complete. Phase 0 (meeting intelligence) landed `a3c196b`.
-2. **Phase A — navigation refoundation** (approved, not started):
-   `isCollapsed` default `false`; remove the sidebar archive into a new
-   `/meetings` destination; make `/notes` reachable; move the collapse control
-   *inside* the sidebar surface; one recording action (drop "Record / New
-   Meeting"); keep About as a footer utility; canonical `lib/nav.ts`;
-   `ui/list-row.tsx`; `ui/nav-section.tsx`; footer Primary/Secondary/Utility;
-   single sidebar-width source of truth; fix sidebar overflow at 737px height.
-   Guard: `tests/lib/nav-ia.test.mjs`. `sidebar-polish.test.mjs` currently
-   asserts "meeting history is the only independently scrollable region" — that
-   encodes the OLD IA and must be changed **deliberately and documented**, not
-   silently deleted.
-3. Then Phase B (workspace header/tabs/states), Phase C (design system),
-   Phase D (interaction), Phase E (secondary screens), Phase F (visual QA).
+   Phase A1 (navigation foundation) landed `5df672a`. **Phase A2 (navigation
+   rebuild) is complete in the working tree** — sidebar, `/meetings`, `/notes`,
+   plus three defects found by visual QA (nav vertical overflow, nav horizontal
+   scrollbar, collapsed rail rendering no destinations). Awaiting commit.
+2. Then Phase B (workspace header/tabs/states) — **start here**, and it should
+   absorb the 48px `MAIN` overflow recorded as still-open above, since that is the
+   same page-shell surface. Then Phase C (design system), Phase D (interaction),
+   Phase E (secondary screens), Phase F (visual QA).
+3. When visual QA resumes, use the CDP path in the A2 section, not the BitBlt
+   recipe — the BitBlt path reports false "element is missing" results after a
+   programmatic resize.
 4. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
 5. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
 

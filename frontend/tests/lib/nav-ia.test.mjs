@@ -29,10 +29,11 @@ const PROVIDER = 'src/components/Sidebar/SidebarProvider.tsx'
 const SIDEBAR = 'src/components/Sidebar/index.tsx'
 
 describe('a1: canonical navigation model', () => {
-  it('nav.ts exists and is the only navigation model', () => {
+  it('nav.ts exists and is the only place a navigation model is declared', () => {
     assert.ok(existsSync(NAV), 'lib/nav.ts must exist')
 
-    // Any second file that declares a competing sidebar navigation list.
+    // Consuming the model is the point; DECLARING another one is the bug. So
+    // this looks for a second export of the model, not for a second import.
     const offenders = []
     const walk = (dir) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -42,12 +43,23 @@ describe('a1: canonical navigation model', () => {
           walk(rel)
         } else if (/\.(ts|tsx)$/.test(entry.name) && rel !== NAV) {
           const src = readFileSync(join(process.cwd(), rel), 'utf8')
-          if (/NAV_GROUPS|NAV_ITEMS\b/.test(src)) offenders.push(rel)
+          if (
+            /export\s+const\s+NAV_(?:GROUPS|ITEMS)\b/.test(src) ||
+            /export\s+(?:function|const)\s+isNavItemActive\b/.test(src)
+          ) {
+            offenders.push(rel)
+          }
         }
       }
     }
     walk('src')
     assert.deepEqual(offenders, [], `competing navigation models: ${offenders.join(', ')}`)
+  })
+
+  it('the sidebar actually renders the canonical model', () => {
+    const src = read(SIDEBAR)
+    assert.match(src, /NAV_GROUPS/, 'the sidebar must render lib/nav.ts, not a private list')
+    assert.match(src, /isNavItemActive\(/, 'the sidebar must derive active state from the model')
   })
 
   it('contains no JSX', () => {
@@ -206,17 +218,26 @@ describe('a1: route integrity', () => {
       )
 
       const routeFile = path === '/' ? 'src/app/page.tsx' : `src/app${path}/page.tsx`
-      // /meetings is the one destination whose screen A2 builds. A1 adds the
-      // route and the nav entry; it must not add a placeholder screen.
-      if (path === '/meetings') {
-        assert.ok(
-          !existsSync(routeFile),
-          '/meetings must not have a placeholder screen in A1 — A2 implements it',
-        )
-        continue
-      }
-      assert.ok(existsSync(routeFile), `navigation destination ${path} has no page at ${routeFile}`)
+      assert.ok(
+        existsSync(routeFile),
+        `navigation destination ${path} has no page at ${routeFile}`,
+      )
     }
+  })
+
+  it('the /meetings library is a real screen, not a placeholder', () => {
+    // A1 added the route with no page on purpose. A2 implements it, so the
+    // screen must now exist AND read real data — a stub that renders nothing
+    // would satisfy the existence check above.
+    const src = read('src/app/meetings/page.tsx')
+    assert.ok(src.length > 0, '/meetings must have a real implementation')
+    assert.match(src, /useSidebar\(\)/, '/meetings must read real meeting data from the provider')
+    assert.match(src, /meetings/, '/meetings must render the provider meeting list')
+    assert.doesNotMatch(
+      src,
+      /SAMPLE|FAKE_|placeholder meeting/i,
+      '/meetings must not ship fixture data',
+    )
   })
 })
 
