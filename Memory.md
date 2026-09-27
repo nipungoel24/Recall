@@ -281,29 +281,165 @@ Nothing below has been implemented:
   signature found` line is the expected no-certificate skip.
 - User data untouched: `meeting_minutes.sqlite` byte-identical at 4,632,576 bytes.
 
-## Visual QA — NOT COMPLETED
+## Visual QA — WORKING (recipe corrected in `a3c196b` session)
 
-No visual claim is made for this commit. WebView2 content is not reliably
-capturable on this host: the Recall main window reports visible, but every
-`CopyFromScreen` capture returns whatever is composited on top. Restore,
-`SetForegroundWindow`, `HWND_TOPMOST`, `RedrawWindow` and minimizing all other
-windows were all attempted and all failed to yield app pixels. The structural and
-test validation above stands on its own; the radius ladder and every deferred
-item require a human or otherwise reliable visual pass.
+The earlier "not capturable" conclusion was **wrong** and is retracted. WebView2
+pixels *are* obtainable on this host. Two mistakes caused the earlier failures:
+
+1. **Wrong HWND.** `Get-Process recall` exposes six top-level windows. The one
+   being grabbed was `tray_icon_app` (`IsWindowVisible = false`, 1920x1063). The
+   real window is class **`Tauri Window`**, `visible = true`, client 1100x700.
+2. **Foreground lock + occlusion.** `SetForegroundWindow` returns TRUE but the
+   foreground HWND does not change. The window was also restored by the app onto
+   the secondary monitor at `(-1432,107)`, directly beneath the agent TUI.
+
+Working recipe (verified repeatedly, dark theme, 1100x700):
+
+1. Select the window by **class `Tauri Window` AND `IsWindowVisible`**. Never
+   `tray_icon_app`.
+2. `AttachThreadInput(myTid, foregroundTid, true)` → `ShowWindow(SW_RESTORE)` →
+   `BringWindowToTop` → `SetForegroundWindow`; **then verify
+   `GetForegroundWindow() == hwnd`**.
+3. `SetWindowPos(hwnd, HWND_TOPMOST, …)` to rise above the agent TUI.
+4. Wait ~1.5s for WebView repaint.
+5. `BitBlt` the window rect from the screen DC into a managed `Bitmap` HDC.
+6. Clear `HWND_TOPMOST`.
+
+**Never use `PrintWindow`** for this app: WebView2 renders through
+DirectComposition into a GPU surface, so `WM_PRINT` returns a flat blank
+(meanLuma 0.0, 1/16 buckets) on the window *and* on
+`Chrome_RenderWidgetHostHWND` / `Intermediate D3D Window`. PrintWindow "succeeds"
+and still yields nothing.
+
+Two further environment facts worth keeping:
+
+- Cross-process `GetWindowText` **hangs indefinitely** on some windows in this
+  session (reproduced on a Chrome window). Resolve the PID first and use
+  `Get-Process .MainWindowTitle`; do not call `GetWindowText` across processes
+  inside an `EnumWindows` callback.
+- Navigation limits without coordinate clicks: `{TAB}` and `{ENTER}` work, but
+  **printable text does not reach WebView2** via `SendKeys` (neither typed chars
+  nor clipboard paste), and **arrow keys do not drive the Radix roving tabindex**
+  in this build. So workspace tabs, theme switching, and reaching a non-first
+  meeting require either a human or a different input path. Never substitute
+  approximate coordinate clicks — that previously started recordings.
+
+# Phase 0 — Meeting Intelligence Recovery (a3c196b)
+
+## Root cause
+
+Every meeting opened with **"Intelligence Unavailable / Unable to load meeting
+intelligence"**, including meetings that simply had no generated intelligence.
+
+The five Meeting Intelligence Tauri commands have existed since Phase 4
+(`80a1485`) in `src/summary/intelligence_commands.rs`, and the re-exports in
+`src/summary/mod.rs` were already correct — but they were **never added to the
+`tauri::generate_handler![]` list in `src/lib.rs`**. `git log` confirms the word
+"intelligence" never appears in `lib.rs`. An unregistered command fails at
+**runtime** with "unknown command"; it is not a compile error, not a TypeScript
+error, and not covered by any Rust test.
+
+Phase 5's frontend (`1021291`) was written against those commands, so:
+
+| Consumer | Command | Effect |
+|---|---|---|
+| `OverviewTab` | `api_get_meeting_intelligence`, `..._items` | error state on every meeting |
+| `TasksTab` | same two | "Tasks Unavailable" on every meeting |
+| `useEvidenceNavigation` | `api_get_transcript_segment_position` | Phase 5 provenance/evidence navigation could not resolve positions |
+
+Unaffected (already-registered commands): Summary, Transcript, Notes, Context.
+
+This was **never a regression** — the wiring was simply never finished, which is
+why 172/172 Phase 5 tests passed while the feature was 100% broken.
+
+## Fix
+
+1. Registered all five commands in `src/lib.rs`.
+2. `api_generate_meeting_intelligence` takes a single nested
+   `request: GenerateIntelligenceRequest`, but the service sent flat arguments.
+   Tauri would have rejected it with a missing-argument error even once
+   registered. Payload is now nested. This was masked by defect 1.
+3. Two stale calls to **deleted** commands, surfaced by the new gate:
+   - `ModelSettingsModal` called `api_get_auto_generate_setting` on mount. That
+     command was commented out of `lib.rs` and its Rust impl deleted, so the
+     fetch always rejected and only logged. The modal is reachable from the
+     Summary tab, so it fired in normal use. Removed.
+   - `builtin-ai.ts` exposed `getModelsDirectory()` wrapping
+     `builtin_ai_get_models_directory`, which never existed in Rust and had no
+     callers. Removed. (`parakeet_`/`whisper_get_models_directory` are real and
+     registered — untouched.)
+
+## Current data reality
+
+`meeting_intelligence` = **0 rows** across all 51 meetings, and
+`meeting_notes` = 0 rows. So "no intelligence yet" is the *only* correct state
+today for every meeting. The UI now says exactly that, with a
+"Generate Intelligence" path, instead of claiming a load failure.
+
+The auto-generate checkbox in `ModelSettingsModal` is still local-only state
+with no persistence. Pre-existing; needs a real backend setting, deliberately
+not faked.
+
+## Gate added
+
+`frontend/tests/lib/tauri-command-registration.test.mjs` parses every literal
+`invoke('…')` in `src/` and asserts the command is in the Rust handler. It fails
+loudly on future drift — the exact class of bug that let this ship. It names the
+five intelligence commands explicitly.
+
+## Validation
+
+`tsc` clean · `cargo fmt --check` clean · `cargo test` 349 passed / 0 failed ·
+JS 513 tests, 511 pass, 2 known failures · Phase 5 172/172 · Gate 8 52/52 ·
+design-system 20/20 · design-token-integrity 12/12 · registration gate 5/5 ·
+production build succeeded, installed, verified visually. User data untouched:
+`meeting_minutes.sqlite` byte-identical at 4,632,576 bytes, WAL 0, 0 audio files.
+
+## Two further defects found by visual inspection (NOT yet fixed)
+
+1. **Expanded sidebar overflows a 737px-tall window.** The nav block
+   (Home → Meeting Notes) fills the full height, so the meeting archive *and the
+   entire footer* — Start Recording, Import Audio, Settings, About — are pushed
+   below the fold with no way to reach them. Directly motivates Phase A.
+2. **Workspace tab strip is clipped at 1100px.** Only "Overview" and part of
+   "Summary" are visible; Transcript/Tasks/Notes/Context run off-screen
+   alongside the title and date in the same `justify-between` row.
+
+Also visually confirmed: the active nav row and the RECALL wordmark both render
+**lime** (`--accent` misuse), and focus rings now show the correct
+`ring-offset-background` behaviour in dark mode (blue ring, no white halo) from
+`4e6d081`.
 
 # Next Exact Step
 
-1. Gates 1 through 8 complete — proceed to Gate 9 (tests + docs).
-2. Establish reliable visual QA (human pass or a capture method that works with
-   WebView2), then run the deferred UI-system work as its own deliberate phase:
-   Agent Forge design audit → design-system architecture → implementation →
-   visual QA → Agent Forge review → production verification.
-3. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
-4. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
+1. Gates 1 through 8 complete. Phase 0 (meeting intelligence) landed `a3c196b`.
+2. **Phase A — navigation refoundation** (approved, not started):
+   `isCollapsed` default `false`; remove the sidebar archive into a new
+   `/meetings` destination; make `/notes` reachable; move the collapse control
+   *inside* the sidebar surface; one recording action (drop "Record / New
+   Meeting"); keep About as a footer utility; canonical `lib/nav.ts`;
+   `ui/list-row.tsx`; `ui/nav-section.tsx`; footer Primary/Secondary/Utility;
+   single sidebar-width source of truth; fix sidebar overflow at 737px height.
+   Guard: `tests/lib/nav-ia.test.mjs`. `sidebar-polish.test.mjs` currently
+   asserts "meeting history is the only independently scrollable region" — that
+   encodes the OLD IA and must be changed **deliberately and documented**, not
+   silently deleted.
+3. Then Phase B (workspace header/tabs/states), Phase C (design system),
+   Phase D (interaction), Phase E (secondary screens), Phase F (visual QA).
+4. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
+5. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
 
 # Blockers
 
-- **Automated visual QA is UNRELIABLE on this host**: WebView2 content is not captured by `CopyFromScreen`. The Recall main window reports `IsWindowVisible = true` at 1920x1060, yet every screenshot returns the topmost composited window instead. `ShowWindow(SW_RESTORE/SW_SHOW)`, `SetForegroundWindow`, `BringWindowToTop`, `SetWindowPos(HWND_TOPMOST)`, `RedrawWindow`, and minimizing all other top-level windows were each attempted and each failed. Do not claim any visual, dark-mode, or layout verification from screenshots on this machine; a human pass is required.
+- **Automated visual QA WORKS** — see "Visual QA — WORKING" above for the verified
+  recipe. This is no longer a blocker. Residual limitation: printable text and
+  arrow keys do not reach WebView2 synthetically, so navigating to a *specific*
+  meeting, switching workspace tabs, or toggling the theme still needs a human
+  or a non-coordinate input path. Do not fall back to coordinate clicks.
+- **`meeting_intelligence` is empty (0/51 meetings) and `meeting_notes` is empty
+  (0 rows).** Correct UI now reports "No Intelligence Generated" with a
+  generation path. Populating them requires a configured summary provider and
+  would write to the user database — do not do that unprompted.
 - Native GUI / Windows recording QA NOT PERFORMED (Windows CLI host only; `cargo build` is build verification, NOT GUI workflow QA).
 - macOS recording QA NOT AVAILABLE.
 - Bun-only test suites cannot run on this machine (NOT AVAILABLE).
