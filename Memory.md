@@ -839,32 +839,254 @@ icon-only control without an accessible name, no raw palette classes on Home).
 - At 1920x1080 and above, Home's `max-w-[1080px]` column leaves a large empty band
   on wide monitors. That is a content-density decision, not a layout defect.
 
+
+# Phase C - Page composition, visual hierarchy, desktop polish
+
+Phase C improved the *composition* of the screens Phase B established geometry
+for. It changes zero Rust source, zero backend behaviour, zero database code, and
+performs no global design-system, card, colour or radius migration.
+
+## C1 - Gutter ownership: one model
+
+Phase B found the duplication: the shell supplies `px-8 py-6` in `MainContent`,
+and Home (`max-w-[1080px] mx-auto px-8 py-8 pb-12`) and Settings
+(`max-w-6xl mx-auto px-8 py-6` / `max-w-6xl mx-auto p-8 pt-6`) each added their
+own on top. Home and Settings were therefore inset 56-64px while Meetings was
+inset 32px, and both were `mx-auto` centred, so their content edges did not line
+up with anything.
+
+**The model chosen:**
+
+```
+shell owns the gutter   ->  MainContent: px-8 py-6   (the only declaration)
+page owns its measure   ->  max-w-* only: no px-*, no py-*, no mx-auto
+```
+
+Pages are left-aligned, not centred, on purpose: a centred page drifts away from
+the shared left edge as its measure changes, which was the inconsistency Phase C
+set out to remove. Measured after the change, the content left gutter is **288px on
+every screen** (256px sidebar + 32px shell gutter) at all four tested widths.
+
+## C2 - Content width matched to content type
+
+Not one universal max-width:
+
+| Screen | Measure | Why |
+|---|---|---|
+| Home | `max-w-6xl` (1152) | three-column dashboard grid needs the room |
+| Meetings | `max-w-4xl` (896) | an archive row is title + date + time |
+| Notes | `max-w-3xl` (768) | a per-meeting destination, not a scanning surface |
+| Settings | `max-w-6xl` | forms and tab strips |
+| Workspace | full available width | it is the work surface |
+
+A first attempt used `max-w-5xl` on Meetings and a full-width-feeling `max-w-4xl`
+with the time far to the right; the CDP screenshot showed a large dead gap between
+a short title and its time, so the measure and the row shape were fixed together.
+
+## C3/C14 - Page header system and typography
+
+`PageHeader` gained a `meta` slot for compact factual metadata, which is the right
+home for "51 meetings" -- useful and scannable, unlike a sentence. Descriptions
+became genuinely opt-in: Meetings' "Every meeting Recall has recorded, newest first."
+was removed because it restated the title and the obvious sort order (this was the
+"unnecessary text" complaint). Notes keeps a description because notes living
+*inside a meeting* is the one non-obvious fact about that screen.
+
+`EmptyState` gained `tone="error"` so a failure cannot be mistaken for an empty
+list, and a new `ListSkeleton` provides a quiet, announced loading placeholder.
+
+Measured typography on the real DOM after the change:
+
+- Meetings: 4 sizes (24 page title, 14 body, 12 caption, one 13px) and 4 weights,
+  154 of 161 text nodes at weight 400. Not an all-bold interface.
+- Home: 3 sizes (20 hero, 14, 12), 4 weights.
+- Zero raw palette classes on all three.
+
+## C4/C5 - Meetings became a real archive, and an honest one
+
+Before: rows were ~96px tall (title, then a redundant full-date line under each
+one), a description restating the title, and no count.
+
+After, verified in the installed app at 1920x1080: one line per meeting, title
+truncating on the left with date and time together on the right, a second line
+only when a transcript snippet actually matched. 20+ meetings are visible on one
+screen instead of ~8.
+
+**The honesty fix is the important one.** `SidebarProvider.fetchMeetings` caught a
+failed `api_get_meetings` and called `setMeetings([])`, which made a broken load
+indistinguishable from "you have no meetings". The provider now records
+`isMeetingsLoading` and `meetingsError` (and no longer wipes the list on failure);
+the page renders a skeleton while loading, and on failure an inline error with a
+**Retry** action wired to the pre-existing `refetchMeetings`. The empty state is
+gated on `!meetingsError && !isMeetingsLoading && !hasArchive` so it can never
+appear as a lie.
+
+## C6 - Notes is no longer a clone of Meetings
+
+The two screens had the same title treatment, the same date grouping, the same row
+shape and the same trailing date. Notes is now differentiated by information
+architecture: a narrower measure, rows that name their destination
+("Notes >") instead of repeating a date the list is already grouped by, and a
+header that explains the per-meeting model.
+
+**Deliberately not done:** a "has notes" indicator. Note presence lives in
+`meeting_notes` and there is no read-only query for it, so the screen cannot know
+which meetings have notes. Adding one is a backend change, which Phase C forbids.
+Rather than fake it, the screen states the truth -- "No meeting has notes written
+yet" -- which is accurate: the database holds zero note rows. The existing
+`refetchMeetings` was reused rather than adding a parallel `retryMeetings` to the
+context API.
+
+## C9/C10 - Button and icon discipline
+
+- Meetings has **no** recording button. A2 established exactly one recording
+  action application-wide, in the sidebar footer, and the archive does not
+  reintroduce a second one.
+- Its single header action is a secondary `outline` button, text only. A calendar
+  icon beside the word "Calendar" is redundant, so it was removed; the visible
+  label stays short while `aria-label="Open Calendar"` keeps the accessible name
+  descriptive. This is the visible-text / accessible-text distinction C3 calls for.
+- Measured on the real DOM: Meetings and Notes render **0 filled (competing
+  primary) controls** and **0 icon-only controls without an accessible name**.
+
+## C11/C12/C13 - Borders, hover, spacing
+
+- Bordered elements containing text, measured on the real DOM: Meetings 1, Notes 1,
+  Home 12. The archive is no longer a stack of bordered boxes.
+- Phase B already retired `hover:bg-accent`; Phase C added none, and added no
+  `transition-all` (asserted by the new tests).
+- Section rhythm inside the archive is `gap-8` between date groups, `mb-1.5` under
+  a group heading, and `min-h-9` rows -- existing Tailwind steps only.
+
+## C16 - Light and dark
+
+Both themes captured for all five screens at four widths. Light mode shows the warm
+off-white `--background` with neutral borders, no raw white, no raw gray, and the
+active nav row uses the muted surface plus the primary indicator. No
+theme-specific fix was required; both modes pass on measurement and on inspection.
+
+## C19 - Visual QA (CDP only)
+
+40 screenshots in `%TEMP%/opencode/phaseC/` plus before/after pairs. Measured per
+screen, per viewport, per theme -- not inferred from source:
+
+| viewport | hOverflow | vOverflow | document scrolls | overflowers |
+|---|---|---|---|---|
+| 1100x700 | 0 | 0 | no | none |
+| 1366x768 | 0 | 0 | no | none |
+| 1920x1080 | 0 | 0 | no | none |
+| 2545x1400 | 0 | 0 | no | none |
+
+Identical for Home, Meetings, Notes, Settings and the Meeting Workspace, in both
+themes. 2545x1400 remains the largest honest client because the host's physical
+display is 2560x1440.
+
+## C21 - Tests
+
+Three new suites, 34 assertions, all structural rather than syntax-matching:
+
+- `page-composition.test.mjs` (11) -- the shell still owns the gutter; no page
+  re-declares padding or centres itself; every page declares a measure and the
+  measures are differentiated; the header exposes `meta`, exactly one `h1`, an
+  error tone and an announced skeleton; no raw palette and no `transition-all`.
+- `meetings-page.test.mjs` (13) -- real provider path, no second data path, no mock
+  dataset, chronological buckets, loading/error/Retry, the empty state gated on
+  success, the provider not collapsing failure to an empty list, one-line rows with
+  metadata on the row, rows not becoming cards, no second recording control, the
+  header action stays secondary, accessible name fuller than the visible label.
+- `notes-page.test.mjs` (10) -- a measure different from Meetings, rows that name
+  their destination, no duplicated header copy, honest "no notes yet" semantics, no
+  faked presence indicator, no invented content, deep-link into the real notes tab,
+  no second editor or persistence path, loading/error handled.
+
+All three strip comments before scanning, because these files *document* the rules
+they follow ("there is no local fixture", "deliberately has no Start Recording
+button") and a naive text search flagged that prose as a violation.
+
+Regression gates unchanged: **593 tests / 591 pass / 2 known failures** (Phase 4
+`checkPermissions`, Bun-only `qa-routes`). Phase 5 aggregate 172/172, Gate 8 52/52,
+design-system 20/20, design-token 12/12, nav-ia 30/30, sidebar-polish 32/32,
+phase3 32/32, layout-foundation 16/16, branding 5/5, tauri-reg 5/5.
+`cargo test --workspace`: 348 + 2 + 1 passed, 0 failed. `tsc` src clean.
+
+## C22 - Data integrity
+
+Byte-identical before and after: sha256 `4911B87F...`, 4,632,576 bytes, WAL 0,
+audio 0. No recording, no meeting created or modified, no note edited, no
+transcript altered. Opening meetings for screenshots is read-only and was the only
+database interaction.
+
+## C23 - Encoding safety
+
+Every file edit in Phase C went through the ISO-8859-1 byte-safe patcher or the
+editor tool, never a PowerShell text cmdlet. `audit-bytes.ps1` reports drift on
+exactly two files -- `meetings/page.tsx` and `notes/page.tsx` -- and both are the
+intentional full rewrites, which replaced em dashes and an ellipsis with ASCII.
+Every other file preserves its non-ASCII bytes exactly, and a mojibake sweep
+(`�?`, `â`, U+FFFD) across `frontend/src` returns nothing. The em dash in
+"System audio is optional - mic-only recording" and the bullet in "0 Meetings -
+Updated" were confirmed intact on the rendered page.
+
+## Found, documented, NOT fixed (out of Phase C scope)
+
+- **CSP blocks every Tauri IPC call** (carried from Phase B). ~15
+  `http://ipc.localhost/...` violations; `connect-src` omits `ipc.localhost`.
+  Functional via the postMessage fallback, but Agent Forge's "fix console errors
+  before release" rule applies. Phase C did not touch `tauri.conf.json`.
+- **Home renders two filled primaries**: "Start Recording" in the hero and
+  "Generate Daily Brief" in its card. They sit in separate regions and each is
+  primary within its own context, which is defensible, but a strict reading of C9
+  ("one obvious primary action") would demote one. Changing it is a product
+  decision about Home's hero, not a composition fix, so it is flagged rather than
+  made. The hero CTA is also a second recording control outside the sidebar footer
+  that A2 standardised on -- worth a product decision.
+- **Home has 12 bordered elements** containing text. As a dashboard of distinct
+  panels the borders are structural rather than decorative, but it is the densest
+  border usage in the app and a candidate for the card pass.
+- **Home does not use `PageHeader`**: its hero is its header, and its `h1` is
+  `text-xl` (20px) rather than the 24px `text-page-title` the other screens use.
+  Intentional-looking, but it means Home is outside the page-header system.
+- **Workspace panel padding** (`p-6`) still stacks on the shell's `py-6`, giving
+  48px of vertical inset inside the workspace. The workspace's information
+  architecture is explicitly out of Phase C scope, and the visible result reads
+  correctly, so this was left alone.
+- **133 raw-palette classes** and **16 `transition-all`** usages remain elsewhere in
+  the app. The screens Phase C owns measure clean; a global migration is Phase D+.
+- **No note-presence query exists**, so Notes cannot show which meetings have
+  notes. This needs a read-only Tauri command, which is a backend change.
+
 # Next Exact Step
 
-1. Gates 1 through 8 complete. Phase 0 landed `a3c196b`, Phase A1 `5df672a`,
-   Phase A2 `4a89d1f`, and **Phase B (desktop layout foundation) is complete**.
-   The 48px document overflow is fixed at the root: `html` now has a definite
-   height, the shell owns the viewport with `h-dvh`, `MainContent` owns the only
-   page scroller, and no page claims `h-screen`. Measured zero horizontal and
-   zero vertical document overflow at six desktop sizes, light and dark.
-2. **Phase C (design system) is next**, and is the tranche deliberately held
-   back: the 133 raw-palette classes, the 16 `transition-all` usages, and the
-   per-screen gutter invention (Home and Settings double their padding) belong
-   there, not in a layout pass. Do not change the radius scale.
-3. A Tauri-config defect surfaced during Phase B visual QA and is not a layout
-   problem: `connect-src` omits `ipc.localhost`, so every IPC call logs a CSP
-   violation before Tauri falls back to postMessage. Fix alongside other config
-   work; the app is functional meanwhile.
-4. Visual QA must use the CDP path (see the A2 and Phase B sections). Two traps
-   worth remembering: the BitBlt screen-capture recipe reports false "element is
-   missing" results after a programmatic resize, and toggling the `dark` class
-   does not change theme because `ThemeProvider` owns the state. Write
-   `localStorage["recall-theme"]` and reload instead.
-5. **Never edit a source file from PowerShell text cmdlets.** They corrupt UTF-8
+1. Gates 1 through 8 complete. Phase 0 `a3c196b`, A1 `5df672a`, A2 `4a89d1f`,
+   Phase B `a5104fc`, and **Phase C (page composition) is complete**. The gutter
+   model is now: the shell owns `px-8 py-6`; a page owns only its measure, never
+   its own padding and never `mx-auto`, so every screen starts on the same 288px
+   left edge. Meetings is a dense one-line archive with real loading/error/Retry,
+   and Notes is differentiated from it by information architecture rather than by
+   inventing note content.
+2. **Phase D is next** and owns exactly what Phase C deliberately left: the 133
+   raw-palette classes, the 16 `transition-all` usages, the border/card audit
+   (Home carries 12 bordered text elements), and the two-filled-primary question on
+   Home. Do not change the radius scale.
+3. Two product decisions are waiting on the user, not on engineering: whether
+   Home's hero keeps its own Start Recording CTA given A2 standardised on a single
+   recording action, and whether Generate Daily Brief should be demoted so Home
+   has one primary action.
+4. A read-only Tauri command for note presence would let /notes show which meetings
+   actually have notes. That is a backend addition, deliberately out of Phase C.
+5. The Tauri CSP defect persists: `connect-src` omits `ipc.localhost`, so every
+   IPC call logs a violation before falling back to postMessage. Unchanged in
+   Phase C. Fix it in a config pass; the app is functional meanwhile.
+6. Visual QA must use the CDP path. Two traps: the BitBlt screen-capture recipe
+   reports false "element is missing" results after a programmatic resize, and
+   toggling the `dark` class does not change theme because `ThemeProvider` owns
+   the state. Write `localStorage["recall-theme"]` and reload instead.
+7. **Never edit a source file from PowerShell text cmdlets.** They corrupt UTF-8
    through the console code page. Use the editor tools or the Latin-1 byte-safe
-   patcher, then run `audit-bytes.ps1` to prove non-ASCII bytes are unchanged.
-6. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
-7. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
+   patcher, then run `audit-bytes.ps1`. Comment text added by those scripts is
+   deliberately ASCII-only.
+8. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
+9. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
 
 # Blockers
 

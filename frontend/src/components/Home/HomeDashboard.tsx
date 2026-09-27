@@ -159,7 +159,7 @@ export function HomeDashboard() {
 
   return (
     <div className="bg-background">
-      <div className="max-w-[1080px] mx-auto px-8 py-8 pb-12">
+      <div className="max-w-6xl">
         {/* ── Hero ─────────────────────────────────────────────── */}
         <section className="border border-border">
           <div className="flex flex-col md:flex-row md:items-center gap-6 p-6">

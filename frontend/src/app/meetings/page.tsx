@@ -1,24 +1,35 @@
 'use client';
 
 /**
- * /meetings — the meeting library.
+ * /meetings - the meeting library.
  *
  * A2 moved the meeting archive out of the sidebar so the sidebar could answer
- * "where am I going?". This screen answers "where are my meetings?", and it has
- * the width and height to do that properly: date grouping, a real search, and a
- * selected state.
+ * "where am I going?". This screen answers "where are my meetings?".
  *
- * Data comes from the existing SidebarProvider, which already fetches
- * `api_get_meetings`. There is no second database access path and no local
- * fixture — if the provider has no meetings, this screen says so.
+ * Phase C composition rules applied here:
+ *
+ * - Gutter ownership: the shell (MainContent) owns `px-8 py-6`. This page adds
+ *   no horizontal padding of its own, so its content starts on exactly the same
+ *   left edge as Home, Notes and Settings.
+ * - Content width: an archive is a scanning surface, so it is allowed to be
+ *   wider than a reading surface, but it is left-aligned rather than centred so
+ *   the left edge stays put as the width changes.
+ * - Density: a professional archive is a list, not a stack of cards. One row is
+ *   one line of title plus right-aligned time, with the full date shown only
+ *   when the date group heading does not already say it.
+ * - Honesty: a failed load says so and offers Retry. It never renders as an
+ *   empty archive, and it never invents meetings.
+ *
+ * Data comes from the existing SidebarProvider (`api_get_meetings`). There is
+ * no second database access path and no local fixture.
  */
 
 import React, { useMemo } from 'react';
-import { Loader2, Search as SearchIcon, SearchX } from 'lucide-react';
+import { AlertTriangle, RotateCw, SearchX } from 'lucide-react';
 
 import { ListRow } from '@/components/ui/list-row';
 import { Button } from '@/components/ui/button';
-import { PageHeader, EmptyState } from '@/components/shared/PageHeader';
+import { PageHeader, EmptyState, ListSkeleton } from '@/components/shared/PageHeader';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { routes } from '@/lib/routes';
 
@@ -72,7 +83,15 @@ function formatDate(iso: string | undefined): string {
 }
 
 const MeetingsPage: React.FC = () => {
-  const { meetings, searchResults, isSearching, searchQuery } = useSidebar();
+  const {
+    meetings,
+    searchResults,
+    isSearching,
+    searchQuery,
+    isMeetingsLoading,
+    meetingsError,
+    refetchMeetings,
+  } = useSidebar();
 
   const now = useMemo(() => new Date(), []);
 
@@ -107,7 +126,10 @@ const MeetingsPage: React.FC = () => {
     for (const meeting of sorted) {
       const snippet = snippets.get(meeting.id);
       // A transcript match narrows the list; otherwise every meeting shows.
-      if (query && !snippet && !meeting.title.toLowerCase().includes(query)) continue;      grouped[bucketFor(meeting.created_at, now)].push({
+      if (query && !snippet && !meeting.title.toLowerCase().includes(query)) {
+        continue;
+      }
+      grouped[bucketFor(meeting.created_at, now)].push({
         id: meeting.id,
         title: meeting.title,
         created_at: meeting.created_at,
@@ -121,79 +143,111 @@ const MeetingsPage: React.FC = () => {
   }, [meetings, now, searchQuery, snippets]);
 
   const total = buckets.reduce((sum, b) => sum + b.meetings.length, 0);
-  const isEmpty = meetings.length === 0;
+  const isSearchingNow = searchQuery.trim().length > 0;
+  const hasArchive = meetings.length > 0;
 
   return (
-    <div className="bg-background">
-      <div className="mx-auto max-w-4xl px-8 py-8">
-        <PageHeader
-          title="Meetings"
-          description="Every meeting Recall has recorded, newest first."
-          actions={
-            <Button type="button" variant="outline" size="sm" asChild>
-              <a href={routes.calendar()}>Open Calendar</a>
+    // No page padding and no mx-auto: the shell owns the gutter, so every
+    // screen's content shares one left edge. Width is capped by content type --
+    // an archive row is title + date + time, so a reading measure would be too
+    // narrow and the full shell width would leave a dead gap.
+    <div className="max-w-4xl">
+      <PageHeader
+        title="Meetings"
+        meta={
+          meetingsError || isMeetingsLoading || !hasArchive
+            ? undefined
+            : `${meetings.length} ${meetings.length === 1 ? 'meeting' : 'meetings'}`
+        }
+        actions={
+          // C9/C10: one secondary action, text only. A calendar icon beside the
+          // word "Calendar" is redundant, and this screen deliberately has no
+          // Start Recording button -- A2 established exactly one recording
+          // action application-wide, and it lives in the sidebar footer. The
+          // accessible name stays more descriptive than the visible label.
+          <Button type="button" variant="outline" size="sm" asChild>
+            <a href={routes.calendar()} aria-label="Open Calendar">
+              Calendar
+            </a>
+          </Button>
+        }
+      />
+
+      {meetingsError ? (
+        <EmptyState
+          tone="error"
+          icon={<AlertTriangle className="h-7 w-7" aria-hidden="true" />}
+          title="Could not load your meetings"
+          description={meetingsError}
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => void refetchMeetings()}>
+              <RotateCw aria-hidden="true" />
+              Retry
             </Button>
           }
         />
+      ) : null}
 
-        {isEmpty ? (
-          <EmptyState
-            icon={<SearchX className="h-8 w-8" aria-hidden="true" />}
-            title="No meetings yet"
-            description="Recorded meetings appear here, newest first. Start a recording from the sidebar."
-          />
-        ) : null}
+      {!meetingsError && isMeetingsLoading && !hasArchive ? <ListSkeleton rows={8} /> : null}
 
-        {isEmpty ? null : (
-          <div className="flex flex-col gap-6">
-            {isSearching ? (
-              <p role="status" aria-live="polite" className="text-caption text-muted-foreground">
-                Searching meeting transcripts…
-              </p>
-            ) : null}
+      {!meetingsError && !isMeetingsLoading && !hasArchive ? (
+        <EmptyState
+          icon={<SearchX className="h-7 w-7" aria-hidden="true" />}
+          title="No meetings yet"
+          description="Recorded meetings appear here, newest first. Start one from the sidebar."
+        />
+      ) : null}
 
-            {total === 0 && !isSearching ? (
-              <EmptyState
-                icon={<SearchIcon className="h-8 w-8" aria-hidden="true" />}
-                title="No matching meetings"
-                description="No meeting title or transcript matches that search."
-              />
-            ) : null}
+      {!meetingsError && hasArchive ? (
+        <div className="flex flex-col gap-8">
+          {total === 0 ? (
+            <EmptyState
+              icon={<SearchX className="h-7 w-7" aria-hidden="true" />}
+              title="No matching meetings"
+              description={
+                isSearchingNow && isSearching
+                  ? 'Still searching transcripts.'
+                  : 'No meeting title or transcript matches that search.'
+              }
+            />
+          ) : null}
 
-            {buckets.map((bucket) => (
-              <section key={bucket.id} aria-label={bucket.label}>
-                <h2 className="px-3 pb-1.5 text-label text-muted-foreground">{bucket.label}</h2>
-                <ul className="flex flex-col gap-0.5">
-                  {bucket.meetings.map((meeting) => (
-                    <li key={meeting.id}>
-                      <ListRow
-                        as="a"
-                        href={routes.meeting(meeting.id)}
-                        label={meeting.title}
-                        className="h-auto min-h-11 flex-wrap py-2"
-                        trailing={
-                          <span className="text-caption tabular-nums text-muted-foreground">
-                            {formatTime(meeting.created_at)}
-                          </span>
-                        }
-                      >
-                        <span className="w-full truncate text-xs text-muted-foreground">
-                          {meeting.snippet ?? formatDate(meeting.created_at)}
+          {buckets.map((bucket) => (
+            <section key={bucket.id} aria-label={bucket.label}>
+              <h2 className="mb-1.5 px-2 text-label text-muted-foreground">{bucket.label}</h2>
+              <ul className="flex flex-col">
+                {bucket.meetings.map((meeting) => (
+                  <li key={meeting.id}>
+                    {/* C4: one line per meeting. Title truncates on the left,
+                        date and time sit together on the right, so the eye
+                        never has to cross a dead gap to read metadata. A row
+                        only grows a second line when a transcript snippet
+                        actually matched. */}
+                    <ListRow
+                      as="a"
+                      href={routes.meeting(meeting.id)}
+                      label={meeting.title}
+                      className="h-auto min-h-9 flex-wrap py-1"
+                      trailing={
+                        <span className="flex items-center gap-3 text-caption tabular-nums text-muted-foreground">
+                          <span>{formatDate(meeting.created_at)}</span>
+                          <span>{formatTime(meeting.created_at)}</span>
                         </span>
-                        {meeting.snippet ? (
-                          <span className="w-full truncate text-xs text-muted-foreground">
-                            {formatDate(meeting.created_at)}
-                          </span>
-                        ) : null}
-                      </ListRow>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
-      </div>
+                      }
+                    >
+                      {meeting.snippet ? (
+                        <span className="w-full truncate text-xs text-muted-foreground">
+                          {meeting.snippet}
+                        </span>
+                      ) : null}
+                    </ListRow>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };

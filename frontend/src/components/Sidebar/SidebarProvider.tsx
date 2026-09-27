@@ -38,6 +38,14 @@ interface SidebarContextType {
   toggleCollapse: () => void;
   meetings: CurrentMeeting[];
   setMeetings: (meetings: CurrentMeeting[]) => void;
+  /**
+   * Phase C5: the meeting list must be able to say "I could not load this"
+   * instead of silently rendering an empty archive. `meetingsError` holds a
+   * human-readable reason; `refetchMeetings` (pre-existing) re-runs the fetch
+   * and is what the Retry action calls.
+   */
+  isMeetingsLoading: boolean;
+  meetingsError: string | null;
   isMeetingActive: boolean;
   setIsMeetingActive: (active: boolean) => void;
   handleRecordingToggle: () => void;
@@ -81,6 +89,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // on launch. The collapsed rail stays one control away.
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
+  const [isMeetingsLoading, setIsMeetingsLoading] = useState(false);
+  const [meetingsError, setMeetingsError] = useState<string | null>(null);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   // Local, frontend-only override. The authoritative signal is the backend
   // recording state, bridged below, so a WebView refresh during an active
@@ -108,19 +118,29 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   // Extract fetchMeetings as a reusable function
   const fetchMeetings = React.useCallback(async () => {
-    if (serverAddress) {
-      try {
-        const meetings = await invoke('api_get_meetings') as Array<MeetingMetadata>;
-        const transformedMeetings = meetings.map((meeting) => ({
-          id: meeting.id,
-          title: meeting.title,
-          created_at: meeting.created_at,
-        }));
-        setMeetings(transformedMeetings);
-      } catch (error) {
-        console.error('Error fetching meetings:', error);
-        setMeetings([]);
-      }
+    if (!serverAddress) return;
+    setIsMeetingsLoading(true);
+    setMeetingsError(null);
+    try {
+      const meetings = await invoke('api_get_meetings') as Array<MeetingMetadata>;
+      const transformedMeetings = meetings.map((meeting) => ({
+        id: meeting.id,
+        title: meeting.title,
+        created_at: meeting.created_at,
+      }));
+      setMeetings(transformedMeetings);
+    } catch (error) {
+      // Previously this collapsed to `setMeetings([])`, which made a failed
+      // load indistinguishable from "you have no meetings". The archive is
+      // user data; say so instead of pretending it is empty.
+      console.error('Error fetching meetings:', error);
+      setMeetingsError(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not reach the local meeting store.'
+      );
+    } finally {
+      setIsMeetingsLoading(false);
     }
   }, [serverAddress]);
 
@@ -333,6 +353,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     toggleCollapse,
     meetings,
     setMeetings,
+    isMeetingsLoading,
+    meetingsError,
     isMeetingActive,
     setIsMeetingActive,
     handleRecordingToggle,
@@ -355,6 +377,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     isCollapsed,
     toggleCollapse,
     meetings,
+    isMeetingsLoading,
+    meetingsError,
     isMeetingActive,
     handleRecordingToggle,
       searchTranscripts,

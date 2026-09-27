@@ -68,7 +68,7 @@ export default function SettingsPage() {
     <div className="h-full bg-background flex flex-col">
       {/* Fixed Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="max-w-6xl mx-auto px-8 py-6">
+        <div className="max-w-6xl">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.back()}
@@ -84,7 +84,7 @@ export default function SettingsPage() {
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-8 pt-6">
+        <div className="max-w-6xl pb-8">
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="bg-transparent relative rounded-none border-b border-border p-0 h-auto">
