@@ -320,17 +320,32 @@ describe('sidebar: tokens, identity and motion', () => {
 })
 
 describe('shell: main content adapts to the sidebar', () => {
-  it('main content offsets match the collapsed and expanded widths', () => {
-    assert.match(mainContent, /isCollapsed \? 'ml-16' : 'ml-64'/)
-    assert.match(sidebar, /isCollapsed \? 'w-16' : 'w-64'/)
+  /*
+   * CONTRACT CHANGE (Phase A1, deliberate).
+   *
+   * These two assertions previously required the sidebar panel and the main
+   * offset to restate the widths inline (`isCollapsed ? 'w-16' : 'w-64'` and
+   * `isCollapsed ? 'ml-16' : 'ml-64'`) and then checked the two numbers agreed.
+   *
+   * That mechanism was the bug: the same two widths were restated four times
+   * across the sidebar, MainContent, and two fixed overlays, so they could and
+   * did drift. A1 replaced the literals with one source of truth
+   * (`lib/sidebar-layout.ts` over CSS custom properties) and every consumer
+   * now calls `sidebarWidth()`.
+   *
+   * The INTENT is unchanged and still enforced: the panel width and the main
+   * content offset are derived from the same source, so they cannot disagree.
+   */
+  it('the sidebar panel and main content both resolve width from one source', () => {
+    assert.match(sidebar, /sidebarWidth\(isCollapsed\)/)
+    assert.match(mainContent, /sidebarWidth\(isCollapsed\)/)
   })
 
-  it('the sidebar panel width and the main offset agree', () => {
-    const panel = sidebar.match(/isCollapsed \? 'w-(\d+)' : 'w-(\d+)'/)
-    assert.ok(panel, 'sidebar width must be derived from isCollapsed')
-    const [collapsedW, expandedW] = [panel[1], panel[2]]
-    const offsets = mainContent.match(/isCollapsed \? 'ml-(\d+)' : 'ml-(\d+)'/)
-    assert.equal(offsets[1], collapsedW, 'collapsed offset must match collapsed width')
-    assert.equal(offsets[2], expandedW, 'expanded offset must match expanded width')
+  it('neither the panel nor the offset restates the width inline', () => {
+    // If these literals ever reappear, the single source of truth is broken.
+    assert.doesNotMatch(sidebar, /\b(?:ml|w)-(?:16|64)\b/)
+    assert.doesNotMatch(mainContent, /\b(?:ml|w)-(?:16|64)\b/)
+    assert.doesNotMatch(sidebar, /'4rem'|'16rem'/)
+    assert.doesNotMatch(mainContent, /'4rem'|'16rem'/)
   })
 })

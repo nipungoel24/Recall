@@ -69,7 +69,10 @@ export const useSidebar = () => {
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ New Call' });
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  // Recall launches with the full navigation visible. A collapsed rail hides
+  // destinations, and "where am I going?" should never be the first question
+  // on launch. The collapsed rail stays one control away.
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   // Local, frontend-only override. The authoritative signal is the backend

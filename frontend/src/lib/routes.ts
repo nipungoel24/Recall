@@ -27,6 +27,13 @@ function withQuery(base: string, params: Record<string, string | null | undefine
 export const routes = {
   home: (): string => '/',
 
+  /**
+   * The meeting library — the chronological archive of every meeting.
+   * Rendered by `app/meetings`. Listed in the canonical nav model
+   * (`lib/nav.ts`) before the screen exists; A1 adds the route, A2 the UI.
+   */
+  meetings: (): string => '/meetings',
+
   calendar: (dateKey?: string | null, monthKey?: string | null): string =>
     withQuery('/calendar', { date: dateKey, month: monthKey }),
 
@@ -44,7 +51,12 @@ export const routes = {
 
   templates: (): string => '/templates',
 
-  notes: (noteId: string): string => withQuery('/notes', { id: noteId }),
+  /**
+   * `noteId` is optional so a navigation destination can link to the bare
+   * notes screen. `withQuery` already drops empty values, so `notes()` and
+   * `notes('')` both resolve to `/notes`.
+   */
+  notes: (noteId?: string | null): string => withQuery('/notes', { id: noteId }),
 
   settings: (): string => '/settings',
 };

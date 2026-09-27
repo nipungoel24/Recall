@@ -13,6 +13,7 @@ import { SettingsModals } from './_components/SettingsModal';
 import { TranscriptPanel } from './_components/TranscriptPanel';
 import { HomeDashboard } from '@/components/Home/HomeDashboard';
 import { routes } from '@/lib/routes';
+import { sidebarWidth } from '@/lib/sidebar-layout';
 import { useModalState } from '@/hooks/useModalState';
 import { useRecordingStart } from '@/hooks/useRecordingStart';
 import { useRecordingStop } from '@/hooks/useRecordingStop';
@@ -210,10 +211,10 @@ export default function Home() {
             status !== RecordingStatus.SAVING && (
               <div className="fixed bottom-12 left-0 right-0 z-10">
                 <div
-                  className="flex justify-center pl-8 transition-[margin] duration-300"
-                  style={{
-                    marginLeft: sidebarCollapsed ? '4rem' : '16rem'
-                  }}
+                    className="flex justify-center pl-8 transition-[margin] duration-300"
+                    style={{
+                      marginLeft: sidebarWidth(sidebarCollapsed)
+                    }}
                 >
                   <div className="w-2/3 max-w-[750px] flex justify-center">
                       <RecordingControls

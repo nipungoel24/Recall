@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, CalendarDays, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload, LayoutList, LayoutTemplate, Sun } from 'lucide-react';
+import { sidebarWidth } from '@/lib/sidebar-layout';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -877,8 +878,10 @@ const Sidebar: React.FC = () => {
       </button>
 
       <div
-        className={`h-screen bg-surface border-r border-border flex flex-col transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-64'
-          }`}
+        className="h-screen bg-surface border-r border-border flex flex-col transition-all duration-300"
+        // Width comes from lib/sidebar-layout.ts, the single source shared with
+        // MainContent and the fixed overlays.
+        style={{ width: sidebarWidth(isCollapsed) }}
       >
         {/*  Header with traffic light spacing */}
         <div className="flex-shrink-0 flex items-center">
