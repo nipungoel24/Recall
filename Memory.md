@@ -4,8 +4,8 @@ Concise, factual working memory. Updated after every completed task, major decis
 
 # Current State
 
-- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1, 2, 3, 4, 5, 6, & 7 complete, Gates 8-9 pending)
-- Branch: `phase/5-meeting-workspace-provenance`
+- Current phase: Phase 5 — Meeting Workspace + Provenance (Gates 1-8 complete; design-system remediation landed `4e6d081`; Gate 9 still pending)
+- Branch: `phase/5-meeting-workspace-provenance` (9 commits ahead of origin, NOT PUSHED)
 - Base: `80a1485` (Phase 4 merged to main)
 
 # Completed
@@ -190,15 +190,123 @@ Concise, factual working memory. Updated after every completed task, major decis
 - Gate 8 visual/interaction changes are unverified by eye — all six rewritten SettingsModal dialogs, the NotesTab save/empty states, the collapsed MeetingWorkspace Tabs, and the recording live regions need a human GUI pass.
 - `simple_level_monitor.rs` is a fake sine-wave stub; real `level_monitor.rs` exists but is not wired (double-capture risk)
 
+# Design System Remediation (4e6d081)
+
+An Agent Forge `production-website` read-only audit of the UI layer found four
+defects that were reproducible without rendering the app. All four are
+correctness bugs rather than taste calls, so they were fixed and
+regression-guarded. The broader UI redesign was deliberately NOT started.
+
+## Confirmed defects found and fixed
+
+1. **Focus rings had no offset colour** — `button`, `input`, `textarea`,
+   `accordion` and `badge` declared `focus-visible:ring-offset-2` but never named
+   an offset colour. Tailwind v3 defaults `--tw-ring-offset-color` to `#fff`, so
+   every focused control rendered a hard white halo on dark surfaces. Each now
+   sets `ring-offset-background`.
+2. **Tailwind `content` globs were incomplete** — only `pages`, `components` and
+   `app` were scanned, so classNames in `src/lib`, `src/hooks`, `src/contexts`
+   and `src/services` were never emitted. `recordingNotification.tsx` shipped
+   with no CSS at all. All four directories are now scanned.
+3. **Neutral palette was hardcoded across 34 files** — `bg-white`, `bg-gray-*`,
+   `border-gray-*`, `divide-gray-*` and `text-gray-*` ignored the theme, making
+   the app effectively light-only outside `components/ui`. Migrated to existing
+   tokens (`bg-surface`, `bg-muted`, `bg-popover`, `bg-background`,
+   `border-border`, `divide-border`, `text-foreground`, `text-muted-foreground`,
+   `bg-primary`, `ring-ring`). Four Context dialogs had overridden
+   `DialogContent` with `bg-white text-gray-900`; two hand-rolled `AISummary`
+   menus bypassed `dropdown-menu` and were pinned to light mode.
+4. **A token migration collapsed an interaction state** — mapping
+   `text-gray-400 hover:text-gray-600` onto one token silently deleted the
+   hover affordance (found in `AISummary/Section.tsx`,
+   `SummaryLanguageSettings.tsx` pin toggle, and the onboarding info button).
+   Caught by diff review during the change itself, not by a test.
+
+Scope was deliberately limited to the NEUTRAL palette families. Colored
+utilities (`bg-blue-*`, `border-red-*`, `text-red-*`, …) still require
+per-call-site intent and were left untouched.
+
+Guard: `frontend/tests/lib/design-token-integrity.test.mjs` (12 tests) covers the
+ring offset, the content globs, the neutral palette, dialog token inheritance,
+and asserts that no hover/focus/active group is a complete no-op against its rest
+state (scanning template-literal branches, where the damage actually occurred).
+
+## Radius redesign — INTENTIONALLY DEFERRED
+
+The `borderRadius` ladder in `tailwind.config.js` is genuinely **inverted**:
+`md` resolves to `--radius + 2px` while `lg` resolves to `var(--radius)`, so
+buttons and inputs render rounder than dialogs and alerts. This was confirmed
+against the compiled CSS.
+
+It was **not fixed** in `4e6d081`. Correcting it retints roughly 200 call sites
+and could not be visually verified, because WebView2 content is not capturable
+on this host (see Blockers). Baking an unverified retint into a commit was
+rejected. `4e6d081` therefore changes no radius value and no radius call site;
+the test asserts only that the scale stays derived from `--radius`, so the
+ladder can be corrected later without fighting the guard.
+
+## Remaining UI-system audit findings — ALL STILL OPEN
+
+Nothing below has been implemented:
+
+- `card.tsx` does not exist; 111 hand-rolled box `className`s across 62 files
+  (the "card soup" visible in Settings). Missing primitives also include
+  `alert-dialog`, `checkbox`, `radio-group`, `toggle`, `toggle-group`, `table`,
+  `sidebar`.
+- `--accent` (lime) is used as a neutral hover/selection fill in ~35 places, so
+  many hovers flash saturated lime.
+- Three mutually incompatible Tabs treatments; settings tabs also lack
+  `focus-visible`, giving two competing focus systems.
+- `settings/page.tsx` spring underline animation has no `prefers-reduced-motion`
+  guard.
+- 4+ hand-rolled confirm flows with no `alert-dialog` primitive.
+- `OnboardingContainer.tsx` is a hand-rolled fullscreen modal with a `z-50`
+  collision risk; `ImportDropOverlay.tsx` hardcodes 5 colours.
+- 18 `transition-all` uses; 7 motion tokens defined with 0 consumers;
+  `lib/motion.ts` has 0 importers.
+- Primitive adoption is uneven: Button ~44 importers, Dialog ~18, but
+  Separator / Sheet / Progress have 0 consumers.
+
+## Validation for 4e6d081
+
+- `tsc --noEmit`: clean for `src/` (8 pre-existing `bun:test` module errors only)
+- `node --test tests/lib/*.test.mjs`: 508 tests / 506 pass / 2 known failures
+  (Phase 4 `checkPermissions`; Bun-only `qa-routes`)
+- `design-token-integrity`: 12/12 · Gate 8: 52/52 · Phase 5: 172/172
+- design-system-regression: 20/20 · sidebar: 32/32 · phase3-shell-home: 32/32
+- branding: 5/5 + `branding-scan.mjs` exit 0 · calendar/daily/context: 28/28
+- updater/analytics: 11/11 · `cargo fmt --check`: clean · `cargo test`: 349
+  passed, 0 failed
+- Production build: SUCCESS (`Recall_0.4.0` MSI + NSIS). The `SignTool Error: No
+  signature found` line is the expected no-certificate skip.
+- User data untouched: `meeting_minutes.sqlite` byte-identical at 4,632,576 bytes.
+
+## Visual QA — NOT COMPLETED
+
+No visual claim is made for this commit. WebView2 content is not reliably
+capturable on this host: the Recall main window reports visible, but every
+`CopyFromScreen` capture returns whatever is composited on top. Restore,
+`SetForegroundWindow`, `HWND_TOPMOST`, `RedrawWindow` and minimizing all other
+windows were all attempted and all failed to yield app pixels. The structural and
+test validation above stands on its own; the radius ladder and every deferred
+item require a human or otherwise reliable visual pass.
+
 # Next Exact Step
 
 1. Gates 1 through 8 complete — proceed to Gate 9 (tests + docs).
-2. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
-3. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
+2. Establish reliable visual QA (human pass or a capture method that works with
+   WebView2), then run the deferred UI-system work as its own deliberate phase:
+   Agent Forge design audit → design-system architecture → implementation →
+   visual QA → Agent Forge review → production verification.
+3. After Gate 9: final verification → push `phase/5-meeting-workspace-provenance` → await review/approval → fast-forward main.
+4. Before release: human GUI QA of the Gate 8 dialog/state changes, Bun suites on a Bun-capable host, Parakeet/ffmpeg host migration, and the `com.meetily.ai` data migration.
 
 # Blockers
 
+- **Automated visual QA is UNRELIABLE on this host**: WebView2 content is not captured by `CopyFromScreen`. The Recall main window reports `IsWindowVisible = true` at 1920x1060, yet every screenshot returns the topmost composited window instead. `ShowWindow(SW_RESTORE/SW_SHOW)`, `SetForegroundWindow`, `BringWindowToTop`, `SetWindowPos(HWND_TOPMOST)`, `RedrawWindow`, and minimizing all other top-level windows were each attempted and each failed. Do not claim any visual, dark-mode, or layout verification from screenshots on this machine; a human pass is required.
 - Native GUI / Windows recording QA NOT PERFORMED (Windows CLI host only; `cargo build` is build verification, NOT GUI workflow QA).
 - macOS recording QA NOT AVAILABLE.
 - Bun-only test suites cannot run on this machine (NOT AVAILABLE).
 - Phase 4 test `checkPermissions` mount effect fails (pre-existing; documented in Phase 4 report).
+- `cargo clippy -D warnings` fails on 2 PRE-EXISTING lints in the unmodified `src-tauri/build/ffmpeg.rs` (unused `std::io::Read` import; `Iterator::last` on a `DoubleEndedIterator`). This blocks clippy before it reaches the lib target, so `--all-targets` and `--lib` both abort. Unrelated to the UI tranche, which changes zero Rust files.
+- `frontend/build-gpu.bat` hardcodes Windows SDK `10.0.22621.0` while this host has `10.0.26100.0`, producing `LNK1181: cannot open input file 'kernel32.lib'`. Use the manual CUDA path (cargo + LLVM + CUDA on PATH, `TAURI_GPU_FEATURE=cuda`). The script was intentionally NOT modified.
