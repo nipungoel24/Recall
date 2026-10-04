@@ -144,11 +144,23 @@ describe('sidebar: the archive does not live here', () => {
 describe('sidebar: footer action hierarchy', () => {
   it('Start Recording is the only prominent footer action', () => {
     const footer = sidebar.match(/data-slot="sidebar-footer"[\s\S]*$/)[0]
-    assert.match(footer, /variant="destructive"/, 'the primary footer action must be prominent')
+    // Intent preserved, token corrected. This assertion used to require
+    // `variant="destructive"` as its proxy for "prominent", which encoded
+    // destructive-red as the identity of the record action. Recording red is
+    // the *state*, not the action: the active-recording indicator above owns
+    // that. Start Recording is the primary action, so it now takes the primary
+    // token, and `destructive` is forbidden in the footer outright so the old
+    // coupling cannot silently return.
+    assert.match(footer, /variant="default"/, 'the primary footer action must be prominent')
     assert.equal(
-      (footer.match(/variant="destructive"/g) || []).length,
+      (footer.match(/variant="default"/g) || []).length,
       1,
       'exactly one prominent footer action',
+    )
+    assert.doesNotMatch(
+      footer,
+      /variant="destructive"/,
+      'start/stop recording is not a destructive action; destructive is for delete/clear',
     )
   })
 

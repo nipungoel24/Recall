@@ -315,12 +315,47 @@ describe('phase D: Home presents one dominant CTA', () => {
     )
   })
 
-  it('Start Recording and Generate Daily Brief do not both render as filled primaries', () => {
-    const filled = [...home.matchAll(/<Button[\s\S]{0,120}?variant="default"/g)].length
+  it('the Home hero cluster holds exactly one filled primary', () => {
+    // Scoped to the hero cluster (Start Recording + Calendar) rather than
+    // counting `variant="default"` across the whole page. The page also has a
+    // filled primary inside the permission preflight ("Request Access"), which
+    // is a contextual remediation and legitimately primary within its own
+    // region; a global count flagged that as a second competing CTA.
+    const cluster =
+      home.match(/<div className="flex items-center gap-2 flex-shrink-0">[\s\S]*?<\/div>/)?.[0] ?? ''
+    assert.ok(cluster, 'could not locate the Home hero action cluster')
+    const filled = [...cluster.matchAll(/<Button[\s\S]{0,120}?variant="(default|destructive)"/g)]
     assert.equal(
-      filled,
+      filled.length,
       1,
-      `Home should not stack multiple filled primary buttons (found ${filled} variant="default" buttons)`,
+      `exactly one filled primary in the hero cluster (found ${filled.length})`,
     )
+  })
+
+  it('Start Recording is a primary action, not a destructive one', () => {
+    // The semantic split this encodes:
+    //   Start Recording -> primary      (it begins something)
+    //   Stop Recording  -> destructive  (it ends an in-flight capture)
+    //   Delete / Clear  -> destructive
+    // Red belongs to the recording *state*, which the sidebar's active-recording
+    // indicator already owns. A persistent destructive-styled primary is a known
+    // hesitation trigger and mislabels the action to anyone reading the design
+    // system rather than the pixels.
+    for (const [label, rel] of [
+      ['Home', 'src/components/Home/HomeDashboard.tsx'],
+      ['sidebar', 'src/components/Sidebar/index.tsx'],
+    ]) {
+      const src = read(rel)
+      const block =
+        src.match(/<Button[\s\S]{0,400}?Start Recording[\s\S]{0,60}?<\/Button>/)?.[0] ??
+        src.match(/<Button[\s\S]{0,400}?data-start-recording[\s\S]{0,120}?<\/Button>/)?.[0] ??
+        ''
+      assert.ok(block, `could not locate the ${label} Start Recording button`)
+      assert.doesNotMatch(
+        block,
+        /variant="destructive"/,
+        `${label}: Start Recording must use the primary variant`,
+      )
+    }
   })
 })

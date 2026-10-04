@@ -326,7 +326,7 @@ const Sidebar: React.FC = () => {
           ) : (
             <Button
               type="button"
-              variant="destructive"
+              variant="default"
               className="w-full"
               onClick={startRecording}
               data-start-recording="true"

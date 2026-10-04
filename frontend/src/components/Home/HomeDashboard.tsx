@@ -173,7 +173,7 @@ export function HomeDashboard() {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <Button
-                variant="destructive"
+                variant="default"
                 size="default"
                 className="px-5"
                 onClick={startRecording}

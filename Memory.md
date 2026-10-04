@@ -1209,12 +1209,15 @@ status/secondary role. Daily Brief was `variant="default"`, i.e. a second filled
 primary. It is now `variant="outline"`. Verified in the running DOM: the only
 filled primary on Home is Start Recording.
 
-**One open question, deliberately not acted on.** Start Recording is
-`variant="destructive"` on both Home and the sidebar footer. That is consistent
-across two surfaces and reads as an intentional record-red convention, but
-`destructive` is semantically "this destroys data", and a persistent
-destructive-styled primary is a known hesitation trigger. Changing it would alter
-a frozen Phase A2/C surface, so it is raised rather than decided unilaterally.
+**Resolved immediately after Phase D, by explicit user decision.** Start Recording
+was `variant="destructive"` on both Home and the sidebar footer. That was
+consistent across two surfaces and read as a record-red convention, but
+`destructive` means "destroys data", and a persistent destructive-styled primary
+is a known hesitation trigger. It is now `variant="default"` (primary) on both
+surfaces. The semantic split is now consistent: **Start Recording = primary**,
+**Stop Recording = destructive** where applicable, **Delete/Clear = destructive**.
+Red belongs to the recording *state*, which the sidebar in-progress indicator
+already owns and which was deliberately left untouched.
 
 ## D9 - Gates
 
@@ -1310,14 +1313,12 @@ SQLite folds in on next open.
    here because `design-token-integrity.test.mjs` had explicitly deferred it to
    "a dedicated, visually verified design-system pass", which is what Phase D was.
    The `--radius` value itself was not touched.
-3. One product decision is still open on the user, not on engineering: whether
-   **Start Recording should stay `variant="destructive"`**. It is consistent on
-   both Home and the sidebar footer and reads as an intentional record-red
-   convention, but `destructive` means "destroys data" and a persistent
-   destructive-styled primary is a known hesitation trigger. Phase D raised it
-   rather than changing a frozen Phase A2/C surface. The related question - whether
-   Home keeps its own Start Recording CTA - is settled: it does, and Generate
-   Daily Brief was demoted to `outline` so Home has one dominant action.
+3. No product decision is open on the UI. Both of the questions Phase D inherited
+   are settled: Start Recording is the **primary** action (`variant="default"`) on
+   Home and the sidebar footer, with destructive reserved for Stop Recording and
+   Delete/Clear; and Home keeps its own Start Recording CTA while Generate Daily
+   Brief stays demoted to `outline`, so Home has one dominant action. Recording red
+   is the in-progress *state*, owned by the sidebar status indicator.
 4. A read-only Tauri command for note presence would let /notes show which meetings
    actually have notes. That is a backend addition, deliberately out of Phase C.
 5. The Tauri CSP defect persists: `connect-src` omits `ipc.localhost`, so every
