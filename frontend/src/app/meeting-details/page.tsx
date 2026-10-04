@@ -330,7 +330,7 @@ function MeetingDetailsContent() {
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
           <button
             onClick={() => router.push(routes.home())}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm font-medium"
           >
             <ArrowLeft className="h-4 w-4" />
             Go Back

@@ -105,20 +105,20 @@ export function AddMeetingsToContextDialog({
                   onClick={() => setSelectedIds((prev) => toggleSelectedId(prev, meeting.id))}
                   className={cn(
                     'w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors',
-                    selected ? 'bg-blue-50' : 'hover:bg-muted',
+                    selected ? 'bg-primary/10' : 'hover:bg-muted',
                   )}
                 >
                   <span
                     className={cn(
                       'flex-shrink-0 flex items-center justify-center w-4 h-4 rounded border',
                       selected
-                        ? 'bg-blue-600 border-blue-600 text-white'
+                        ? 'bg-primary border-primary text-primary-foreground'
                         : 'border-border bg-background',
                     )}
                   >
                     {selected && <Check className="w-3 h-3" />}
                   </span>
-                  <span className={cn('truncate', selected ? 'text-blue-700' : 'text-muted-foreground')}>
+                  <span className={cn('truncate', selected ? 'text-primary' : 'text-muted-foreground')}>
                     {meeting.title}
                   </span>
                 </button>

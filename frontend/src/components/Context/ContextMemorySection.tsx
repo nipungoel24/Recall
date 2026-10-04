@@ -17,9 +17,9 @@ interface ContextMemorySectionProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  open: 'bg-blue-100 text-blue-700',
-  done: 'bg-green-100 text-green-700',
-  blocked: 'bg-red-100 text-red-700',
+  open: 'bg-primary/10 text-primary',
+  done: 'bg-success/15 text-success',
+  blocked: 'bg-destructive/15 text-destructive',
 };
 
 /**
@@ -102,7 +102,7 @@ export function ContextMemorySection({ memory }: ContextMemorySectionProps) {
                           type="button"
                           title={`From: ${provenance.title}`}
                           onClick={() => openSourceMeeting(provenance)}
-                          className="flex-shrink-0 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="flex-shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:text-primary hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           {provenance.title === 'View source meeting' ? 'Source' : provenance.title}
                           {capturedDate && <span className="text-muted-foreground">· {capturedDate}</span>}

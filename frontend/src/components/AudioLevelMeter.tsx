@@ -31,9 +31,9 @@ export function AudioLevelMeter({
 
   // Color coding based on level
   const getLevelColor = (level: number) => {
-    if (level < 0.3) return 'bg-green-500';
-    if (level < 0.7) return 'bg-yellow-500';
-    return 'bg-red-500';
+    if (level < 0.3) return 'bg-success';
+    if (level < 0.7) return 'bg-warning';
+    return 'bg-destructive';
   };
 
   const rmsColor = getLevelColor(logRms);
@@ -64,7 +64,7 @@ export function AudioLevelMeter({
     <div className={`flex items-center space-x-2 ${className}`}>
       {/* Device activity indicator */}
       <div className={`w-2 h-2 rounded-full ${
-        isActive ? 'bg-green-400 animate-pulse' : 'bg-border'
+        isActive ? 'bg-success animate-pulse' : 'bg-border'
       }`} title={`${deviceName} - ${isActive ? 'Active' : 'Inactive'}`} />
 
       {/* Level meter container */}
@@ -73,14 +73,14 @@ export function AudioLevelMeter({
         <div className="w-full h-full bg-border rounded-sm overflow-hidden">
           {/* RMS level bar (main level) */}
           <div
-            className={`${sizes.meter} ${rmsColor} transition-all duration-150 ease-out rounded-sm`}
+            className={`${sizes.meter} ${rmsColor} transition-[width,background-color] duration-150 ease-out rounded-sm`}
             style={{ width: `${rmsPercent}%` }}
           />
 
           {/* Peak level indicator (thin line) */}
           {peakPercent > rmsPercent && (
             <div
-              className={`absolute top-0 bottom-0 w-0.5 ${peakColor} transition-all duration-75`}
+              className={`absolute top-0 bottom-0 w-0.5 ${peakColor} transition-[left,background-color] duration-75`}
               style={{ left: `${peakPercent}%` }}
             />
           )}
@@ -124,22 +124,22 @@ export function CompactAudioLevelMeter({
   const rmsPercent = Math.round(logRms * 100);
 
   const getLevelColor = (level: number) => {
-    if (level < 0.3) return 'bg-green-400';
-    if (level < 0.7) return 'bg-yellow-400';
-    return 'bg-red-400';
+    if (level < 0.3) return 'bg-success';
+    if (level < 0.7) return 'bg-warning';
+    return 'bg-destructive';
   };
 
   return (
     <div className={`flex items-center space-x-1 ${className}`}>
       {/* Activity dot */}
       <div className={`w-1.5 h-1.5 rounded-full ${
-        isActive ? 'bg-green-400' : 'bg-border'
+        isActive ? 'bg-success' : 'bg-border'
       }`} />
 
       {/* Mini meter */}
       <div className="w-8 h-1.5 bg-border rounded-sm overflow-hidden">
         <div
-          className={`h-full ${getLevelColor(logRms)} transition-all duration-150`}
+          className={`h-full ${getLevelColor(logRms)} transition-[width,background-color] duration-150`}
           style={{ width: `${rmsPercent}%` }}
         />
       </div>

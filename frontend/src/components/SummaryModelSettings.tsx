@@ -126,17 +126,22 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
       <div className="bg-surface rounded-lg border border-border p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Auto Summary</h3>
+            <h3 id="auto-summary-heading" className="text-section-title text-foreground mb-2">Auto Summary</h3>
             <p className="text-sm text-muted-foreground">Auto Generating summary after meeting completion(Stopping)</p>
           </div>
-          <Switch checked={isAutoSummary} onCheckedChange={toggleIsAutoSummary} />
+          <Switch
+            id="auto-summary"
+            aria-labelledby="auto-summary-heading"
+            checked={isAutoSummary}
+            onCheckedChange={toggleIsAutoSummary}
+          />
         </div>
       </div>
 
       <SummaryLanguageSettings />
 
       <div className="bg-surface rounded-lg border border-border p-6 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4">Summary Model Configuration</h3>
+        <h3 className="text-section-title text-foreground mb-4">Summary Model Configuration</h3>
         <p className="text-sm text-muted-foreground mb-6">
           Configure the AI model used for generating meeting summaries.
         </p>

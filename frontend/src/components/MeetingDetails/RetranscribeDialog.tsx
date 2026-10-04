@@ -259,17 +259,17 @@ export function RetranscribeDialog({
           <DialogTitle className="flex items-center gap-2">
             {isProcessing ? (
               <>
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 Retranscribing...
               </>
             ) : error ? (
               <>
-                <AlertCircle className="h-5 w-5 text-red-600" />
+                <AlertCircle className="h-5 w-5 text-destructive" />
                 Retranscription Failed
               </>
             ) : (
               <>
-                <RefreshCw className="h-5 w-5 text-blue-600" />
+                <RefreshCw className="h-5 w-5 text-primary" />
                 Retranscribe Meeting
               </>
             )}
@@ -349,7 +349,7 @@ export function RetranscribeDialog({
               <div className="relative">
                 <div className="w-full bg-border rounded-full h-3">
                   <div
-                    className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                    className="bg-primary h-3 rounded-full transition-[width] duration-300 ease-out"
                     style={{ width: `${Math.min(progress.progress_percentage, 100)}%` }}
                   />
                 </div>
@@ -365,8 +365,8 @@ export function RetranscribeDialog({
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="bg-destructive/10 border border-destructive/40 rounded-lg p-3">
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
         </div>
@@ -379,7 +379,7 @@ export function RetranscribeDialog({
               </Button>
               <Button
                 onClick={handleStartRetranscription}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary hover:bg-primary/90"
                 disabled={!meetingFolderPath}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />

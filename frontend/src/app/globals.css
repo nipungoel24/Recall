@@ -51,6 +51,11 @@
     /* --- Focus / Ring --- */
     --ring: 226 79.5% 52.2%;
     --focus: 226 79.5% 52.2%;
+    /* Phase D: darkens content behind a modal or drop target. Dark in BOTH
+       themes on purpose -- a scrim is not a surface, and a light-mode scrim
+       would read as fog rather than as depth. This token exists so the app
+       needs no raw-palette backdrop colour anywhere. */
+    --scrim: 60 6.3% 6.3%;
 
     /* --- Selection --- */
     --selection: 225 100% 93.1%;
@@ -114,9 +119,10 @@
     --destructive: 3 100% 69.4%;
     --destructive-foreground: 60 6.3% 6.3%;
 
-    /* --- Focus / Ring --- */
+      /* --- Focus / Ring --- */
     --ring: 227 100% 78.4%;
     --focus: 227 100% 78.4%;
+    --scrim: 60 8% 4%;
 
     /* --- Selection --- */
     --selection: 226 30.2% 24.7%;
@@ -260,20 +266,53 @@
   }
 }
 
-/* Reduced motion — remove non-essential transforms, preserve opacity feedback */
+/* Reduced motion — remove non-essential transforms, preserve opacity feedback.
+
+   Phase D widened this from three bespoke keyframes to a global guard. The
+   previous block only covered animations this file defines, so the 60+ Tailwind
+   and Radix animation utilities in the app were opted into reduced motion one
+   file at a time (via `motion-reduce:` / `motion-safe:`) and 24 files were simply
+   never covered. One guard is both smaller and more complete than 24 patches.
+
+   framer-motion is handled separately and correctly: its animations are inline
+   styles that CSS cannot override, so the app is wrapped in
+   `<MotionConfig reducedMotion="user">` in layout.tsx. */
 @media (prefers-reduced-motion: reduce) {
+  /* Bespoke Recall keyframes: shake, fades, entrance slides. */
   .animate-vibrate,
   .animate-fade-in,
   .animate-fade-in-up {
     animation: none !important;
   }
 
-  /* Reduce transition distance, keep opacity changes for state feedback */
+  /* Tailwind looping animations. `animate-pulse` is a decorative opacity
+     shimmer and `animate-ping` an expanding ring; both are pure motion.
+
+     `animate-spin` is deliberately NOT listed. A spinner conveys "work in
+     progress"; freezing it reports a stuck application, which is worse than a
+     small rotation. It stays, and that is an intentional exception. */
+  .animate-pulse,
+  .animate-ping {
+    animation: none !important;
+  }
+
+  /* tailwindcss-animate enter/exit used by every Radix overlay: dialog,
+     dropdown, popover, select, sheet, tooltip, accordion. These animate
+     opacity together with scale and translate, which is exactly the
+     vestibular trigger class reduced-motion users are asking to avoid. */
+  [class*='animate-in'],
+  [class*='animate-out'],
+  .animate-accordion-up,
+  .animate-accordion-down {
+    animation: none !important;
+  }
+
+  /* Reduce transition distance, keep opacity changes for state feedback. */
   [data-state] {
     transition-duration: 0.01ms !important;
   }
 
-  /* Keep focus visible — never reduce focus feedback */
+  /* Keep focus visible — never reduce focus feedback. */
   :focus-visible {
     transition: none !important;
   }

@@ -34,8 +34,13 @@ module.exports = {
   				strong: 'hsl(var(--border-strong))',
   			},
   			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
-  			focus: 'hsl(var(--focus))',
+    			ring: 'hsl(var(--ring))',
+    			focus: 'hsl(var(--focus))',
+    			// Phase D: a modal/drop scrim is not a surface -- it must stay dark
+    			// in both themes, and no existing token expresses "darken whatever
+    			// is behind me". Rather than leave a raw palette backdrop colour
+    			// as a permanent exception, it gets one justified token.
+    			scrim: 'hsl(var(--scrim))',
   			primary: {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'
@@ -84,10 +89,16 @@ module.exports = {
   				'5': 'hsl(var(--chart-5))'
   			}
   		},
+  		// Phase D: the ladder was inverted -- `md` resolved to --radius + 2px
+  		// while `lg` resolved to --radius, so `rounded-md` rendered rounder
+  		// than `rounded-lg` and dialogs came out less rounded than the buttons
+  		// inside them. The steps now ascend, which is the whole point of a
+  		// named scale. --radius (6px) is the control size; `lg` is for
+  		// containers such as dialogs, popovers and cards.
   		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) + 2px)',
-  			sm: 'calc(var(--radius) - 2px)'
+  			sm: 'calc(var(--radius) - 2px)',
+  			md: 'var(--radius)',
+  			lg: 'calc(var(--radius) + 2px)'
   		},
   		keyframes: {
   			'accordion-down': {

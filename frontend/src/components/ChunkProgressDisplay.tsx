@@ -76,11 +76,11 @@ export function ChunkProgressDisplay({
   const getChunkStatusColor = (status: ChunkStatus['status']) => {
     switch (status) {
       case 'completed':
-        return 'text-green-600 bg-green-50 border-green-200';
+        return 'text-success bg-success/10 border-success/40';
       case 'processing':
-        return 'text-blue-600 bg-blue-50 border-blue-200';
+        return 'text-primary bg-primary/10 border-primary/40';
       case 'failed':
-        return 'text-red-600 bg-red-50 border-red-200';
+        return 'text-destructive bg-destructive/10 border-destructive/40';
       case 'pending':
       default:
         return 'text-muted-foreground bg-muted border-border';
@@ -96,7 +96,7 @@ export function ChunkProgressDisplay({
             Processing Progress
           </h3>
           {isPaused && (
-            <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
+            <span className="bg-warning/15 text-warning px-2 py-1 rounded-full text-xs font-medium">
               Paused
             </span>
           )}
@@ -106,7 +106,7 @@ export function ChunkProgressDisplay({
           {!isPaused ? (
             <button
               onClick={onPause}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors"
+              className="bg-warning hover:bg-warning/90 text-warning-foreground px-3 py-1 rounded text-sm transition-colors"
               disabled={progress.processing_chunks === 0 && progress.completed_chunks === progress.total_chunks}
             >
               Pause
@@ -114,7 +114,7 @@ export function ChunkProgressDisplay({
           ) : (
             <button
               onClick={onResume}
-              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors"
+              className="bg-success hover:bg-success/90 text-success-foreground px-3 py-1 rounded text-sm transition-colors"
             >
               Resume
             </button>
@@ -122,7 +122,7 @@ export function ChunkProgressDisplay({
 
           <button
             onClick={onCancel}
-            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors"
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground px-3 py-1 rounded text-sm transition-colors"
           >
             Cancel
           </button>
@@ -142,7 +142,7 @@ export function ChunkProgressDisplay({
 
         <div className="w-full bg-border rounded-full h-2">
           <div
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+            className="bg-primary h-2 rounded-full transition-[width] duration-300 ease-out"
             style={{ width: `${completionPercentage}%` }}
           />
         </div>
@@ -151,14 +151,14 @@ export function ChunkProgressDisplay({
       {/* Processing Stats */}
       <div className="grid grid-cols-4 gap-4 mb-4 text-sm">
         <div className="text-center">
-          <div className="text-lg font-semibold text-green-600">
+          <div className="text-lg font-semibold text-success">
             {progress.completed_chunks}
           </div>
           <div className="text-muted-foreground">Completed</div>
         </div>
 
         <div className="text-center">
-          <div className="text-lg font-semibold text-blue-600">
+          <div className="text-lg font-semibold text-primary">
             {progress.processing_chunks}
           </div>
           <div className="text-muted-foreground">Processing</div>
@@ -172,7 +172,7 @@ export function ChunkProgressDisplay({
         </div>
 
         <div className="text-center">
-          <div className="text-lg font-semibold text-red-600">
+          <div className="text-lg font-semibold text-destructive">
             {progress.failed_chunks}
           </div>
           <div className="text-muted-foreground">Failed</div>
@@ -181,10 +181,10 @@ export function ChunkProgressDisplay({
 
       {/* Time Estimate */}
       {progress.estimated_remaining_ms && progress.estimated_remaining_ms > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+        <div className="bg-primary/10 border border-primary/40 rounded-lg p-3 mb-4">
           <div className="flex items-center space-x-2">
-            <span className="text-blue-600">⏱️</span>
-            <span className="text-sm text-blue-800">
+            <span className="text-primary">⏱️</span>
+            <span className="text-sm text-primary">
               Estimated time remaining: {formatTimeRemaining(progress.estimated_remaining_ms)}
             </span>
           </div>
@@ -221,7 +221,7 @@ export function ChunkProgressDisplay({
 
                   {chunk.status === 'processing' && (
                     <div className="flex items-center space-x-1">
-                      <div className="animate-spin w-3 h-3 border border-blue-600 border-t-transparent rounded-full"></div>
+                      <div className="animate-spin w-3 h-3 border border-primary border-t-transparent rounded-full"></div>
                     </div>
                   )}
                 </div>
@@ -233,7 +233,7 @@ export function ChunkProgressDisplay({
                 )}
 
                 {chunk.error_message && (
-                  <div className="mt-1 text-red-700 text-xs">
+                  <div className="mt-1 text-destructive text-xs">
                     Error: {chunk.error_message}
                   </div>
                 )}
@@ -244,10 +244,10 @@ export function ChunkProgressDisplay({
 
       {/* Processing Complete */}
       {progress.completed_chunks === progress.total_chunks && progress.total_chunks > 0 && (
-        <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
+        <div className="mt-4 bg-success/10 border border-success/40 rounded-lg p-3">
           <div className="flex items-center space-x-2">
-            <span className="text-green-600">🎉</span>
-            <span className="text-sm font-medium text-green-800">
+            <span className="text-success">🎉</span>
+            <span className="text-sm font-medium text-success">
               Processing completed! All {progress.total_chunks} chunks have been transcribed.
             </span>
           </div>
@@ -276,7 +276,7 @@ export function ChunkProgressMini({ progress, className = '' }: { progress: Proc
 
       <div className="w-full bg-border rounded-full h-1.5 mb-2">
         <div
-          className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+          className="bg-primary h-1.5 rounded-full transition-[width] duration-300"
           style={{ width: `${completionPercentage}%` }}
         />
       </div>
@@ -284,7 +284,7 @@ export function ChunkProgressMini({ progress, className = '' }: { progress: Proc
       <div className="text-xs text-muted-foreground">
         {progress.completed_chunks} / {progress.total_chunks} chunks
         {progress.processing_chunks > 0 && (
-          <span className="ml-2 text-blue-600">
+          <span className="ml-2 text-primary">
             ({progress.processing_chunks} processing)
           </span>
         )}

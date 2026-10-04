@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { ArrowLeft, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -126,12 +125,7 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="bg-background"
-    >
+    <div className="bg-background">
       <div className="max-w-4xl mx-auto px-8 py-8">
         <button
           type="button"
@@ -253,6 +247,6 @@ export default function ContextDetailPageClient({ id }: { id: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
+    </div>
   );
 }

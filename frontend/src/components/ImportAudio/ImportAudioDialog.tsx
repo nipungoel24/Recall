@@ -416,7 +416,7 @@ export function ImportAudioDialog({
               <div className="relative">
                 <div className="w-full bg-muted rounded-full h-3">
                   <div
-                    className="bg-primary h-3 rounded-full transition-colors duration-300 ease-out"
+                    className="bg-primary h-3 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                     style={{ width: `${Math.min(progress.progress_percentage, 100)}%` }}
                   />
                 </div>

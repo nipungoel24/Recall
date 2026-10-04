@@ -133,7 +133,7 @@ const NotesIndexPage: React.FC = () => {
                       as="a"
                       href={routes.meetingSection(meeting.id, 'notes')}
                       label={meeting.title}
-                      className="h-auto min-h-10 py-1.5"
+                      className="h-auto min-h-9 py-1"
                       trailing={
                         <span className="flex items-center gap-1 text-caption text-muted-foreground">
                           Notes

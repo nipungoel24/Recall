@@ -322,25 +322,25 @@ export function BuiltInModelManager({
                     <span className="min-w-0 break-words text-base font-bold leading-snug text-foreground">{model.display_name || model.name}</span>
                     {isAvailable && (
                       <>
-                        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-green-600">
-                          <span className="h-2 w-2 rounded-full bg-green-600"></span>
+                        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-success">
+                          <span className="h-2 w-2 rounded-full bg-success"></span>
                           Ready
                         </span>
                         {selectedModel === model.name && (
-                          <span className="shrink-0 rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          <span className="shrink-0 rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                             Selected
                           </span>
                         )}
                       </>
                     )}
                     {isCorrupted && (
-                      <span className="flex shrink-0 items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      <span className="flex shrink-0 items-center gap-1 rounded bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
                         <BadgeAlert className="h-3 w-3" />
                         Corrupted
                       </span>
                     )}
                     {isError && (
-                      <span className="shrink-0 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      <span className="shrink-0 rounded bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
                         Error
                       </span>
                     )}
@@ -421,7 +421,7 @@ export function BuiltInModelManager({
                   {/* Available - Show small trash icon (only if not currently selected) */}
                   {isAvailable && !modelIsDownloading && selectedModel !== model.name && (
                     <button
-                      className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-red-600"
+                      className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteModel(model.name);
@@ -438,7 +438,7 @@ export function BuiltInModelManager({
                   <p className="mb-1">{model.description}</p>
                 )}
                 {(isError || isCorrupted) && (
-                  <p className="mb-1 text-xs text-red-600">
+                  <p className="mb-1 text-xs text-destructive">
                     {isError && typeof model.status === 'object' && 'Error' in model.status
                       ? (model.status as any).Error
                       : isCorrupted
@@ -477,7 +477,7 @@ export function BuiltInModelManager({
                   </div>
                   <div className="w-full h-2.5 bg-border rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-gray-800 to-gray-900 rounded-full transition-all duration-300"
+                      className="h-full bg-primary rounded-full transition-[width] duration-300"
                       style={{ width: `${progress}%` }}
                     />
                   </div>

@@ -94,7 +94,7 @@ export function SettingsModals({
 
           {/* Divider */}
           <div className="border-t pt-8">
-            <h3 className="text-lg font-semibold text-foreground mb-4">AI Model Configuration</h3>
+            <h3 className="text-section-title text-foreground mb-4">AI Model Configuration</h3>
             <div className="space-y-4">
               <div>
                 <label htmlFor="summarization-provider" className="block text-sm font-medium text-foreground mb-1">
@@ -138,7 +138,7 @@ export function SettingsModals({
               </div>
               {modelConfig.provider === 'ollama' && (
                 <div>
-                  <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
+                  <h4 className="text-base font-semibold text-foreground mb-4">Available Ollama Models</h4>
                   {error && (
                     <div
                       role="alert"

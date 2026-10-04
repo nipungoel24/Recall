@@ -215,7 +215,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ initialDateKey, initialMont
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Calendar</h1>
+            <h1 className="text-page-title">Calendar</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {monthAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
             </p>

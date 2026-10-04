@@ -62,7 +62,7 @@ export const ComplianceNotification: React.FC<ComplianceNotificationProps> = ({
 
   return (
     <div 
-      className={`fixed z-50 transition-colors duration-300 ${
+      className={`fixed z-50 transition-opacity transition-transform duration-300 motion-reduce:transition-none ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
       }`}
       style={{

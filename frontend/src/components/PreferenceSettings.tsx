@@ -130,10 +130,15 @@ export function PreferenceSettings() {
       <div className="bg-surface rounded-lg border border-border p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-section-title text-foreground mb-2">Notifications</h3>
+            <h3 id="prefs-notifications-heading" className="text-section-title text-foreground mb-2">Notifications</h3>
             <p className="text-small text-muted-foreground">Enable or disable notifications of start and end of meeting</p>
           </div>
-          <Switch checked={notificationsEnabledValue} onCheckedChange={setNotificationsEnabled} />
+          <Switch
+            id="prefs-notifications"
+            aria-labelledby="prefs-notifications-heading"
+            checked={notificationsEnabledValue}
+            onCheckedChange={setNotificationsEnabled}
+          />
         </div>
       </div>
 

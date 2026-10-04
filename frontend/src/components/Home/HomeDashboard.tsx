@@ -449,7 +449,7 @@ export function HomeDashboard() {
                       into one polished brief.
                     </p>
                     <Button
-                      variant="default"
+                      variant="outline"
                       size="sm"
                       className="mt-3 w-full"
                       onClick={() => router.push(routes.daily())}

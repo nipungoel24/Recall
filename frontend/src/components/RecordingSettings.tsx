@@ -139,7 +139,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Recording Settings</h3>
+        <h3 className="text-section-title text-foreground mb-4">Recording Settings</h3>
         <p className="text-sm text-muted-foreground mb-6">
           Configure how your audio recordings are saved during meetings.
         </p>
@@ -148,12 +148,14 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {/* Auto Save Toggle */}
       <div className="flex items-center justify-between p-4 border rounded-lg">
         <div className="flex-1">
-          <div className="font-medium">Save Audio Recordings</div>
+          <div id="recording-auto-save-label" className="font-medium">Save Audio Recordings</div>
           <div className="text-sm text-muted-foreground">
             Automatically save audio files when recording stops
           </div>
         </div>
         <Switch
+          id="recording-auto-save"
+          aria-labelledby="recording-auto-save-label"
           checked={preferences.auto_save}
           onCheckedChange={handleAutoSaveToggle}
           disabled={saving}
@@ -200,12 +202,14 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {/* Recording Notification Toggle */}
       <div className="flex items-center justify-between p-4 border rounded-lg">
         <div className="flex-1">
-          <div className="font-medium">Recording Start Notification</div>
+          <div id="recording-notification-label" className="font-medium">Recording Start Notification</div>
           <div className="text-sm text-muted-foreground">
             Show reminder to inform participants when recording starts
           </div>
         </div>
         <Switch
+          id="recording-notification"
+          aria-labelledby="recording-notification-label"
           checked={showRecordingNotification}
           onCheckedChange={handleNotificationToggle}
         />
@@ -214,7 +218,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {/* Device Preferences */}
       <div className="space-y-4">
         <div className="border-t pt-6">
-          <h4 className="text-base font-medium text-foreground mb-4">Default Audio Devices</h4>
+          <h4 className="text-base font-semibold text-foreground mb-4">Default Audio Devices</h4>
           <p className="text-sm text-muted-foreground mb-4">
             Set your preferred microphone and system audio devices for recording. These will be automatically selected when starting new recordings.
           </p>

@@ -105,7 +105,7 @@ export function DailyMeetingView({
           <div className="flex w-4 flex-shrink-0 flex-col items-center pt-4" aria-hidden="true">
             <span
               className={`h-2.5 w-2.5 rounded-full border-2 ${
-                index === 0 ? 'border-blue-200 bg-blue-500' : 'border-border bg-background'
+                index === 0 ? 'border-primary/40 bg-primary' : 'border-border bg-background'
               }`}
             />
             {index < dayMeetings.length - 1 && (
@@ -126,7 +126,7 @@ export function DailyMeetingView({
       <div className="mb-5">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+          <h1 className="text-page-title">{title}</h1>
         </div>
         {!isLoading && error === null && (
           <p className="text-sm text-muted-foreground mt-1">
@@ -159,12 +159,12 @@ export function DailyMeetingView({
           </div>
         </div>
       ) : error ? (
-        <div className="border border-red-200 bg-red-50 rounded-lg p-4">
-          <div className="flex items-start gap-2 text-red-700">
+        <div className="border border-destructive/40 bg-destructive/10 rounded-lg p-4">
+          <div className="flex items-start gap-2 text-destructive">
             <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium">Failed to load meetings</div>
-              <p className="text-sm text-red-600 mt-0.5 break-words">{error}</p>
+              <p className="text-sm text-destructive mt-0.5 break-words">{error}</p>
             </div>
           </div>
           <Button size="sm" variant="outline" className="mt-3" onClick={refresh}>

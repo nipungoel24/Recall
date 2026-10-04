@@ -413,12 +413,12 @@ export function DownloadProgressStep() {
             <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           )}
           {state.status === 'completed' && (
-            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-              <Check className="w-4 h-4 text-green-600" />
+            <div className="w-6 h-6 rounded-full bg-success/15 flex items-center justify-center">
+              <Check className="w-4 h-4 text-success" />
             </div>
           )}
           {state.status === 'error' && (
-            <span className="text-sm text-red-500">Failed</span>
+            <span className="text-sm text-destructive">Failed</span>
           )}
         </div>
       </div>
@@ -428,7 +428,7 @@ export function DownloadProgressStep() {
         <div className="space-y-2">
           <div className="w-full h-2 bg-border rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-gray-700 to-gray-900 rounded-full transition-all duration-300"
+              className="h-full bg-primary rounded-full transition-[width] duration-300"
               style={{ width: `${state.progress}%` }}
             />
           </div>
@@ -451,9 +451,9 @@ export function DownloadProgressStep() {
       )}
 
       {state.status === 'error' && state.error && (
-        <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600 font-medium">Download Error</p>
-          <p className="text-xs text-red-500 mt-1">{state.error}</p>
+        <div className="mt-2 p-3 bg-destructive/10 border border-destructive/40 rounded-md">
+          <p className="text-sm text-destructive font-medium">Download Error</p>
+          <p className="text-xs text-destructive mt-1">{state.error}</p>
           {(title === 'Transcription Engine' || title === 'Summary Engine') && (
             <button
               onClick={title === 'Transcription Engine' ? handleRetryDownload : handleRetrySummaryDownload}

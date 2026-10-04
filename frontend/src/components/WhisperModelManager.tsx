@@ -604,7 +604,7 @@ function ModelCard({
             {isAvailable && (
               <>
                 <div className="flex items-center gap-1.5 text-success">
-                  <div className="w-2 h-2 bg-success/100 rounded-full"></div>
+                  <div className="w-2 h-2 bg-success rounded-full"></div>
                   <span className="text-xs font-medium">Ready</span>
                 </div>
                 <AnimatePresence>

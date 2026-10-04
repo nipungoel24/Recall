@@ -220,8 +220,8 @@ export const BlockComponent: React.FC<BlockProps> = ({
 
   return (
     <div 
-      className={`group relative min-h-[24px] flex items-start rounded transition-all duration-150 ease-in-out
-        ${isSelected ? 'bg-blue-50 ring-1 ring-blue-200 shadow-sm' : 'hover:bg-muted'}`}
+      className={`group relative min-h-[24px] flex items-start rounded transition-colors transition-shadow duration-150 ease-in-out
+        ${isSelected ? 'bg-primary/10 ring-1 ring-primary/40 shadow-sm' : 'hover:bg-muted'}`}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
       onMouseUp={onMouseUp}
@@ -245,7 +245,7 @@ export const BlockComponent: React.FC<BlockProps> = ({
           rows={1}
           className={`
             w-full resize-none overflow-hidden bg-transparent border-none p-0 focus:outline-none focus:ring-0
-            transition-all duration-150 ease-in-out
+            transition-colors duration-150 ease-in-out
             ${block.color === 'gray' ? 'text-muted-foreground' : ''}
             ${block.type === 'heading1' ? 'text-xl font-bold' : ''}
             ${block.type === 'heading2' ? 'text-lg font-semibold' : ''}

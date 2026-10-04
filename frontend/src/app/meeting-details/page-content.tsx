@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { Summary, SummaryResponse } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { invoke } from '@tauri-apps/api/core';
@@ -161,12 +160,7 @@ export default function PageContent({
   }, [shouldAutoGenerate, meeting.id]); // Re-run if meeting changes
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col h-full bg-background"
-    >
+    <div className="flex flex-col h-full bg-background">
       <div className="flex flex-1 overflow-hidden">
         <TranscriptPanel
           transcripts={meetingData.transcripts}
@@ -227,6 +221,6 @@ export default function PageContent({
             onSummaryContextIdsChange={setSummaryContextIds}
         />
       </div>
-    </motion.div>
+    </div>
   );
 }

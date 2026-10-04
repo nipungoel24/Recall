@@ -68,9 +68,14 @@ export function SetupOverviewStep() {
                             <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                <button className="text-muted-foreground hover:text-foreground">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground"
+                                    aria-label="About AI summarization settings"
+                                >
                                     <Info className="w-4 h-4" />
-                                </button>
+                                </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs text-sm">
                                 You can also select external AI providers like OpenAI, Claude, or

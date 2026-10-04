@@ -142,7 +142,7 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
             <button
               onClick={handleBrowse}
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-muted-foreground disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted-foreground disabled:cursor-not-allowed transition-colors"
             >
               {importState === 'selecting' || importState === 'detecting' ? (
                 <>
@@ -160,12 +160,12 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
 
           {/* Detection Result */}
           {detectedPath && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="p-3 bg-success/10 border border-success/40 rounded-lg">
               <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-green-800">Database found!</p>
-                  <p className="text-xs text-green-700 mt-1 break-all">{detectedPath}</p>
+                  <p className="text-sm font-medium text-success">Database found!</p>
+                  <p className="text-xs text-success mt-1 break-all">{detectedPath}</p>
                 </div>
               </div>
             </div>
@@ -173,11 +173,11 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
 
           {/* Error Message */}
           {importState === 'error' && errorMessage && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-3 bg-destructive/10 border border-destructive/40 rounded-lg">
               <div className="flex items-start gap-2">
-                <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <XCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm text-red-800">{errorMessage}</p>
+                  <p className="text-sm text-destructive">{errorMessage}</p>
                 </div>
               </div>
             </div>
@@ -188,7 +188,7 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
             <button
               onClick={handleImport}
               disabled={!canImport || isLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-muted-foreground disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-success text-success-foreground rounded-lg hover:bg-success/90 disabled:bg-muted-foreground disabled:cursor-not-allowed transition-colors"
             >
               {importState === 'importing' ? (
                 <>

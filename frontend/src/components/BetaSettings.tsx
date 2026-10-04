@@ -38,7 +38,10 @@ export function BetaSettings() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <FlaskConical className="h-5 w-5 text-muted-foreground" />
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3
+                  id={`beta-feature-${featureKey}`}
+                  className="text-section-title text-foreground"
+                >
                   {BETA_FEATURE_NAMES[featureKey]}
                 </h3>
                 <span className="px-2 py-0.5 text-xs font-medium bg-warning/10 text-warning rounded-md border border-warning/30">
@@ -52,6 +55,8 @@ export function BetaSettings() {
 
             <div className="ml-6">
               <Switch
+                id={`beta-feature-toggle-${featureKey}`}
+                aria-labelledby={`beta-feature-${featureKey}`}
                 checked={betaFeatures[featureKey]}
                 onCheckedChange={(checked) => toggleBetaFeature(featureKey, checked)}
               />

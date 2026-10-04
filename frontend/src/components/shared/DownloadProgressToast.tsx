@@ -86,9 +86,9 @@ function DownloadToastContent({
         </div>
 
         {hasError ? (
-          <p className="text-xs text-red-600">{download.error || 'Download failed'}</p>
+          <p className="text-xs text-destructive">{download.error || 'Download failed'}</p>
         ) : isComplete ? (
-          <p className="text-xs text-green-600">Download complete</p>
+          <p className="text-xs text-success">Download complete</p>
         ) : isCancelled ? (
           <p className="text-xs text-muted-foreground">Download cancelled</p>
         ) : (
@@ -96,7 +96,7 @@ function DownloadToastContent({
             {/* Progress bar */}
             <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
               <div
-                className="h-full bg-foreground rounded-full transition-all duration-300"
+                className="h-full bg-foreground rounded-full transition-[width] duration-300"
                 style={{ width: `${download.progress}%` }}
               />
             </div>

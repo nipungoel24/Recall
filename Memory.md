@@ -1055,6 +1055,245 @@ Updated" were confirmed intact on the rendered page.
 - **No note-presence query exists**, so Notes cannot show which meetings have
   notes. This needs a read-only Tauri command, which is a backend change.
 
+# Phase D - Design system polish (the pass Phase C deliberately deferred)
+
+Phase D changed no product behaviour, no IA, and no user data. It took the
+already-accepted Phase 5 foundation and removed the layer of hardcoded, ad-hoc
+styling that sat on top of it, then proved the result in the real WebView2.
+
+## D1 - The raw-palette count was wrong
+
+The Phase C handoff recorded "~133 raw-palette classes". An exhaustive scan
+found **206** occurrences across **140 lines in 27 files**, plus 2 inline SVG hex
+literals. Any migration scoped to 133 would have silently left a third of the
+surface behind. The corrected number is the one recorded here.
+
+## D2 - Colour moved to semantic tokens (206 -> 0)
+
+Mapping was **role-based, not hue-based**; a raw colour only became a token when
+the token stated the same intent:
+
+    blue            -> primary          red     -> destructive
+    green           -> success          yellow/amber/orange -> warning
+    gray/slate/neutral text and surfaces -> muted / muted-foreground /
+                                         foreground / surface / border
+
+Alpha levels were chosen so the result is legible in **both** themes. This was
+not token purity for its own sake: `bg-blue-50` on Recall's dark surface is a
+near-white box, so `bg-primary/10` is also a dark-mode bug fix. Tints that had a
+structural role were kept honest -- e.g. the Completion ring's `#e5e7eb` track is
+`stroke-border`, its `#3b82f6` fill is `stroke-primary`.
+
+`text-white` was resolved per site against the surface it actually sits on
+(`primary-foreground`, `destructive-foreground`, `success-foreground`,
+`warning-foreground`, `popover-foreground`), never blanket-replaced.
+
+**Migration hazard, recorded so it is never repeated:** `bg-<hue>-50` is a
+**prefix** of `bg-<hue>-500`. An ordered replace therefore fired the tint rule
+first and produced `bg-warning/100` (the trailing `0` is the tell). All 17
+artifacts were repaired to the solid step. Order specific-shade rules before
+tint rules, and treat a `/100` opacity as a bug signal -- it is not a real
+Tailwind step.
+
+Also removed 92 lines of commented-out toolbar in `AISummary/index.tsx` that held
+the last decorative gradient heading. That deletion is the **only** non-ASCII
+`audit-bytes.ps1` drift in this phase (4 runs -> 2): the two emoji were inside the
+deleted comment and the two live ones at lines 687/694 are byte-identical.
+
+## D3 - The `--scrim` token, and a real bug it exposed
+
+A modal/drop scrim is not a surface: no existing token expressed "darken whatever
+is behind me", and leaving it as a raw palette colour would be a permanent
+exception. Rather than allow that, one token was added (`--scrim`, dark in both
+themes on purpose) and `--scrim` mapped in `tailwind.config.js`.
+
+**The valuable part is what using it revealed.** `dialog.tsx` and `sheet.tsx`
+scrims were `bg-foreground/50`, which *inverts with the theme*. Measured in the
+running app before the fix:
+
+    dark  theme -> rgba(245, 243, 237, 0.5)   <- a MILKY LIGHT wash
+    light theme -> rgba( 17,  17,  15, 0.5)   <- a dark wash
+
+So every dialog in the app had a fogged-white backdrop in dark mode -- the exact
+failure the token exists to prevent, and it flipped on every theme change. Both
+primitives now use `bg-scrim/60`, verified in-app afterwards:
+
+    dark  theme -> rgba(11, 11,  9, 0.6)
+    light theme -> rgba(17, 17, 15, 0.6)
+
+This is the clearest argument for doing visual verification rather than trusting a
+static read: the source said "50% grey overlay", which looks correct, and only
+the computed value in both themes showed the inversion.
+
+## D4 - Motion names its properties
+
+`transition-all` went 16 -> 0, each replaced with the properties it actually
+animates. Real defects fixed: `ComplianceNotification` animated opacity with a
+transform transition; width-driven bars in `ModelSettingsModal` and
+`ImportAudioDialog` transitioned `all`; the button press scale transitioned
+nothing; the accordion chevron had no rotation transition.
+
+Reduced motion is honoured globally (pulse/ping, Radix enter/exit, accordion)
+with `<MotionConfig reducedMotion="user">` in the layout. **`animate-spin` is
+deliberately preserved** and this is now documented in the gate: it reports live
+work in progress, and a frozen spinner reads as a stalled app.
+
+Six decorative page-mount `motion.div` entrances were removed. They animated on
+every route entry, added nothing, and sat inside the reduced-motion blast radius.
+
+## D5 - The radius ladder was inverted, and this is the one sanctioned change
+
+`design-token-integrity.test.mjs` recorded the ladder as inverted and **explicitly
+removed its ordering assertion** so the fix could be made later:
+
+> the current ladder is inverted and fixing it is deferred to a visually
+> verified pass ... The ordering fix belongs in a dedicated, visually verified
+> design-system pass.
+
+Phase D is that pass, and the fix is now rendered and inspected rather than
+reasoned about on paper.
+
+Before:  `sm = radius-2 = 4px`, `md = radius+2 = 8px`, `lg = radius = 6px`
+After:   `sm = 4px`, `md = 6px`, `lg = 8px`
+
+`rounded-md` was rounder than `rounded-lg`, so **dialogs rendered sharper than
+the buttons inside them**. To make "container = `lg`, control = `md`" real rather
+than nominal, the overlay family was put on the `lg` step: `popover`,
+`dropdown-menu` (content + sub-content) and `select` content. Controls
+(`button`, `select` trigger) stay on `md`; `tooltip` stays on `md` because it is
+a small attached label, not a panel.
+
+Note this is a *size-preserving* fix for `rounded-md` (102 call sites unchanged at
+6px). The visible change is `rounded-lg` (90 call sites) 6px -> 8px.
+
+Only the **ordering** changed. The `--radius` value, the derived-ladder approach,
+and the compact/brutalist direction are all untouched.
+
+## D6 - Interaction states and accessible names
+
+Missing hover feedback added to `tabs` (scoped to `data-[state=inactive]` so it
+cannot fight the active tab), `switch`, `select` trigger, and the scroll-area
+thumb. Every transition is property-specific and disabled under reduced motion.
+
+Five **switches shipped with no accessible name** -- visible text sat in a sibling
+`<div>` with no programmatic association. Each now reuses that existing visible
+text via `aria-labelledby` rather than duplicating the string. An unnamed icon
+button in `SetupOverviewStep` moved onto the `Button` primitive, which supplies
+`type`, focus ring and sizing.
+
+The popover/command "outline removed without a focus treatment" audit flag was a
+**false positive**: all three `PopoverTrigger` uses are `asChild`, so they inherit
+the Button's `focus-visible` ring. Recorded rather than "fixed".
+
+## D7 - Typography and rhythm coherence
+
+`text-section-title` is exactly 18px/600, so replacing `text-lg font-semibold`
+with the token was lossless; it only stopped hardcoding what the token already
+said. Settings `h3`s now use it, and the two `h4` sub-levels were reconciled
+(they disagreed: 18px/700 vs 16px/500).
+
+Meetings and Notes rows now share one height. Notes moved 40px -> **36px** to
+match Meetings rather than the reverse, because Phase C deliberately made
+Meetings the dense screen and diluting it would have reversed a frozen decision.
+Verified live: 51 rows each, single height value 36.
+
+Page titles were normalised to `text-page-title`. `/settings` was rendering its
+`h1` at **30px** against 24px everywhere else -- 25% larger for no reason.
+Home is intentionally left at 20px: it is a greeting-led surface, not a route
+title, and its composition is frozen from Phase C.
+
+## D8 - Home has one dominant CTA
+
+PRD settles Start Recording as the primary action and Daily Brief as a
+status/secondary role. Daily Brief was `variant="default"`, i.e. a second filled
+primary. It is now `variant="outline"`. Verified in the running DOM: the only
+filled primary on Home is Start Recording.
+
+**One open question, deliberately not acted on.** Start Recording is
+`variant="destructive"` on both Home and the sidebar footer. That is consistent
+across two surfaces and reads as an intentional record-red convention, but
+`destructive` is semantically "this destroys data", and a persistent
+destructive-styled primary is a known hesitation trigger. Changing it would alter
+a frozen Phase A2/C surface, so it is raised rather than decided unilaterally.
+
+## D9 - Gates
+
+`frontend/tests/lib/phase-d-design-polish.test.mjs` adds **20** assertions across
+6 suites: zero raw palette / inline hex / `dark:`+hue, the scrim contract
+(including a regression guard against `bg-foreground` scrims), the ascending
+ladder and the overlay-vs-control split, motion and reduced motion, heading and
+row coherence, and Home CTA hierarchy.
+
+    tsc --noEmit        src/ CLEAN (only the pre-existing bun:test module errors)
+    node --test         613 tests, 611 pass, 2 known failures
+    cargo test          348 passed, 0 failed, 2 ignored (+1 doc test)
+    audit-bytes.ps1     1 drift, the intended dead-code deletion
+    production build    MSI + NSIS both produced; signing skipped (no cert)
+
+The 2 failures are the documented pre-existing pair (Phase 4 `checkPermissions`,
+Bun-only `qa-routes.test.mjs`). The baseline was 593/591/2; +20 new = 613/611/2.
+
+## D10 - Visual QA: 48 combinations, and two harness bugs worth remembering
+
+Verified in the real production build over WebView2: **6 routes x 4 viewports
+(1100x700, 1366x768, 1920x1080, 2545x1400) x light/dark = 48**, all with zero
+horizontal overflow, zero unnamed controls, and the correct theme resolved.
+Sidebar collapses 255 -> 63 -> 255 cleanly. Dialog panel measured at the 8px `lg`
+step and fitting the viewport in both themes.
+
+Three harness traps, each of which first produced a **false all-clear or false
+failure** and had to be fixed before the numbers meant anything:
+
+1. **`set-size.ps1` silently returned `NO WINDOW` when the app had died, and the
+   matrix happily recorded every "viewport" at the default window size.** An
+   earlier run of 40 combinations was worthless for this reason. `qa-matrix.ps1`
+   now aborts rather than record a viewport it could not apply.
+2. **A stray Google Chrome was squatting on `127.0.0.1:9222` and answering 404**
+   while the app's own WebView2 listened on `[::1]:9222`. The capture script now
+   probes both loopback families and takes whichever exposes the app's page.
+   (`$host` is a read-only PowerShell variable -- do not use it as a loop var.)
+3. **A naive "does this button have a name?" check reports a control labelled by
+   `aria-labelledby` as unnamed.** Both the probe and the Agent Forge audit do
+   this. It produced a false a11y failure that was chased for several rounds
+   before the switch was measured properly and found correctly labelled.
+
+Also: `pnpm build` fails in Next's lint/type-check worker on this host (exit
+-1) while `npm run build` succeeds, so `tauri.conf.json`'s `beforeBuildCommand`
+has to be pointed at npm for a local build. Plain `cargo build --release` does
+**not** embed `frontendDist` -- it produces a binary that loads `devUrl` and
+fails with `ERR_CONNECTION_REFUSED`. `npx tauri build` is required. The config
+was patched and reverted for each build; patching must be BOM-free or the Rust
+build script rejects the JSON.
+
+## D11 - Data integrity
+
+Unchanged, verified after the app was closed:
+
+    SHA-256  4911B87F823B6751576C15D96DE19B194B91B22AA121E859787B7BD3EB19BA51  (identical to baseline)
+    size     4,632,576 bytes  (identical)
+    rows     51 meetings / 7627 transcripts / 0 meeting_notes
+
+Phase D writes nothing to the user database. One caveat recorded honestly: a
+`meeting_minutes.sqlite-wal` of ~20 KB remained after the QA app instance was
+force-killed, so it could not be checkpointed away (`sqlite3` and `python` are
+both absent from this host). The **main database file is byte-identical to the
+baseline**, which is the authoritative check; the WAL is a transient log that
+SQLite folds in on next open.
+
+## Found, documented, NOT fixed (out of Phase D scope)
+
+- The Tauri CSP still omits `ipc.localhost` from `connect-src`, so every IPC call
+  logs a violation before falling back to postMessage. Unchanged through B, C
+  and D. This is a config/Rust concern, not design-system work.
+- A stray `transition-all` survives in the shipped CSS as
+  `.bn-container .bn-transition-all` -- that is **BlockNote's own stylesheet**, not
+  Recall code. Recall's `src/` is at zero. Do not patch a vendor stylesheet.
+- `HomeDashboard.tsx` has a Phase C gate forbidding `shadow-sm` on the page
+  ("brutalist: no shadows"), but the `Button` primitive itself applies `shadow-sm`.
+  The gate greps the page's own classNames so it passes. Left alone: changing the
+  primitive's shadow would restyle every button in the app, well past Phase D.
+- Start Recording as a `destructive` primary (see D8).
+
 # Next Exact Step
 
 1. Gates 1 through 8 complete. Phase 0 `a3c196b`, A1 `5df672a`, A2 `4a89d1f`,
@@ -1064,14 +1303,21 @@ Updated" were confirmed intact on the rendered page.
    left edge. Meetings is a dense one-line archive with real loading/error/Retry,
    and Notes is differentiated from it by information architecture rather than by
    inventing note content.
-2. **Phase D is next** and owns exactly what Phase C deliberately left: the 133
-   raw-palette classes, the 16 `transition-all` usages, the border/card audit
-   (Home carries 12 bordered text elements), and the two-filled-primary question on
-   Home. Do not change the radius scale.
-3. Two product decisions are waiting on the user, not on engineering: whether
-   Home's hero keeps its own Start Recording CTA given A2 standardised on a single
-   recording action, and whether Generate Daily Brief should be demoted so Home
-   has one primary action.
+2. **Phase D is complete** - see the Phase D section above. It owns exactly what
+   Phase C deliberately left: the raw-palette classes (**206**, not the 133
+   previously recorded), the 16 `transition-all` usages, and the
+   two-filled-primary question on Home. The radius scale **ordering** was fixed
+   here because `design-token-integrity.test.mjs` had explicitly deferred it to
+   "a dedicated, visually verified design-system pass", which is what Phase D was.
+   The `--radius` value itself was not touched.
+3. One product decision is still open on the user, not on engineering: whether
+   **Start Recording should stay `variant="destructive"`**. It is consistent on
+   both Home and the sidebar footer and reads as an intentional record-red
+   convention, but `destructive` means "destroys data" and a persistent
+   destructive-styled primary is a known hesitation trigger. Phase D raised it
+   rather than changing a frozen Phase A2/C surface. The related question - whether
+   Home keeps its own Start Recording CTA - is settled: it does, and Generate
+   Daily Brief was demoted to `outline` so Home has one dominant action.
 4. A read-only Tauri command for note presence would let /notes show which meetings
    actually have notes. That is a backend addition, deliberately out of Phase C.
 5. The Tauri CSP defect persists: `connect-src` omits `ipc.localhost`, so every

@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { FolderPlus, Layers, LoaderIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,12 +28,7 @@ function ContextsListPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="bg-background"
-    >
+    <div className="bg-background">
       <div className="max-w-5xl mx-auto px-8 py-8">
         <PageHeader
           title="Contexts"
@@ -125,7 +119,7 @@ function ContextsListPage() {
         onOpenChange={setCreateOpen}
         onCreated={(created) => router.push(routes.context(created.id))}
       />
-    </motion.div>
+    </div>
   );
 }
 

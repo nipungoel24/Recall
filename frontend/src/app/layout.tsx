@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { MotionConfig } from 'framer-motion'
 import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
@@ -243,6 +244,14 @@ export default function RootLayout({
       </head>
       <body className={`${sourceSans3.variable} font-sans antialiased`}>
         <ThemeProvider>
+          {/* Phase D: framer-motion renders transforms and opacity as INLINE
+              styles, so the reduced-motion rules in globals.css cannot reach
+              it and every `motion.*` in the app was animating regardless of
+              the user's preference. `reducedMotion="user"` makes the library
+              itself drop transform/layout animations for those users. Opacity
+              fades are kept, because they are state feedback rather than
+              decorative movement. */}
+          <MotionConfig reducedMotion="user">
           <RecordingStateProvider>
             <TranscriptProvider>
               <ConfigProvider>
@@ -293,6 +302,7 @@ export default function RootLayout({
               </ConfigProvider>
             </TranscriptProvider>
           </RecordingStateProvider>
+          </MotionConfig>
 
         <Toaster position="bottom-center" offset="5rem" richColors closeButton />
         </ThemeProvider>
