@@ -6,6 +6,27 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use super::ffmpeg::find_ffmpeg_path;
+/// Verify that a finalized audio artifact actually exists and is non-empty.
+///
+/// Extracted so the stop path and the regression tests exercise the SAME code.
+/// Phase E's P0 was that the stop path trusted its callee: with ffmpeg missing
+/// the merge never happened, nothing was written, and the app still reported a
+/// saved recording. A zero-byte or absent file is never a recoverable meeting.
+pub fn verify_audio_artifact(path: &std::path::Path) -> Result<u64, String> {
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.len() > 0 => Ok(meta.len()),
+        Ok(_) => Err(format!(
+            "Recording finalization produced an empty audio file at {}. The recording was not saved.",
+            path.display()
+        )),
+        Err(e) => Err(format!(
+            "Recording finalization reported success but the audio file is missing at {}: {}",
+            path.display(),
+            e
+        )),
+    }
+}
+
 
 /// Audio data without device type (we only store mixed audio)
 #[derive(Clone)]

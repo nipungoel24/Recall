@@ -112,3 +112,6 @@ pub use decoder::{decode_audio_file, DecodedAudio};
 
 // Export audio constants
 pub use constants::AUDIO_EXTENSIONS;
+
+#[cfg(test)]
+mod tests;

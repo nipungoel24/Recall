@@ -5,8 +5,8 @@ use ffmpeg_sidecar::{
     version::ffmpeg_version,
 };
 use log::{debug, error};
-use once_cell::sync::Lazy;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use which::which;
 
 #[cfg(not(windows))]
@@ -15,10 +15,60 @@ const EXECUTABLE_NAME: &str = "ffmpeg";
 #[cfg(windows)]
 const EXECUTABLE_NAME: &str = "ffmpeg.exe";
 
-static FFMPEG_PATH: Lazy<Option<PathBuf>> = Lazy::new(find_ffmpeg_path_internal);
+// Resolution result plus the instant it was computed.
+//
+// This used to be `Lazy<Option<PathBuf>>`, which cached a `None` for the whole
+// process lifetime. If ffmpeg was missing at first use (mid-install, antivirus
+// quarantine, network share not yet mounted) the app could never recover for
+// the rest of the session, and every checkpoint encode failed silently from
+// then on. The cache is now time-limited so a changed environment is picked up,
+// and the in-flight guard is released even on panic so one failure does not
+// poison every later lookup.
+static FFMPEG_PATH: OnceLock<Mutex<Option<CachedFfmpeg>>> = OnceLock::new();
+static FFMPEG_IN_FLIGHT: Mutex<()> = Mutex::new(());
+
+const FFMPEG_CACHE_TTL_SECS: u64 = 60;
+
+struct CachedFfmpeg {
+    path: Option<PathBuf>,
+    resolved_at: std::time::Instant,
+}
 
 pub fn find_ffmpeg_path() -> Option<PathBuf> {
-    FFMPEG_PATH.as_ref().map(|p| p.clone())
+    let cache = FFMPEG_PATH.get_or_init(|| Mutex::new(None));
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        // A poisoned cache must not make ffmpeg permanently undiscoverable.
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    let fresh = guard
+        .as_ref()
+        .is_some_and(|c| c.resolved_at.elapsed().as_secs() < FFMPEG_CACHE_TTL_SECS);
+    if fresh {
+        return guard.as_ref().and_then(|c| c.path.clone());
+    }
+
+    // Serialise concurrent misses so N callers do not all try to install.
+    let _in_flight = match FFMPEG_IN_FLIGHT.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    // Re-check: another thread may have resolved it while we waited.
+    let fresh = guard
+        .as_ref()
+        .is_some_and(|c| c.resolved_at.elapsed().as_secs() < FFMPEG_CACHE_TTL_SECS);
+    if fresh {
+        return guard.as_ref().and_then(|c| c.path.clone());
+    }
+
+    let path = find_ffmpeg_path_internal();
+    *guard = Some(CachedFfmpeg {
+        path: path.clone(),
+        resolved_at: std::time::Instant::now(),
+    });
+    path
 }
 
 fn find_ffmpeg_path_internal() -> Option<PathBuf> {
@@ -127,7 +177,17 @@ fn find_ffmpeg_path_internal() -> Option<PathBuf> {
         return Some(path);
     }
 
-    let installation_dir = sidecar_dir().map_err(|e| e.to_string()).unwrap();
+    // A missing sidecar dir means we cannot find a bundled copy. Returning None
+    // lets the caller surface a clear "ffmpeg unavailable" error; the previous
+    // `unwrap()` panicked inside the resolver, which poisoned the cache and made
+    // every later lookup panic too.
+    let installation_dir = match sidecar_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            error!("sidecar dir unavailable while locating ffmpeg: {}", e);
+            return None;
+        }
+    };
     let ffmpeg_in_installation = installation_dir.join(EXECUTABLE_NAME);
     if ffmpeg_in_installation.is_file() {
         debug!("found ffmpeg in directory: {:?}", ffmpeg_in_installation);

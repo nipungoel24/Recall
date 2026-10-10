@@ -3,6 +3,7 @@
 // Transcription module: Provider abstraction, engine management, and worker pool.
 
 pub mod engine;
+pub mod outcome;
 pub mod parakeet_provider;
 pub mod provider;
 pub mod whisper_provider;

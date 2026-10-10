@@ -1,5 +1,6 @@
 use anyhow::Result;
 use log::{debug, error, info, warn};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -305,10 +306,14 @@ impl RecordingManager {
     }
 
     /// Save recording after transcription is complete
+    ///
+    /// Returns `Ok(Some(path))` only when a real, non-empty audio file was
+    /// produced. `Ok(None)` means audio saving was intentionally disabled.
+    /// Any failure is returned so the caller can stop reporting success.
     pub async fn save_recording_only<R: tauri::Runtime>(
         &mut self,
         app: &tauri::AppHandle<R>,
-    ) -> Result<()> {
+    ) -> Result<Option<PathBuf>> {
         debug!("Saving recording with transcript chunks");
 
         // Get actual recording duration from state
@@ -316,25 +321,48 @@ impl RecordingManager {
         info!("Recording duration from state: {:?}s", recording_duration);
 
         // Save the recording with actual duration
-        match self
+        let saved = self
             .recording_saver
             .stop_and_save(app, recording_duration)
-            .await
-        {
+            .await;
+
+        match saved {
             Ok(Some(file_path)) => {
-                info!("Recording saved successfully to: {}", file_path);
+                // A recorded checkpoint failure means the audio on disk is incomplete, even if
+        // a partial merge happened to produce a file. Surface it rather than let
+        // the caller claim a clean success.
+        if let Some(checkpoint_error) = self.recording_saver.take_checkpoint_failure() {
+            return Err(anyhow::anyhow!(
+                "Audio could not be fully encoded during recording: {}. The recording is incomplete.",
+                checkpoint_error
+            ));
+        }
+
+        // Do not trust the caller's "success": prove the artifact exists
+                // and is not empty, using the same helper the regression tests
+                // exercise. A missing or zero-byte audio file means the recording
+                // is NOT recoverable, and saying otherwise is the P0 this fixes.
+                let path = PathBuf::from(&file_path);
+                match super::incremental_saver::verify_audio_artifact(&path) {
+                    Ok(bytes) => {
+                        info!("Recording saved successfully to: {} ({} bytes)", file_path, bytes);
+                        Ok(Some(path))
+                    }
+                    Err(e) => Err(anyhow::anyhow!(e)),
+                }
             }
             Ok(None) => {
                 debug!("Recording not saved (auto-save disabled or no audio data)");
+                Ok(None)
             }
             Err(e) => {
+                // Previously this was logged and discarded, and the caller still
+                // emitted a success event. The error MUST reach the stop path so
+                // the UI can report a failed recording instead of a fake success.
                 error!("Failed to save recording: {}", e);
-                // Don't fail the stop operation if saving fails
+                Err(anyhow::anyhow!(e))
             }
         }
-
-        debug!("Recording save operation completed");
-        Ok(())
     }
 
     /// Stop recording and save audio (legacy method)

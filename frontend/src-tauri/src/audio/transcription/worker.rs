@@ -3,6 +3,7 @@
 // Parallel transcription worker pool and chunk processing logic.
 
 use super::engine::TranscriptionEngine;
+use super::outcome;
 use super::provider::TranscriptionError;
 use crate::audio::AudioChunk;
 use log::{error, info, warn};
@@ -115,6 +116,10 @@ pub fn start_transcription_task<R: Runtime>(
                         worker_id, engine_name, current_model
                     );
                 } else {
+                    // A worker that starts with no model can only fail every chunk.
+                    // Recording that up front means a recording that never had a
+                    // usable model is reported as failed rather than as silent.
+                    outcome::record_failure("Transcription model was not loaded at start");
                     warn!(
                         "⚠️ Worker {} pre-validation: {} model not loaded - chunks may be skipped",
                         worker_id, engine_name
@@ -145,6 +150,12 @@ pub fn start_transcription_task<R: Runtime>(
 
                             // Check if model is still loaded before processing
                             if !engine_clone.is_model_loaded().await {
+                                // Model gone before this chunk ran. That is a FAILED
+                                // chunk. It still increments the progress counter so the
+                                // drain loop terminates, but `record_failure` makes the
+                                // run's terminal state "failed" instead of letting an
+                                // empty transcript read as silence.
+                                outcome::record_failure("Transcription model was not loaded");
                                 warn!("⚠️ Worker {}: Model unloaded, but continuing to preserve chunk {}", worker_id, chunk.chunk_id);
                                 // Still count as completed even if we can't process
                                 chunks_completed_clone.fetch_add(1, Ordering::SeqCst);
@@ -207,6 +218,11 @@ pub fn start_transcription_task<R: Runtime>(
                                         let audio_start_time = chunk_timestamp; // Already in seconds from recording start
                                         let audio_end_time = chunk_timestamp + chunk_duration;
 
+                                        // This chunk produced validated text. Recording it
+                                        // is what makes a zero-failure run distinguishable
+                                        // from a failed one.
+                                        outcome::record_success();
+
                                         // Save structured transcript segment to recording manager (only final results)
                                         // Save ALL segments (partial and final) to ensure complete JSON
                                         // Create structured segment with full timestamp data
@@ -256,6 +272,14 @@ pub fn start_transcription_task<R: Runtime>(
                                             continue;
                                         }
                                         TranscriptionError::ModelNotLoaded => {
+                                            // A chunk the model could not process is a
+                                            // FAILED chunk, not a completed one. It is
+                                            // still counted in the progress total so the
+                                            // drain loop can terminate, but
+                                            // `record_failure` makes the run's terminal
+                                            // state "failed" so the stop path cannot
+                                            // present it as silence.
+                                            outcome::record_failure("Transcription model was not loaded");
                                             warn!(
                                                 "Worker {}: Model unloaded during transcription",
                                                 worker_id
@@ -264,12 +288,23 @@ pub fn start_transcription_task<R: Runtime>(
                                             continue;
                                         }
                                         _ => {
+                                            // Engine failure. Record it BEFORE falling
+                                            // through to the completed counter; previously
+                                            // this arm only logged a warning and then the
+                                            // chunk was booked complete, so a completely
+                                            // failed transcription produced an empty
+                                            // transcript and a success message.
+                                            outcome::record_failure(e.to_string());
                                             warn!(
                                                 "Worker {}: Transcription failed: {}",
                                                 worker_id, e
                                             );
                                             let _ = app_clone
-                                                .emit("transcription-warning", e.to_string());
+                                                .emit("transcription-error", serde_json::json!({
+                                                    "error": e.to_string(),
+                                                    "userMessage": "Transcription failed for part of this recording. The audio was still saved.",
+                                                    "actionable": true
+                                                }));
                                         }
                                     }
                                 }
@@ -333,6 +368,11 @@ pub fn start_transcription_task<R: Runtime>(
                 }
 
                 info!("👷 Worker {} completed", worker_id);
+                // Close the run so `outcome()` can return a terminal state. The
+                // stop path and the status command both read this, so a worker
+                // that exits (normally or by draining) publishes the real result
+                // instead of leaving the run looking like it is still going.
+                outcome::mark_finished();
             });
 
             worker_handles.push(worker_handle);

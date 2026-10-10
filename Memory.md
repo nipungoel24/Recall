@@ -1428,6 +1428,136 @@ needs either a product decision or a dedicated pass:
 - `pool.close().await` runs inside `block_on` on the event-loop thread with no
   timeout; a checked-out connection hangs shutdown indefinitely.
 
+# Phase F1 - Recording + Transcription Integrity
+
+Phase F1 fixes the two P0 release blockers Phase E left open. Both were the
+same class of lie: the app told the user a meeting was captured and transcribed
+when it was not.
+
+## P0-A - A failed recording reported success
+
+### Root cause, traced end to end
+
+1. `IncrementalSaver::save_checkpoint` runs every 30s and calls FFmpeg.
+2. `RecordingSaver`'s accumulation task did `if let Err(e) = add_chunk(chunk)
+   { error!(...) }` -- the encoder failure was **logged and discarded**, so
+   `checkpoint_count` never advanced.
+3. `finalize()` correctly returns `Err("No audio checkpoints to merge")`.
+4. `RecordingManager::save_recording_only` caught that `Err`, logged it, and
+   returned `Ok(())` unconditionally -- the comment read *"Don't fail the stop
+   operation if saving fails"*.
+5. `stop_recording` therefore emitted `recording-stopped` with no failure
+   information, and `useRecordingStop` showed "Recording saved successfully!".
+
+Compounding it: `FFMPEG_PATH` was `Lazy<Option<PathBuf>>`, so a single miss
+cached `None` for the process lifetime, and line 130 did
+`sidecar_dir().unwrap()` inside the resolver -- a panic there poisons the `Lazy`,
+making every later lookup panic too.
+
+### Fix
+
+- `RecordingSaver` now has a `checkpoint_failure: Arc<Mutex<Option<String>>>`
+  field. A failed checkpoint records the **first** error and keeps it.
+- `save_recording_only` calls `take_checkpoint_failure()` first and returns
+  `Err` if anything was recorded, so an incomplete recording cannot be reported
+  as complete.
+- The audio artifact is verified through a new shared helper
+  `incremental_saver::verify_audio_artifact(path) -> Result<u64, String>`,
+  which requires the file to exist **and** be non-empty. The stop path and the
+  regression tests execute the *same* function, so they cannot drift apart.
+- `save_recording_only` returns `Result<Option<PathBuf>>` instead of `Result<()>`:
+  the `Ok(None)` (auto-save disabled) and `Err` cases are now distinguishable.
+- `stop_recording` captures the failure and emits `audio_saved`, `audio_error`,
+  and the transcription verdict in the `recording-stopped` payload.
+- `useRecordingStop` persists that payload and, when `audio_saved === false`,
+  reports an error and does **not** create a meeting or show a success toast.
+- `find_ffmpeg_path` uses a 60s TTL cache instead of a permanent `Lazy`, with a
+  poisoned-lock recovery path, so a missing encoder that later becomes available
+  is picked up. The `unwrap()` in discovery became an error return.
+- Recoverable checkpoints are **never deleted** on the failure path.
+
+## P0-B - A failed transcription looked like silence
+
+### Root cause
+
+In the worker, the engine-failure arm emitted a warning and then fell through to
+the unconditional `chunks_completed.fetch_add(1)`. The failed chunk was booked
+**complete**, and nothing anywhere recorded that it had failed. A run where every
+chunk failed therefore produced zero segments, which is indistinguishable from a
+silent meeting, and the frontend toasted success.
+
+Related: `get_transcription_status` was a constant stub
+(`chunks_in_queue: 0, is_processing: false`), so the post-stop wait loop broke on
+its first iteration and the real gate was a hardcoded 4 second sleep.
+
+### Fix
+
+New `audio/transcription/outcome.rs` is the single source of truth:
+
+    Idle      -- no transcription run was ever started this session
+    Running   -- still in progress
+    Completed -- ran to completion. segments == 0 is a VALID "nobody spoke"
+    Failed    -- the engine failed, or was interrupted
+
+- `record_success()` / `record_failure()` are called by the worker. The failure
+  arm records **before** the completed counter runs.
+- A worker whose model was never loaded, and chunks dropped because the model
+  unloaded mid-session, are recorded as failures rather than completions.
+- `get_transcription_status` now returns the real snapshot instead of the stub.
+- `recording-stopped` carries the verdict.
+- The frontend surfaces "Recording saved, but transcription failed" and a
+  success toast that says the transcript is incomplete, instead of claiming a
+  clean save with 0 segments.
+- Retry is preserved: `mark_started()` clears prior failures, so a failed run
+  cannot poison the next attempt. There is a test for exactly this.
+
+`STARTED` is tracked separately so "started and produced nothing" (Completed)
+is distinguishable from "never ran" (Idle). Collapsing those two would make a
+status poll before any recording look like a silent meeting.
+
+## Preserved from Phase E
+
+The re-transcription guard (empty segments must not delete a valid transcript)
+remains in place and is covered by a Phase F1 assertion.
+
+## Validation
+
+- `cargo test --workspace`: **365 passed, 0 failed, 2 ignored** (baseline 348; +17)
+- `node --test`: **629 tests, 627 pass, 2 known pre-existing failures**
+  (baseline 614/612/2; +15 from `phase-f1-recording-integrity.test.mjs`)
+- `tsc --noEmit`: src/ clean
+- production build: `npx tauri build` succeeded
+- encoding: 0 U+FFFD, 0 mojibake across every changed file
+- user data **byte-identical**: sha256 `4911B87F...`, 4,632,576 bytes, WAL
+  20,632 (unchanged from the Phase E baseline), 0 audio files, no recording
+  started, no meeting created or modified
+
+## Runtime verification actually performed
+
+- Launched the production binary with CDP and invoked `get_transcription_status`
+  through `window.__TAURI_INTERNALS__`. It returned
+  `{"outcome":"idle","chunks_queued":0,"chunks_succeeded":0,"chunks_failed":0,
+  "is_processing":false,"last_error":null}` -- proving the stub is replaced, the
+  command is registered, and the new shape serialises across the IPC boundary.
+- Confirmed the app still launches and Home renders with no intelligence error
+  state.
+- The failure paths are proven by **executing the real production functions**
+  (`verify_audio_artifact`, `outcome::*`) in Rust tests against temp
+  directories, not by re-implementing them in the test.
+
+## Explicitly NOT verified
+
+A live hardware recording was **not** performed: it would create a real meeting
+in the user's database, which this phase forbids. So the following are proven by
+executing production code under test, not by an end-to-end run: a real recording
+producing valid audio, FFmpeg actually missing during a real recording, and the
+real engine failing mid-session on hardware. Those need an isolated profile and
+synthetic audio, which is F1 follow-up work.
+
+Also unchanged and still open from Phase E: path containment plus
+`fs:read-all`/`fs:write-all`, the orphanable llama-helper sidecar, the unbounded
+`pool.close()` shutdown wait, and no teardown for an active recording on exit.
+
 # Next Exact Step
 
 1. Gates 1 through 8 complete. Phase 0 `a3c196b`, A1 `5df672a`, A2 `4a89d1f`,

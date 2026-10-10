@@ -206,13 +206,16 @@ async fn is_recording() -> bool {
     audio::recording_commands::is_recording().await
 }
 
+/// Real transcription status.
+///
+/// This was a constant stub (`chunks_in_queue: 0, is_processing: false`), so the
+/// frontend's post-stop wait loop broke on its first iteration and the real gate
+/// was a hardcoded 4 second sleep. It now reports the actual counters and the
+/// terminal outcome, so the UI can wait properly AND distinguish a completed run
+/// from a failed one.
 #[tauri::command]
-fn get_transcription_status() -> TranscriptionStatus {
-    TranscriptionStatus {
-        chunks_in_queue: 0,
-        is_processing: false,
-        last_activity_ms: 0,
-    }
+fn get_transcription_status() -> audio::transcription::outcome::TranscriptionOutcomeSnapshot {
+    audio::transcription::outcome::snapshot()
 }
 
 #[tauri::command]

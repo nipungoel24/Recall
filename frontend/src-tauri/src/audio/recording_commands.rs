@@ -262,6 +262,10 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     drop(engine_lifecycle_guard);
     reset_speech_detected_flag(); // Reset for new recording session
 
+    // Start a fresh transcription outcome for this recording. Without this the
+    // previous session's counters would leak into the next meeting's verdict.
+    transcription::outcome::mark_started();
+
     // Start optimized parallel transcription task and store handle
     let task_handle = transcription::start_transcription_task(app.clone(), transcription_receiver);
     {
@@ -439,6 +443,10 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     IS_RECORDING.store(true, Ordering::SeqCst);
     drop(engine_lifecycle_guard);
     reset_speech_detected_flag(); // Reset for new recording session
+
+    // Start a fresh transcription outcome for this recording. Without this the
+    // previous session's counters would leak into the next meeting's verdict.
+    transcription::outcome::mark_started();
 
     // Start optimized parallel transcription task and store handle
     let task_handle = transcription::start_transcription_task(app.clone(), transcription_receiver);
@@ -733,35 +741,41 @@ pub async fn stop_recording<R: Runtime>(
         }),
     );
 
+    // Declared outside the cleanup block: the `recording-stopped` payload below
+    // must be able to report a save failure that happened inside it.
+    let mut audio_save_error: Option<String> = None;
+
     // Perform final cleanup with the manager if available
     let (meeting_folder, meeting_name) = if let Some(mut manager) = manager_for_cleanup {
         info!("🧹 Performing final cleanup and saving recording data");
 
         // Extract meeting info BEFORE async operations
-        let meeting_folder = manager.get_meeting_folder();
+let meeting_folder = manager.get_meeting_folder();
         let meeting_name = manager.get_meeting_name();
 
         match tokio::time::timeout(
-            tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
-            manager.save_recording_only(&app),
-        )
-        .await
-        {
-            Ok(Ok(_)) => {
-                info!("✅ Recording data saved successfully during cleanup");
-            }
-            Ok(Err(e)) => {
-                warn!(
-                    "⚠️ Error during recording cleanup (transcripts preserved): {}",
-                    e
-                );
-                // Don't fail shutdown - transcripts are already preserved
-            }
-            Err(_) => {
-                warn!("⏱️ File I/O timeout (5 minutes) reached during save, continuing shutdown");
-                // Don't fail shutdown - transcripts are already preserved
-            }
+        tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
+        manager.save_recording_only(&app),
+    )
+    .await
+    {
+        Ok(Ok(_)) => {
+            info!("✅ Recording data saved successfully during cleanup");
         }
+        Ok(Err(e)) => {
+            // A save failure means the user's audio is NOT recoverable. Record
+            // it and surface it; do NOT let this become a success event.
+            // Recoverable checkpoints are deliberately left on disk so the user
+            // can still attempt recovery -- they are never deleted here.
+            error!("❌ Recording save failed: {}", e);
+            audio_save_error = Some(e.to_string());
+        }
+        Err(_) => {
+            let msg = "File I/O timeout (5 minutes) reached while saving the recording".to_string();
+            error!("⏱️ {}", msg);
+            audio_save_error = Some(msg);
+        }
+    }
 
         (meeting_folder, meeting_name)
     } else {
@@ -798,13 +812,26 @@ pub async fn stop_recording<R: Runtime>(
         }),
     );
 
-    // Emit final stop event with folder_path and meeting_name for frontend to save
+    // The stop payload now carries the truth about what happened. The frontend
+    // must not infer success from "a stop event arrived": it reads these fields.
+    // `transcription` is the terminal transcription verdict (completed vs failed),
+    // which is what lets the UI distinguish a silent meeting from a broken engine.
+    let transcription_snapshot = transcription::outcome::snapshot();
+    let audio_ok = audio_save_error.is_none();
+
     app.emit(
         "recording-stopped",
         serde_json::json!({
-            "message": "Recording stopped - frontend will save after all transcripts received",
+            "message": if audio_ok {
+                "Recording stopped - frontend will save after all transcripts received"
+            } else {
+                "Recording stopped with errors - audio was NOT saved"
+            },
             "folder_path": folder_path_str,
-            "meeting_name": meeting_name_str
+            "meeting_name": meeting_name_str,
+            "audio_saved": audio_ok,
+            "audio_error": audio_save_error,
+            "transcription": transcription_snapshot
         }),
     )
     .map_err(|e| e.to_string())?;

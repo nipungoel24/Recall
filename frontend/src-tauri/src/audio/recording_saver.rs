@@ -55,6 +55,10 @@ pub struct RecordingSaver {
     transcript_segments: Arc<Mutex<Vec<TranscriptSegment>>>,
     chunk_receiver: Option<mpsc::UnboundedReceiver<AudioChunk>>,
     is_saving: Arc<Mutex<bool>>,
+    /// First checkpoint/encoder failure seen during accumulation. `Arc` so the
+    /// background task can set it. Read by the stop path so a recording whose
+    /// audio was never encoded cannot be reported as saved.
+    checkpoint_failure: Arc<Mutex<Option<String>>>,
 }
 
 impl RecordingSaver {
@@ -67,7 +71,18 @@ impl RecordingSaver {
             transcript_segments: Arc::new(Mutex::new(Vec::new())),
             chunk_receiver: None,
             is_saving: Arc::new(Mutex::new(false)),
+            checkpoint_failure: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Take the first checkpoint/encoder failure recorded during accumulation,
+    /// if any. The stop path uses this to fail a recording honestly instead of
+    /// claiming success after a dead encoder.
+    pub fn take_checkpoint_failure(&self) -> Option<String> {
+        self.checkpoint_failure
+            .lock()
+            .ok()
+            .and_then(|mut v| v.take())
     }
 
     /// Set the meeting name for this recording session
@@ -193,6 +208,10 @@ impl RecordingSaver {
         let incremental_saver_arc = self.incremental_saver.clone();
         let save_audio = auto_save;
 
+        // Shared with the accumulation task so a checkpoint failure survives
+        // until the stop path reads it.
+        let checkpoint_failure_ref = self.checkpoint_failure.clone();
+
         if let Some(mut receiver) = self.chunk_receiver.take() {
             tokio::spawn(async move {
                 info!(
@@ -217,8 +236,27 @@ impl RecordingSaver {
                         // Add chunk to incremental saver
                         if let Some(saver_arc) = &incremental_saver_arc {
                             let mut saver_guard = saver_arc.lock().await;
-                            if let Err(e) = saver_guard.add_chunk(chunk) {
-                                error!("Failed to add chunk to incremental saver: {}", e);
+                            match saver_guard.add_chunk(chunk) {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    // A failed checkpoint (typically: ffmpeg
+                                    // missing or unspawnable) used to be logged and
+                                    // dropped. `checkpoint_count` then never
+                                    // advanced, finalize() reported "no
+                                    // checkpoints", and the stop path swallowed
+                                    // that too -- so the user was told the meeting
+                                    // was saved when no audio existed. Record it so
+                                    // the stop path can fail truthfully.
+                                    error!("Failed to add chunk to incremental saver: {}", e);
+                                    if let Ok(mut slot) = checkpoint_failure_ref.lock() {
+                                        // Keep the first failure: it is the root
+                                        // cause, and every later chunk will fail
+                                        // the same way.
+                                        if slot.is_none() {
+                                            *slot = Some(e.to_string());
+                                        }
+                                    }
+                                }
                             }
                         } else {
                             error!("Incremental saver not available while accumulating");

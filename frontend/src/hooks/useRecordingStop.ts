@@ -103,10 +103,24 @@ export function useRecordingStop(): UseRecordingStopReturn {
           message: string;
           folder_path?: string;
           meeting_name?: string;
+          /** Whether the audio file was actually finalized and verified on disk. */
+          audio_saved?: boolean;
+          /** Why the audio could not be saved, when audio_saved is false. */
+          audio_error?: string | null;
+          /** Terminal transcription verdict, so failure is not read as silence. */
+          transcription?: {
+            outcome: 'idle' | 'running' | 'completed' | 'failed';
+            chunks_queued: number;
+            chunks_succeeded: number;
+            chunks_failed: number;
+            is_processing: boolean;
+            last_error?: string | null;
+          };
         }>('recording-stopped', async (event) => {
           // Create promise that resolves when sessionStorage is set (prevents race condition)
           recordingStoppedDataRef.current = (async () => {
-            const { folder_path, meeting_name } = event.payload;
+            const { folder_path, meeting_name, audio_saved, audio_error, transcription } =
+              event.payload;
 
             // Store folder_path and meeting_name for later use in handleRecordingStop
             if (folder_path) {
@@ -115,6 +129,16 @@ export function useRecordingStop(): UseRecordingStopReturn {
             if (meeting_name) {
               sessionStorage.setItem('last_recording_meeting_name', meeting_name);
             }
+            // Persist the terminal outcome so the save decision below reads a
+            // fact rather than assuming the absence of text means silence.
+            sessionStorage.setItem(
+              'last_recording_outcome',
+              JSON.stringify({
+                audio_saved: audio_saved !== false,
+                audio_error: audio_error ?? null,
+                transcription: transcription ?? null,
+              })
+            );
           })();
 
         });
@@ -288,6 +312,52 @@ export function useRecordingStop(): UseRecordingStopReturn {
         // Get fresh transcript state (ALL transcripts including late ones)
         const freshTranscripts = [...transcriptsRef.current];
 
+        // Read the terminal outcome the backend published with the stop event.
+        // A recording whose audio failed to finalize must NOT be reported as a
+        // success, and a transcription failure must not be presented as an empty
+        // (silent) meeting.
+        let outcome: {
+          audio_saved?: boolean;
+          audio_error?: string | null;
+          transcription?: { outcome?: string; chunks_failed?: number; last_error?: string | null } | null;
+        } = {};
+        try {
+          const raw = sessionStorage.getItem('last_recording_outcome');
+          if (raw) outcome = JSON.parse(raw);
+        } catch (e) {
+          console.error('Failed to parse recording outcome:', e);
+        }
+
+        const audioSaved = outcome.audio_saved !== false;
+        const transcriptionFailed = outcome.transcription?.outcome === 'failed';
+
+        if (!audioSaved) {
+          const reason =
+            outcome.audio_error ||
+            'The recording could not be finalized, so no audio was saved.';
+          console.error('Recording audio was not saved:', reason);
+          setStatus(RecordingStatus.IDLE, 'Recording failed');
+          toast.error('Recording failed', {
+            description: `${reason} Recoverable audio checkpoints were left on disk; the app will offer recovery.`,
+            duration: 12000,
+          });
+          sessionStorage.removeItem('last_recording_outcome');
+          return;
+        }
+
+        // Transcription failed: keep whatever partial text exists (never delete
+        // it) but tell the user plainly that this meeting is incomplete, instead
+        // of showing a success toast for an empty transcript.
+        if (transcriptionFailed && freshTranscripts.length === 0) {
+          console.error('Transcription failed; no segments were produced.');
+          setStatus(RecordingStatus.SAVING, 'Saving partial recording...');
+          toast.warning('Recording saved, but transcription failed', {
+            description:
+              'The audio was kept, but no transcript could be produced. You can retry transcription from the meeting.',
+            duration: 12000,
+          });
+        }
+
         // Get folder_path and meeting_name from recording-stopped event
         // (briefly wait for the payload if the event lags the IPC response)
         let folderPath = sessionStorage.getItem('last_recording_folder_path');
@@ -373,18 +443,31 @@ export function useRecordingStop(): UseRecordingStopReturn {
 
           // Mark as completed
           setStatus(RecordingStatus.COMPLETED);
+          sessionStorage.removeItem('last_recording_outcome');
+
+          // The audio was verified on disk before we got here. Only the
+          // transcription outcome can still make this an incomplete recording,
+          // and that warning was already surfaced above.
+          if (transcriptionFailed) {
+            console.warn('Meeting saved with an incomplete transcript.');
+          }
 
           // Show success toast with navigation option
-          toast.success('Recording saved successfully!', {
-            description: `${freshTranscripts.length} transcript segments saved.`,
-            action: {
-              label: 'View Meeting',
-              onClick: () => {
-                router.push(routes.meeting(meetingId));
-              }
-            },
-            duration: 10000,
-          });
+          toast.success(
+            transcriptionFailed ? 'Recording saved (transcript incomplete)' : 'Recording saved successfully!',
+            {
+              description: transcriptionFailed
+                ? `${freshTranscripts.length} transcript segments recovered. Transcription failed for part of this recording.`
+                : `${freshTranscripts.length} transcript segments saved.`,
+              action: {
+                label: 'View Meeting',
+                onClick: () => {
+                  router.push(routes.meeting(meetingId));
+                }
+              },
+              duration: 10000,
+            }
+          );
 
           // Auto-navigate after a short delay with source parameter
           setTimeout(() => {
