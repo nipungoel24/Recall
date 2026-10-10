@@ -190,6 +190,11 @@ pub struct TranscriptSetting {
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct MeetingIntelligenceModel {
     pub meeting_id: String,
+    // The migration creates the column as `abstract` (20260917000000_add_meeting_intelligence.sql).
+    // The struct field is `abstract_text` because `abstract` is a Rust keyword.
+    // Without this rename sqlx looked for a non-existent `abstract_text` column and
+    // every read/write of meeting intelligence failed at runtime.
+    #[sqlx(rename = "abstract")]
     pub abstract_text: Option<String>,
     pub schema_version: i64,
     pub generated_at: Option<String>,

@@ -25,6 +25,13 @@ export function NotesTab({ meeting }: NotesTabProps) {
   const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editorRef = useRef<BlockNoteSummaryViewRef>(null);
+  // Holds the editor's authoritative output the moment it is produced. React
+  // state updates are not visible to the currently-executing closure, so
+  // reading `notesMarkdown` straight after `await editor.saveSummary()` returned
+  // the PREVIOUS content -- the save wrote stale data and still reported success.
+  // `saveSummary` invokes `onSave` synchronously, so by the time it resolves this
+  // ref already holds the value that must be persisted.
+  const latestEditorOutputRef = useRef<{ markdown?: string; json?: string }>({});
 
   const loadNotes = useCallback(async () => {
     try {
@@ -74,10 +81,17 @@ export function NotesTab({ meeting }: NotesTabProps) {
     // the Save action can never report success while writing stale content.
     const editor = editorRef.current;
     if (editor?.isDirty) {
+      latestEditorOutputRef.current = {};
       await editor.saveSummary();
     }
 
-    if (!notesMarkdown && !notesJson) {
+    // Prefer the ref: it holds this flush's output. Fall back to state only for
+    // the untouched-document path (nothing was dirty, so nothing new was produced).
+    const flushed = latestEditorOutputRef.current;
+    const markdownToSave = flushed.markdown ?? notesMarkdown;
+    const jsonToSave = flushed.json ?? notesJson;
+
+    if (!markdownToSave && !jsonToSave) {
       toast.info('Nothing to save');
       return;
     }
@@ -88,8 +102,8 @@ export function NotesTab({ meeting }: NotesTabProps) {
     try {
       await invoke('api_save_meeting_notes', {
         meetingId: meeting.id,
-        notesMarkdown: notesMarkdown || undefined,
-        notesJson: notesJson || undefined,
+        notesMarkdown: markdownToSave || undefined,
+        notesJson: jsonToSave || undefined,
       });
 
       setIsDirty(false);
@@ -189,6 +203,11 @@ export function NotesTab({ meeting }: NotesTabProps) {
               ref={editorRef}
               summaryData={{ markdown: notesMarkdown, summary_json: parsedBlocks }}
               onSave={(data) => {
+                // Record synchronously for the in-flight save, then mirror into state.
+                latestEditorOutputRef.current = {
+                  markdown: data.markdown,
+                  json: data.summary_json ? JSON.stringify(data.summary_json) : undefined,
+                };
                 if (data.markdown !== undefined) setNotesMarkdown(data.markdown);
                 if (data.summary_json !== undefined) {
                   setNotesJson(JSON.stringify(data.summary_json));

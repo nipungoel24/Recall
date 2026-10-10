@@ -491,6 +491,18 @@ async fn run_retranscription<R: Runtime>(
         .try_state::<AppState>()
         .ok_or_else(|| anyhow!("App state not available"))?;
 
+    // Never destroy the existing transcript on the way to writing nothing.
+    // Both engines legitimately return Ok with zero segments (no speech above the
+    // acceptance threshold, or a mis-initialised session producing all-blank
+    // output). The DELETE below is inside a transaction, so an *insert* failure
+    // rolls back -- but an empty insert list is a success, so without this guard
+    // a blank re-transcription silently emptied the meeting's transcript.
+    if segments.is_empty() {
+        return Err(anyhow!(
+            "Re-transcription produced no transcript segments; existing transcript left unchanged"
+        ));
+    }
+
     // Wrap delete+insert+update in a transaction to prevent data loss
     let pool = app_state.db_manager.pool();
     let mut conn = pool

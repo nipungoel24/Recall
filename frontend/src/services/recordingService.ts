@@ -72,9 +72,14 @@ export class RecordingService {
     meetingName: string
   ): Promise<void> {
     return invoke('start_recording_with_devices_and_meeting', {
-      mic_device_name: micDeviceName,
-      system_device_name: systemDeviceName,
-      meeting_name: meetingName
+      // Tauri v2 camelCases command arguments by default (tauri-macros
+      // `ArgumentCase::Camel` -> `to_lower_camel_case`). The Rust params are all
+      // `Option<String>`, so snake_case keys did NOT error -- they silently
+      // deserialized to `None`, meaning the selected devices and the meeting
+      // name were discarded on every recording.
+      micDeviceName: micDeviceName,
+      systemDeviceName: systemDeviceName,
+      meetingName: meetingName
     });
   }
 

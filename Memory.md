@@ -1297,6 +1297,137 @@ SQLite folds in on next open.
   primitive's shadow would restyle every button in the app, well past Phase D.
 - Start Recording as a `destructive` primary (see D8).
 
+fix(release): repair broken meeting intelligence and silent recording argument loss
+
+Phase E production-readiness audit. Five defects, each verified by reading the
+implementation and, where possible, the vendored framework source. No schema
+change, no migration change, no new dependency, no UI change.
+
+## Meeting Intelligence was 100% non-functional
+
+The migration creates the column `abstract`
+(migrations/20260917000000_add_meeting_intelligence.sql:7) but the Rust model
+declared `abstract_text` with no `#[sqlx(rename)]` (database/models.rs:193), and
+the repository both read `SELECT *` into that struct and INSERTed an
+`abstract_text` column (repositories/meeting_intelligence.rs:22,51,54).
+
+Because there is no `.sqlx/` directory and sqlx is built without the `macros`
+feature, `query_as` is checked at RUNTIME, not compile time. So this shipped as
+a green build and then failed on every read and every write:
+`no such column: abstract_text` / `no field found for name abstract_text`.
+Every meeting therefore showed "Intelligence Unavailable" and generation could
+never persist.
+
+This is the same defect CLASS Phase 0 found (commands that exist but are not
+wired). Phase 0 fixed the registration; this adjacent break was still live.
+
+Fixed by renaming the struct field back to the real column via
+`#[sqlx(rename = "abstract")]` (the field keeps the Rust-legal name because
+`abstract` is a Rust keyword) and correcting the INSERT to use `abstract`.
+
+## Recording silently discarded its arguments
+
+`recordingService.startRecordingWithDevices` invoked
+`start_recording_with_devices_and_meeting` with snake_case keys
+(`mic_device_name`, `system_device_name`, `meeting_name`).
+
+Tauri v2 camelCases command arguments by default. Verified in the vendored
+source: `tauri-macros-2.6.1/src/command/wrapper.rs:51` defaults
+`argument_case: ArgumentCase::Camel`, `:507` applies `to_lower_camel_case()`,
+and `tauri-2.11.5/src/ipc/command.rs:97-103` turns a missing key into an error
+only when the target is NOT an `Option`.
+
+All three Rust parameters are `Option<String>`. The mismatch therefore did not
+error: it deserialized to `None`. Every recording started on the default
+microphone with no system audio and no meeting name. Fixed by sending camelCase.
+
+## Re-transcription could empty a transcript
+
+`audio/retranscription.rs` deleted every transcript row for the meeting and
+then inserted the new segments in the same transaction. Both engines
+legitimately return `Ok` with ZERO segments (no speech over the acceptance
+threshold, or a mis-initialised session emitting all-blank output), and an empty
+insert list is a successful transaction. The DELETE therefore committed and the
+meeting was left with no transcript.
+
+Added a guard before the transaction: an empty segment list now returns an error
+and the existing transcript is left untouched.
+
+## Notes saved stale content and reported success
+
+`NotesTab.saveNotes` awaited `editor.saveSummary()`, which invokes `onSave`,
+which calls `setNotesMarkdown(...)`. A React state update is not visible to the
+closure that is still executing, so the immediately following
+`invoke('api_save_meeting_notes', { notesMarkdown })` sent the PREVIOUS value.
+The first save wrote the loaded content, each later save wrote the previous
+save's content, and a "Notes saved" toast fired every time.
+
+Fixed with a ref that `onSave` writes synchronously; `saveNotes` prefers that
+ref and falls back to state only when the document was not dirty.
+
+Recorded here, deliberately NOT fixed, because it is a product decision rather
+than a defect: the editor only mounts when `hasNotes` is true, so on a meeting
+with no note rows there is no create affordance and Save is disabled. With
+`meeting_notes` at 0 rows this makes notes unreachable in the current database.
+Whether an empty Notes tab should offer "create" is a product call.
+
+## CSP connect-src omitted Tauri's own IPC origin
+
+`connect-src` was `'self' http://localhost:11434 http://localhost:5167
+http://localhost:8178 https://api.ollama.ai`. Tauri always attempts its IPC
+custom protocol first (`http://ipc.localhost/<cmd>` on Windows,
+`ipc://localhost/<cmd>` elsewhere), which is a different origin from the page
+and so is not matched by `'self'`. Every invoke was therefore rejected by CSP,
+logged, and silently rerouted to Tauri's postMessage fallback.
+
+The fallback is NOT a security regression: both transports carry and validate
+the same per-webview invoke key and both reach the same handler. But the
+declared connect policy was not the enforced one, and any genuine future CSP
+violation would hide behind a permanently latched fallback.
+
+Fixed by adding exactly the two sources Tauri documents in its own vendored
+config reference (`tauri-utils-2.9.3/src/config.rs:2741`): `ipc:` and
+`http://ipc.localhost`. Neither is network-reachable; both are handled by the
+in-process scheme handler. This restores the intended transport and makes the
+policy match reality. No arbitrary origin was added.
+
+## Validation
+
+- cargo check --lib: clean
+- cargo test: 348 passed, 0 failed, 2 ignored (+1 doc test)
+- tsc --noEmit: src/ clean
+- node --test: 614 tests, 612 pass, 2 known pre-existing failures (Phase 4
+  checkPermissions, Bun-only qa-routes) - unchanged, no new failures
+- tauri.conf.json: valid JSON, no BOM
+- encoding: 0 mojibake, 0 U+FFFD across all six changed files
+- user data byte-identical: sha256 4911B87F..., 4,632,576 bytes, 0 audio files,
+  no recording started, no meeting created or modified
+
+## Known release blockers NOT fixed here (deliberate)
+
+Reported in full in the Phase E report rather than fixed here, because each
+needs either a product decision or a dedicated pass:
+
+- Path containment: `read_audio_file`, `save_transcript`, `cleanup_checkpoints`
+  and `recover_audio_from_checkpoints` take a raw path string from the webview
+  with no confinement. Note that fixing only these commands is INSUFFICIENT:
+  the `main` capability grants `fs:read-all` and `fs:write-all`, so the
+  renderer already has filesystem reach independent of these commands.
+- Transcription failure is indistinguishable from an empty transcript: an
+  engine failure is logged and the chunk is booked complete, so the meeting is
+  created with zero segments and a success toast.
+- FFmpeg being unavailable loses all audio silently: the path lookup caches
+  `None` for the process lifetime and every error is downgraded to a log while
+  `recording-stopped` still fires.
+- The post-stop "wait for transcription" gate is dead: `get_transcription_status`
+  returns constant zeros and `transcription-complete` is never emitted, so save
+  depends on a hardcoded 4 second sleep.
+- The llama-helper sidecar can be orphaned: a graceful shutdown clears the
+  registry before deferring the kill, and exit-time cleanup then finds nothing
+  to kill.
+- `pool.close().await` runs inside `block_on` on the event-loop thread with no
+  timeout; a checked-out connection hangs shutdown indefinitely.
+
 # Next Exact Step
 
 1. Gates 1 through 8 complete. Phase 0 `a3c196b`, A1 `5df672a`, A2 `4a89d1f`,
@@ -1313,12 +1444,17 @@ SQLite folds in on next open.
    here because `design-token-integrity.test.mjs` had explicitly deferred it to
    "a dedicated, visually verified design-system pass", which is what Phase D was.
    The `--radius` value itself was not touched.
-3. No product decision is open on the UI. Both of the questions Phase D inherited
-   are settled: Start Recording is the **primary** action (`variant="default"`) on
-   Home and the sidebar footer, with destructive reserved for Stop Recording and
-   Delete/Clear; and Home keeps its own Start Recording CTA while Generate Daily
-   Brief stays demoted to `outline`, so Home has one dominant action. Recording red
-   is the in-progress *state*, owned by the sidebar status indicator.
+3. **Phase E audit is complete and the release verdict is NOT READY.** Meeting
+   Intelligence was 100% non-functional (an `abstract` / `abstract_text` column
+   mismatch that only fails at runtime), every recording was silently discarding its
+   device arguments and meeting name, re-transcription could empty a transcript, and
+   Notes saved stale content while reporting success. Those four are fixed and
+   committed. **Unfixed P0/P1 remain** and are listed in the Phase E section: silent
+   total audio loss when FFmpeg is unavailable, a transcription failure being
+   indistinguishable from an empty transcript, a dead post-stop transcription gate,
+   an orphanable llama-helper sidecar, and unconfined path commands combined with
+   `fs:read-all` + `fs:write-all` capabilities. The next step is a deliberate
+   reliability + security pass, not more polish.
 4. A read-only Tauri command for note presence would let /notes show which meetings
    actually have notes. That is a backend addition, deliberately out of Phase C.
 5. The Tauri CSP defect persists: `connect-src` omits `ipc.localhost`, so every

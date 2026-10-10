@@ -48,10 +48,10 @@ impl MeetingIntelligenceRepository {
 
         sqlx::query(
             r#"
-            INSERT INTO meeting_intelligence (meeting_id, abstract_text, schema_version, generated_at, provider, model, created_at, updated_at)
+            INSERT INTO meeting_intelligence (meeting_id, abstract, schema_version, generated_at, provider, model, created_at, updated_at)
             VALUES (?, ?, 1, ?, ?, ?, ?, ?)
             ON CONFLICT(meeting_id) DO UPDATE SET
-                abstract_text = excluded.abstract_text,
+                abstract = excluded.abstract,
                 generated_at = excluded.generated_at,
                 provider = excluded.provider,
                 model = excluded.model,
