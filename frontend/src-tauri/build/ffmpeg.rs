@@ -448,9 +448,11 @@ fn verify_ffmpeg_binary(path: &std::path::PathBuf, target: &str) -> bool {
             }
         }
         Err(e) => {
-            println!("cargo:warning=❌ Failed to execute FFmpeg for verification: {}", e);
+            println!(
+                "cargo:warning=❌ Failed to execute FFmpeg for verification: {}",
+                e
+            );
             false
         }
     }
 }
-
