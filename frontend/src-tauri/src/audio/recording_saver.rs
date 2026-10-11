@@ -359,6 +359,27 @@ impl RecordingSaver {
     }
 }
 
+/// Per-folder write lock for `transcripts.json`.
+///
+/// Returns a guard that must be held for the duration of a write. Keyed by the
+/// canonical folder path so two meetings never contend with each other.
+fn transcript_write_lock_for(folder: &std::path::Path) -> std::sync::MutexGuard<'static, ()> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+
+    static LOCKS: OnceLock<Mutex<HashMap<std::path::PathBuf, &'static Mutex<()>>>> =
+        OnceLock::new();
+
+    let locks = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut map = locks.lock().unwrap_or_else(|e| e.into_inner());
+
+    let entry = map
+        .entry(folder.to_path_buf())
+        .or_insert_with(|| Box::leak(Box::new(Mutex::new(()))));
+
+    entry.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Write `transcripts.json` for a segment buffer (atomic write with temp file
 /// and validation).
 ///
@@ -381,8 +402,20 @@ fn write_transcripts_json_to(
         segments_clone.len()
     );
 
+    // Serialise writers for this folder.
+    //
+    // `RecordingSaver::add_transcript_segment` and `TranscriptSegmentSink::add`
+    // both call this on the SAME folder, and a full-file rewrite fires on every
+    // single transcript-update event. Without a lock, two interleaved writers
+    // sharing one temp file could publish each other's half-written bytes and
+    // then fail the second rename -- corrupting the transcript while reporting
+    // success. The lock is per-folder, so different meetings never contend.
+    let _writer_guard = transcript_write_lock_for(folder);
+
+    // Temp name includes the pid, so a crashed or concurrent writer cannot
+    // collide with ours.
     let transcript_path = folder.join("transcripts.json");
-    let temp_path = folder.join(".transcripts.json.tmp");
+    let temp_path = folder.join(format!(".transcripts.json.{}.tmp", std::process::id()));
 
     // Create JSON structure
     let json = serde_json::json!({
@@ -398,15 +431,20 @@ fn write_transcripts_json_to(
         anyhow::anyhow!("JSON serialization failed: {}", e)
     })?;
 
-    // Write to temp file with error handling
-    std::fs::write(&temp_path, &json_string).map_err(|e| {
+    // Write to temp file with error handling.
+    //
+    // Both failure paths remove the temp file. A leftover `.transcripts.json.*.tmp`
+    // in a meeting folder is junk the user never asked for, and repeated failures
+    // (disk full, an AV holding a handle) would otherwise accumulate them.
+    if let Err(e) = std::fs::write(&temp_path, &json_string) {
         error!(
             "Failed to write transcript temp file to {}: {}",
             temp_path.display(),
             e
         );
-        anyhow::anyhow!("Failed to write temp file: {}", e)
-    })?;
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(anyhow::anyhow!("Failed to write temp file: {}", e));
+    }
 
     // Verify temp file was written correctly
     if !temp_path.exists() {
@@ -418,15 +456,16 @@ fn write_transcripts_json_to(
     }
 
     // Atomic rename
-    std::fs::rename(&temp_path, &transcript_path).map_err(|e| {
+    if let Err(e) = std::fs::rename(&temp_path, &transcript_path) {
         error!(
             "Failed to rename transcript file from {} to {}: {}",
             temp_path.display(),
             transcript_path.display(),
             e
         );
-        anyhow::anyhow!("Failed to rename transcript file: {}", e)
-    })?;
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(anyhow::anyhow!("Failed to rename transcript file: {}", e));
+    }
 
     info!(
         "✅ Successfully wrote transcripts.json with {} segments",

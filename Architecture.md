@@ -24,8 +24,8 @@ Recall is a single self-contained **Tauri 2 desktop application** (v0.4.0). No s
 │   api/ · ollama|openai|anthropic|groq|openrouter/ ·          │
 │   console_utils/ · tray · onboarding                         │
 └──────────┬──────────────────────────────┬────────────────────┘
-           │ sqlx (SQLite, WAL, 15        │ filesystem + sidecars
-           │  migrations, checksums)      │
+           │ sqlx (SQLite, WAL + NORMAL,  │ filesystem + sidecars
+           │  16 migrations, checksums)    │
      ┌─────┴─────┐                  ┌──────┴──────┐
      │ SQLite    │                  │ recordings  │ ffmpeg (bundled)
      │ meeting_  │                  │ models      │ llama-helper sidecar
@@ -105,6 +105,34 @@ Keep a clean separation between: Tauri command boundary (thin, typed) → domain
 ### Database
 
 SQLite stays the primary store. Migrations only additive; shipped migrations never rewritten; checksums enforced by contract audit. Search evolves from `LIKE` to **SQLite FTS** when the search feature is implemented; local embeddings only later if lexical+structured search proves insufficient.
+
+### SQLite journal mode (decision)
+
+**WAL with `synchronous = NORMAL`, configured explicitly at connection time**
+(`database/manager.rs`). The effective mode is logged on every startup rather
+than assumed.
+
+WAL is correct here because Recall is a single-writer / many-reader desktop app:
+live transcription writes transcript rows while the UI reads meetings, summary
+generation writes derived data, and context rebuilds run in the background.
+Under the rollback journal, every writer takes a whole-database lock, so those
+overlaps become `SQLITE_BUSY` timeouts.
+
+This was previously **never configured**. Fresh installs happened to get WAL
+only because `sqlx::CREATE_DB_WAL` sets it when creating the file; a database
+imported from the legacy Python backend was created by `sqlite3.connect()` in
+`delete` journal mode and silently kept it. Because `journal_mode` is persisted
+in the file header, setting it explicitly at connect time is what actually
+upgrades an already-imported database.
+
+`NORMAL` is the recommended durability level under WAL: safe against application
+crash, and far faster than `FULL`, which fsyncs on every commit. Power-loss
+durability is traded deliberately — a recording's authoritative record is its
+audio and checkpoints on disk, not its SQLite rows.
+
+`foreign_keys = ON` is set explicitly (sqlx also defaults it on), so
+`ON DELETE CASCADE` actually fires. Writes that must not depend on that pragma
+delete their children explicitly.
 
 ### Structured intelligence & provenance
 

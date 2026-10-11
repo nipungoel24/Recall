@@ -361,15 +361,31 @@ impl ContextService {
         .await;
 
         // Never leave the temporary context behind, whatever happened.
+        //
+        // These deletes are reported rather than discarded. Swallowing them
+        // meant a failure left a `__rebuild-<uuid>` context permanently
+        // visible in the user's Context list -- a phantom context they did not
+        // create and cannot explain.
         let cleanup = async {
-            let _ = sqlx::query("DELETE FROM context_memory_items WHERE context_id = ?")
+            let items = sqlx::query("DELETE FROM context_memory_items WHERE context_id = ?")
                 .bind(&tmp.id)
                 .execute(pool)
                 .await;
-            let _ = sqlx::query("DELETE FROM contexts WHERE id = ?")
+            if let Err(e) = &items {
+                log::warn!(
+                    "Failed to delete temp context memory items for {}: {}",
+                    tmp.id,
+                    e
+                );
+            }
+            let ctx = sqlx::query("DELETE FROM contexts WHERE id = ?")
                 .bind(&tmp.id)
                 .execute(pool)
                 .await;
+            if let Err(e) = &ctx {
+                log::warn!("Failed to delete temp context {}: {}", tmp.id, e);
+            }
+            (items, ctx)
         };
         if let Err(e) = run_result {
             cleanup.await;

@@ -141,9 +141,23 @@ impl<R: Runtime> ConsentManager<R> {
     }
 
     /// Save notification settings to disk
+    ///
+    /// Writes through a temp file and renames, so an interrupted write cannot
+    /// truncate the user's settings into an unreadable file. This was a plain
+    /// in-place overwrite, the only non-atomic writer of user-facing state.
     pub async fn save_settings(&self, settings: &NotificationSettings) -> Result<()> {
         let content = serde_json::to_string_pretty(settings)?;
-        tokio::fs::write(&self.settings_path, content).await?;
+
+        let temp_path = self.settings_path.with_extension("json.tmp");
+
+        tokio::fs::write(&temp_path, content.as_bytes()).await?;
+        tokio::fs::rename(&temp_path, &self.settings_path)
+            .await
+            .map_err(|e| {
+                // Do not leave the temp file behind on a failed rename.
+                let _ = std::fs::remove_file(&temp_path);
+                e
+            })?;
 
         log_info!("Saved notification settings to disk");
         Ok(())

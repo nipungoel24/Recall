@@ -86,7 +86,20 @@ impl SettingsRepository {
         whisper_model: &str,
         ollama_endpoint: Option<&str>,
     ) -> std::result::Result<(), sqlx::Error> {
-        // Using id '1' for backward compatibility
+        let mut tx = pool.begin().await?;
+        Self::save_model_config_tx(&mut tx, provider, model, whisper_model, ollama_endpoint)
+            .await?;
+        tx.commit().await
+    }
+
+    /// Transaction-scoped model config write.
+    pub async fn save_model_config_tx(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        provider: &str,
+        model: &str,
+        whisper_model: &str,
+        ollama_endpoint: Option<&str>,
+    ) -> std::result::Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             INSERT INTO settings (id, provider, model, whisperModel, ollamaEndpoint)
@@ -102,7 +115,7 @@ impl SettingsRepository {
         .bind(model)
         .bind(whisper_model)
         .bind(ollama_endpoint)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
 
         Ok(())
@@ -110,6 +123,20 @@ impl SettingsRepository {
 
     pub async fn save_api_key(
         pool: &SqlitePool,
+        provider: &str,
+        api_key: &str,
+    ) -> std::result::Result<(), sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        Self::save_api_key_tx(&mut tx, provider, api_key).await?;
+        tx.commit().await
+    }
+
+    /// Transaction-scoped API key write.
+    ///
+    /// Shares the column resolution so the autocommit and transactional callers
+    /// can never drift apart on which provider maps to which column.
+    pub async fn save_api_key_tx(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         provider: &str,
         api_key: &str,
     ) -> std::result::Result<(), sqlx::Error> {
@@ -143,9 +170,39 @@ impl SettingsRepository {
             "#,
             api_key_column, api_key_column
         );
-        sqlx::query(&query).bind(api_key).execute(pool).await?;
+        sqlx::query(&query).bind(api_key).execute(&mut **tx).await?;
 
         Ok(())
+    }
+
+    /// Save the provider config and its API key atomically.
+    ///
+    /// These were two independent writes. If the key write failed, the command
+    /// returned an error to the UI while the provider switch had already been
+    /// persisted -- the user saw "save failed" with a changed setting and no
+    /// working key.
+    pub async fn save_provider_config_with_key(
+        pool: &SqlitePool,
+        provider: &str,
+        model: &str,
+        whisper_model: &str,
+        ollama_endpoint: Option<&str>,
+        api_key: Option<&str>,
+    ) -> std::result::Result<(), sqlx::Error> {
+        let mut tx = pool.begin().await?;
+
+        Self::save_model_config_tx(&mut tx, provider, model, whisper_model, ollama_endpoint)
+            .await?;
+
+        // Mirror the caller's skip rule: custom-openai uses JSON config, and an
+        // empty key means "leave the stored key alone".
+        if let Some(key) = api_key {
+            if !key.is_empty() && provider != "custom-openai" {
+                Self::save_api_key_tx(&mut tx, provider, key).await?;
+            }
+        }
+
+        tx.commit().await
     }
 
     pub async fn get_api_key(
@@ -195,6 +252,17 @@ impl SettingsRepository {
         provider: &str,
         model: &str,
     ) -> std::result::Result<(), sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        Self::save_transcript_config_tx(&mut tx, provider, model).await?;
+        tx.commit().await
+    }
+
+    /// Transaction-scoped transcript config write.
+    pub async fn save_transcript_config_tx(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        provider: &str,
+        model: &str,
+    ) -> std::result::Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             INSERT INTO transcript_settings (id, provider, model)
@@ -206,7 +274,7 @@ impl SettingsRepository {
         )
         .bind(provider)
         .bind(model)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
 
         Ok(())
@@ -214,6 +282,17 @@ impl SettingsRepository {
 
     pub async fn save_transcript_api_key(
         pool: &SqlitePool,
+        provider: &str,
+        api_key: &str,
+    ) -> std::result::Result<(), sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        Self::save_transcript_api_key_tx(&mut tx, provider, api_key).await?;
+        tx.commit().await
+    }
+
+    /// Transaction-scoped transcript API key write.
+    pub async fn save_transcript_api_key_tx(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         provider: &str,
         api_key: &str,
     ) -> std::result::Result<(), sqlx::Error> {
@@ -242,7 +321,7 @@ impl SettingsRepository {
             crate::config::DEFAULT_PARAKEET_MODEL,
             api_key_column
         );
-        sqlx::query(&query).bind(api_key).execute(pool).await?;
+        sqlx::query(&query).bind(api_key).execute(&mut **tx).await?;
 
         Ok(())
     }

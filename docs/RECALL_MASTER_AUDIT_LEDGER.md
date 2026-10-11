@@ -128,6 +128,28 @@ Audited via WS-E and WS-C; see the table below for items resolved as a side effe
 | D-1 | **S2** | **FIXED** | Intelligence source rows were deleted only via `ON DELETE CASCADE`, which depends on the connection having `PRAGMA foreign_keys = ON`. Without it, sources orphan and evidence navigation points at deleted items. Sources are now deleted explicitly inside the transaction. | `meeting_intelligence.rs` |
 | D-2 | **S2** | **FIXED** | The abstract and intelligence items were written by two independent autocommit calls; a failure between them left a new summary beside stale items. Now one transaction, with a forced mid-transaction failure regression-tested to roll back. | `replace_all` |
 
+### Workstream D — Database, migrations, transactions, WAL
+
+Audited (read-only pass) and fixed. Tests in `src-tauri/src/tests_database_reliability.rs`
+(14) apply the **real migrations** to a disposable file-backed DB.
+
+| ID | Sev | Status | Finding | Resolution |
+|---|---|---|---|---|
+| D-1 | **S1** | **FIXED** | WAL was **never configured**. Fresh installs got it only incidentally via `sqlx::CREATE_DB_WAL`; a database imported from the legacy Python backend (`fs::copy` of a `sqlite3` file in `delete` journal mode) silently kept the rollback journal forever — whole-DB writer lock on every background write. | WAL + `synchronous=NORMAL` set explicitly; effective mode logged, not assumed |
+| D-2 | **S1** | **FIXED** | `migrations/checksums.json` had 15 entries for 16 migrations — `20260917000000_add_meeting_intelligence.sql` was unlocked. Any later edit to it would become a hard startup `VersionMismatch` for upgrading users. | Entry added (SHA-384); a test now fails the build if any migration lacks one |
+| D-3 | **S1** | **FIXED** | `transcripts.json` used a **fixed** temp path and was rewritten in full on every transcript event by two unsynchronized writers (`RecordingSaver` + `TranscriptSegmentSink`). Concurrent writers could publish each other's half-written bytes and then fail the rename — corrupting the transcript while reporting success. On the hot path. | Per-folder write lock + pid-scoped temp name + temp cleanup on both failure paths; a concurrency test drives both writers over 80 segments and asserts valid, complete JSON |
+| D-4 | **S2** | **FIXED** | Provider config and API key were two independent autocommit writes. A failed key write returned an error to the UI while the provider switch had already persisted. Same for the transcript pair. | `save_provider_config_with_key` writes both in one transaction; a test proves an invalid provider leaves the prior config intact |
+| D-5 | **S2** | **FIXED** | `initialize_fresh_database` swallowed both default-model-config errors into `error!()` and still returned `Ok`, so a fresh install could have a summary model and no transcription model while reporting success. | Both defaults in one transaction; failure propagated |
+| D-6 | **S2** | **FIXED** | `contexts/service.rs` rebuild cleanup discarded both DELETE errors with `let _ =`, permanently leaving a `__rebuild-<uuid>` phantom context visible in the user's Context list. (Also ledger item **E-9**.) | Errors reported with the context id |
+| D-7 | **S2** | **FIXED** | Shutdown logged "WAL checkpoint completed successfully" on any `Ok`. `wal_checkpoint` is a **no-op outside WAL**, so on legacy-imported databases it was a false record during incident triage. | Reads the result row and logs frames checkpointed, or warns with outstanding frames |
+| D-8 | **S2** | **FIXED** | `notifications/settings.rs` was the only non-atomic writer of user-facing state — a plain in-place `tokio::fs::write`. A crash mid-write truncated settings unrecoverably. | Temp + rename, temp removed on rename failure |
+| D-9 | **S3** | deferred | `metadata.json` is written by two modules under different temp names with no shared lock → lost updates to device/duration fields. | **Open** — needs a shared lock across `recording_saver` and `summary::metadata`; low severity |
+| D-10 | — | verified OK | `migrations.staging/` is a **sibling** of `migrations/`, and sqlx skips non-files and non-`<VERSION>_<DESC>.sql` names, so staging files can never be picked up as real migrations. | No action needed |
+| D-11 | — | verified OK | `foreign_keys=ON` (explicit + sqlx default) on every pooled connection. Migration ordering, repeat-startup idempotency, and the `_sqlx_migrations` bookkeeping are transactional by construction. `std::fs::rename` on Windows uses `MOVEFILE_REPLACE_EXISTING`, so replacing an existing destination works. | No action needed |
+
+**Journal-mode decision** is recorded in `Architecture.md` and `PRD.md` (both
+previously overclaimed WAL and an incorrect migration count of 15).
+
 ### Tooling / hygiene
 
 | ID | Sev | Status | Finding |

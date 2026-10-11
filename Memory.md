@@ -1882,6 +1882,66 @@ is randomised per process, so which 2 survived `.take(2)` differed between
 launches. Both call sites now dedup order-preservingly, keeping the user's
 explicit selection order.
 
+## Database reliability decisions
+
+### Journal mode: WAL + `synchronous = NORMAL`, configured explicitly
+
+Set on the connect options in `database/manager.rs`, and the **effective** mode
+is logged at startup rather than assumed.
+
+WAL is correct because Recall is a single-writer / many-reader desktop app: live
+transcription writes transcript rows while the UI reads meetings, summary
+generation writes derived data, and context rebuilds run in the background.
+Under the rollback journal every writer takes a whole-database lock, so those
+overlaps become `SQLITE_BUSY` timeouts.
+
+**This was previously never configured.** Fresh installs got WAL only by accident
+(`sqlx::CREATE_DB_WAL` sets it when creating the file). A database imported from
+the legacy Python backend was created by `sqlite3.connect()` in `delete` journal
+mode and kept it silently. `journal_mode` is persisted in the file header, so
+setting it at connect time is what actually upgrades an imported database.
+
+`NORMAL` is the recommended durability level under WAL: safe against application
+crash, much faster than `FULL`. Power-loss durability is traded deliberately --
+a recording's authoritative record is its audio and checkpoints on disk, not its
+SQLite rows.
+
+`foreign_keys = ON` is explicit, so `ON DELETE CASCADE` fires. Writes that must
+not depend on that pragma delete their children explicitly.
+
+### Migration policy
+
+- 16 shipped migrations, each with a SHA-384 entry in `migrations/checksums.json`.
+  A test fails the build if any `.sql` migration lacks an entry.
+- Shipped migrations are never rewritten; sqlx hard-fails with `VersionMismatch`
+  if one is modified after release.
+- `migrations.staging/` is a **sibling** of `migrations/`, and sqlx ignores
+  non-files and non-`<VERSION>_<DESC>.sql` names, so staging files can never be
+  applied as real migrations.
+- `PRAGMA foreign_keys` inside a migration is a **no-op** (it cannot change
+  inside a transaction, and sqlx wraps every migration in one).
+
+### Atomic file writes
+
+Every user-facing state file is written temp-then-rename. Two rules learned the
+hard way:
+
+1. **The temp name must be unique** (include the pid). A fixed temp name lets two
+   concurrent writers publish each other's half-written bytes -- this corrupted
+   `transcripts.json` on the hot path.
+2. **Concurrent writers to one folder must be serialised.** `transcripts.json` is
+   rewritten in full on every transcript event by both `RecordingSaver` and
+   `TranscriptSegmentSink`, so it takes a per-folder write lock.
+
+Temp files are removed on every failure path.
+
+### Transaction boundaries
+
+Related writes that must both succeed use one transaction. Known transactional
+paths: meeting + transcripts, notes, summary, contexts, context memory items,
+meeting update/delete, meeting intelligence, context rebuild, import,
+retranscription, provider config + API key, transcript config + API key, fresh
+database defaults.
 ## Shutdown lifecycle (authoritative)
 
 All exit paths funnel through `lifecycle::shutdown_all(app)`:

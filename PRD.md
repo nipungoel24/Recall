@@ -99,7 +99,7 @@ Home · Record · Meetings · Daily · Calendar · Tasks · Contexts · Search �
 - **Reliability:** crash recovery, checkpointing, atomic file writes, graceful shutdown, single-instance.
 - **Performance:** VAD reduces transcription load; virtualized transcripts; bounded memory prompts; no blocking async; measurable before optimizing native code.
 - **Accessibility:** keyboard navigable, visible focus, labeled controls, tooltips for icon buttons, reduced motion, WCAG contrast.
-- **Data durability:** SQLite with migrations (never rewrite shipped migrations); WAL; backup of summary results; legacy import.
+- **Data durability:** SQLite with migrations (never rewrite shipped migrations); WAL with `synchronous=NORMAL` (configured explicitly, not incidental — see Architecture.md); backup of summary results; legacy import.
 - **Migration safety:** pre-rename Meetily installs keep working (identifier `com.meetily.ai`, legacy folders, env fallbacks); fresh installs get Recall branding.
 - **Security:** minimal Tauri permissions; secrets never logged; AI output validated; path traversal blocked in template ids.
 - **Desktop behavior:** tray with recording controls, update check, quit; notifications with consent; window restore on second launch.

@@ -58,6 +58,8 @@ pub mod summary;
 pub mod tray;
 
 #[cfg(test)]
+mod tests_database_reliability;
+#[cfg(test)]
 mod tests_lifecycle;
 #[cfg(test)]
 mod tests_recording_e2e;

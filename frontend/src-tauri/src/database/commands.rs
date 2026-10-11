@@ -195,28 +195,41 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
         .unwrap_or("qwen3.5:2b");
 
     // Default Summary Model: Built-in AI (Qwen recommendation for this system)
-    if let Err(e) = crate::database::repositories::setting::SettingsRepository::save_model_config(
-        pool,
-        "builtin-ai",
-        default_summary_model,
-        "large-v3", // Default whisper model (unused for builtin but required)
-        None,
-    )
-    .await
-    {
-        error!("Failed to set default summary model config: {}", e);
-    }
+    //
+    // These two defaults used to be written independently with their errors
+    // logged and then swallowed, so a fresh install could end up with a summary
+    // model and no transcription model while still reporting
+    // "database-initialized" success. They are now one transaction: both are
+    // applied or neither is, and a failure is returned to the caller.
+    let defaults_result = (async {
+        let mut tx = pool.begin().await?;
 
-    // Default Transcription Model: Parakeet
-    if let Err(e) =
-        crate::database::repositories::setting::SettingsRepository::save_transcript_config(
-            pool,
+        crate::database::repositories::setting::SettingsRepository::save_model_config_tx(
+            &mut tx,
+            "builtin-ai",
+            default_summary_model,
+            "large-v3", // Default whisper model (unused for builtin but required)
+            None,
+        )
+        .await?;
+
+        // Default Transcription Model: Parakeet
+        crate::database::repositories::setting::SettingsRepository::save_transcript_config_tx(
+            &mut tx,
             "parakeet",
             crate::config::DEFAULT_PARAKEET_MODEL,
         )
-        .await
-    {
-        error!("Failed to set default transcription model config: {}", e);
+        .await?;
+
+        tx.commit().await
+    })
+    .await;
+
+    if let Err(e) = defaults_result {
+        return Err(format!(
+            "Failed to initialize default model configuration: {}",
+            e
+        ));
     }
 
     info!("Fresh database initialized successfully with default models");

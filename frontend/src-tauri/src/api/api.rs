@@ -340,28 +340,21 @@ pub async fn api_save_model_config<R: Runtime>(
     );
     let pool = state.db_manager.pool();
 
-    if let Err(e) = SettingsRepository::save_model_config(
+    // Provider config and API key are written in ONE transaction. They used to
+    // be two independent writes, so a failed key write returned an error to the
+    // UI while the provider switch had already been persisted.
+    if let Err(e) = SettingsRepository::save_provider_config_with_key(
         pool,
         &provider,
         &model,
         &whisper_model,
         ollama_endpoint.as_deref(),
+        api_key.as_deref(),
     )
     .await
     {
         log_error!("❌ Failed to save model config to database: {}", e);
         return Err(e.to_string());
-    }
-
-    // Skip API key saving for custom-openai provider (it uses customOpenAIConfig JSON instead)
-    if let Some(key) = api_key {
-        if !key.is_empty() && provider != "custom-openai" {
-            log_info!("🔑 API key provided, saving...");
-            if let Err(e) = SettingsRepository::save_api_key(pool, &provider, &key).await {
-                log_error!("❌ Failed to save API key: {}", e);
-                return Err(e.to_string());
-            }
-        }
     }
 
     // Trigger graceful shutdown of built-in AI sidecar if it's running
@@ -468,21 +461,31 @@ pub async fn api_save_transcript_config<R: Runtime>(
     );
     let pool = state.db_manager.pool();
 
-    if let Err(e) = SettingsRepository::save_transcript_config(pool, &provider, &model).await {
+    // Transcript config and its API key are written in ONE transaction, for the
+    // same reason as the summary provider config above.
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    if let Err(e) = SettingsRepository::save_transcript_config_tx(&mut tx, &provider, &model).await
+    {
         log_error!("Failed to save transcript config: {}", e);
+        let _ = tx.rollback().await;
         return Err(e.to_string());
     }
 
-    if let Some(key) = api_key {
+    if let Some(key) = api_key.as_deref() {
         if !key.is_empty() {
             log_info!("API key provided, saving for transcript provider...");
-            if let Err(e) = SettingsRepository::save_transcript_api_key(pool, &provider, &key).await
+            if let Err(e) =
+                SettingsRepository::save_transcript_api_key_tx(&mut tx, &provider, key).await
             {
                 log_error!("Failed to save transcript API key: {}", e);
+                let _ = tx.rollback().await;
                 return Err(e.to_string());
             }
         }
     }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     log_info!("Successfully saved transcript configuration.");
     Ok(

@@ -32,8 +32,53 @@ impl DatabaseManager {
 
         use std::str::FromStr;
         let options = sqlx::sqlite::SqliteConnectOptions::from_str(tauri_db_path)?
-            .pragma("foreign_keys", "ON");
+            .pragma("foreign_keys", "ON")
+            // WAL is the correct journal mode for this application, and it is
+            // now set explicitly rather than left to chance.
+            //
+            // Recall is a single-writer / many-reader desktop app: live
+            // transcription writes transcript rows while the UI reads meetings,
+            // summary generation writes derived data, and context rebuilds run in
+            // the background. Under the rollback journal every writer takes a
+            // whole-database lock, so those overlap into `SQLITE_BUSY` timeouts.
+            // WAL lets readers proceed during a write.
+            //
+            // This was previously never configured. Fresh installs happened to
+            // get WAL only because `sqlx::CREATE_DB_WAL` sets it at creation
+            // time, but a database imported from the legacy Python backend
+            // (`fs::copy` of a `sqlite3`-created file, journal mode `delete`)
+            // silently kept the rollback journal forever. `journal_mode` is
+            // persistent in the file header, so setting it here is what actually
+            // upgrades an already-imported database.
+            .pragma("journal_mode", "WAL")
+            // NORMAL is the recommended durability level under WAL: it is safe
+            // against application crashes and is an order of magnitude faster
+            // than FULL, which fsyncs on every commit. Power-loss durability is
+            // traded deliberately; the user's audio and checkpoints on disk are
+            // the authoritative record of a recording, not the SQLite rows.
+            .pragma("synchronous", "NORMAL");
         let pool = SqlitePool::connect_with(options).await?;
+
+        // Report the journal mode we actually ended up on. `PRAGMA
+        // journal_mode` is a no-op outside WAL, so the requested mode and the
+        // effective mode can legitimately differ -- and the difference must be
+        // visible in the log rather than assumed.
+        match sqlx::query("PRAGMA journal_mode").fetch_one(&pool).await {
+            Ok(row) => {
+                use sqlx::Row;
+                let mode: String = row.try_get(0).unwrap_or_else(|_| "unknown".to_string());
+                if mode.eq_ignore_ascii_case("wal") {
+                    log::info!("SQLite journal mode: {} (WAL)", mode);
+                } else {
+                    log::warn!(
+                        "SQLite journal mode is '{}', not WAL. Writes will serialize on a \
+                         whole-database lock.",
+                        mode
+                    );
+                }
+            }
+            Err(e) => log::warn!("Could not read SQLite journal mode: {}", e),
+        }
 
         sqlx::migrate!("./migrations").run(&pool).await?;
 
@@ -195,13 +240,39 @@ impl DatabaseManager {
     pub async fn cleanup(&self) -> Result<()> {
         log::info!("Starting database cleanup...");
 
-        // Force checkpoint of WAL to main database file and remove WAL file
-        // TRUNCATE mode: checkpoints all pages AND deletes the WAL file
+        // Checkpoint the WAL so committed data is folded back into the main
+        // database file and the `-wal`/`-shm` files are truncated away.
+        //
+        // `wal_checkpoint` is a NO-OP outside WAL mode: it returns a row, not
+        // an error. The previous code logged "WAL checkpoint completed
+        // successfully" on any `Ok`, which was a false record on exactly the
+        // databases most likely to need it. The result row's first column is the
+        // number of frames still outstanding, so a truthful check is possible.
         match sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
-            .execute(&self.pool)
+            .fetch_one(&self.pool)
             .await
         {
-            Ok(_) => log::info!("WAL checkpoint completed successfully"),
+            Ok(row) => {
+                use sqlx::Row;
+                let busy: i64 = row.try_get(0).unwrap_or(-1);
+                let log_frames: i64 = row.try_get(1).unwrap_or(-1);
+                let checkpointed: i64 = row.try_get(2).unwrap_or(-1);
+                if busy == 0 {
+                    log::info!(
+                        "WAL checkpoint completed: {} frames checkpointed, {} logged",
+                        checkpointed,
+                        log_frames
+                    );
+                } else {
+                    log::warn!(
+                        "WAL checkpoint incomplete: {} frame(s) still outstanding \
+                         (checkpointed {}, logged {}). The WAL file is retained.",
+                        busy,
+                        checkpointed,
+                        log_frames
+                    );
+                }
+            }
             Err(e) => log::warn!("WAL checkpoint failed (non-fatal): {}", e),
         }
 
