@@ -8,7 +8,7 @@ import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
 import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
 import { useEffect, useRef, useState, RefObject } from 'react';
 import { toast } from 'sonner';
-import { Languages, ChevronDown, Loader2, Square, AlertTriangle, RefreshCw, Settings } from 'lucide-react';
+import { Languages, ChevronDown, Loader2, Square, AlertTriangle, AlertCircle, RefreshCw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { LanguagePickerPopover } from '@/components/LanguagePickerPopover';
@@ -52,6 +52,13 @@ interface SummaryPanelProps {
   onSummaryChange: (summary: Summary) => void;
   onDirtyChange: (isDirty: boolean) => void;
   summaryError: string | null;
+  /**
+   * Set when LOADING an existing summary failed, as distinct from the meeting
+   * having no summary yet. Without this, a backend error renders "No Summary
+   * Generated Yet", which tells the user to generate something that may already
+   * exist.
+   */
+  summaryLoadError?: string | null;
   onRegenerateSummary: () => Promise<void>;
   getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
   availableTemplates: Array<{ id: string, name: string, description: string }>;
@@ -87,6 +94,7 @@ export function SummaryPanel({
   onSummaryChange,
   onDirtyChange,
   summaryError,
+  summaryLoadError,
   onRegenerateSummary,
   getSummaryStatusMessage,
   availableTemplates,
@@ -362,6 +370,18 @@ export function SummaryPanel({
               )}
             </div>
           </div>
+        </div>
+      ) : !aiSummary && summaryLoadError ? (
+        // A failed load must not masquerade as "nothing generated yet".
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+          <AlertCircle className="h-7 w-7 text-destructive" aria-hidden="true" />
+          <div>
+            <h2 className="text-title text-foreground">Could not load the summary</h2>
+            <p className="mt-1 max-w-sm text-caption text-muted-foreground">{summaryLoadError}</p>
+          </div>
+          <p className="max-w-sm text-caption text-muted-foreground">
+            This meeting may already have a summary. Reload before generating a new one.
+          </p>
         </div>
       ) : !aiSummary ? (
         <div className="flex flex-col flex-1 h-full">

@@ -8,10 +8,16 @@ import { toast } from 'sonner';
 interface UseMeetingDataProps {
   meeting: any;
   summaryData: Summary | null;
+  /**
+   * Set when LOADING the summary failed. Distinct from "this meeting has no
+   * summary", so the panel does not claim "No Summary Generated Yet" when the
+   * backend simply failed to answer.
+   */
+  summaryError?: string | null;
   onMeetingUpdated?: () => Promise<void>;
 }
 
-export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMeetingDataProps) {
+export function useMeetingData({ meeting, summaryData, summaryError, onMeetingUpdated }: UseMeetingDataProps) {
   // State
   // Use prop directly since summary generation fetches transcripts independently
   const transcripts = meeting.transcripts;

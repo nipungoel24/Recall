@@ -87,10 +87,12 @@ const MeetingsPage: React.FC = () => {
     meetings,
     searchResults,
     isSearching,
+    searchError,
     searchQuery,
     isMeetingsLoading,
     meetingsError,
     refetchMeetings,
+    searchTranscripts,
   } = useSidebar();
 
   const now = useMemo(() => new Date(), []);
@@ -188,6 +190,24 @@ const MeetingsPage: React.FC = () => {
         />
       ) : null}
 
+      {/* A failed SEARCH is not a search that matched nothing. Without this the
+          archive below renders "No matching meetings", telling the user their
+          meeting is missing when the backend merely failed to answer. */}
+      {searchError && isSearchingNow && !meetingsError ? (
+        <EmptyState
+          tone="error"
+          icon={<AlertTriangle className="h-7 w-7" aria-hidden="true" />}
+          title="Could not search your meetings"
+          description={searchError}
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => void searchTranscripts(searchQuery)}>
+              <RotateCw aria-hidden="true" />
+              Retry search
+            </Button>
+          }
+        />
+      ) : null}
+
       {!meetingsError && isMeetingsLoading && !hasArchive ? <ListSkeleton rows={8} /> : null}
 
       {!meetingsError && !isMeetingsLoading && !hasArchive ? (
@@ -198,7 +218,7 @@ const MeetingsPage: React.FC = () => {
         />
       ) : null}
 
-      {!meetingsError && hasArchive ? (
+      {!meetingsError && !searchError && hasArchive ? (
         <div className="flex flex-col gap-8">
           {total === 0 ? (
             <EmptyState

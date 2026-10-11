@@ -30,6 +30,12 @@ function MeetingDetailsContent() {
   const [meetingDetails, setMeetingDetails] = useState<MeetingDetailsResponse | null>(null);
   const [meetingSummary, setMeetingSummary] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Set when loading the summary FAILED. Distinct from a meeting that genuinely
+   * has no summary, so the panel never claims "No Summary Generated Yet" when
+   * the backend simply failed to answer.
+   */
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState<boolean>(false);
   const [hasCheckedAutoGen, setHasCheckedAutoGen] = useState<boolean>(false);
@@ -160,6 +166,7 @@ function MeetingDetailsContent() {
     setMeetingDetails(null);
     setMeetingSummary(null);
     setError(null);
+    setSummaryError(null);
     setIsLoading(true);
     setHasCheckedAutoGen(false);
     setShouldAutoGenerate(false);
@@ -190,6 +197,7 @@ function MeetingDetailsContent() {
     setMeetingDetails(null);
     setMeetingSummary(null);
     setError(null);
+    setSummaryError(null);
     setIsLoading(true);
 
     let stale = false;
@@ -284,6 +292,12 @@ function MeetingDetailsContent() {
       } catch (error) {
         if (stale) return;
         console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
+        // A failed fetch is not "this meeting has no summary". Recording the
+        // failure lets the panel distinguish the two; setting null alone made a
+        // backend error render "No Summary Generated Yet".
+        setSummaryError(
+          error instanceof Error ? error.message : String(error ?? 'Failed to load summary')
+        );
         setMeetingSummary(null);
       }
     };
@@ -382,6 +396,7 @@ function MeetingDetailsContent() {
       <MeetingWorkspace
         meeting={meetingDetails}
         summaryData={meetingSummary}
+        summaryError={summaryError}
         onMeetingUpdated={async () => {
           await refetchMeetings();
         }}

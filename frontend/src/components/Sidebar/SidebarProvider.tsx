@@ -53,6 +53,13 @@ interface SidebarContextType {
   searchResults: TranscriptSearchResult[];
   isSearching: boolean;
   /**
+   * Set when the last search FAILED, as distinct from succeeding with no
+   * matches. Without this the two states collapse into `searchResults: []` and
+   * the UI reports "No matching meetings" for a backend error, which tells the
+   * user their meeting does not exist when it does.
+   */
+  searchError: string | null;
+  /**
    * The live meeting-search query. Owned here rather than in the sidebar so
    * /meetings — the single search surface — can read the same value the
    * sidebar input writes, instead of keeping a private copy.
@@ -96,8 +103,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // recording state, bridged below, so a WebView refresh during an active
   // recording restores the "recording" sidebar state instead of resetting it.
   const [meetingActiveOverride, setMeetingActiveOverride] = useState(false);
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
+const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
   const [serverAddress, setServerAddress] = useState('');
   const [transcriptServerAddress, setTranscriptServerAddress] = useState('');
@@ -216,12 +224,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (!query.trim()) {
       searchSeqRef.current += 1;
       setSearchResults([]);
+      setSearchError(null);
       return;
     }
 
     const seq = ++searchSeqRef.current;
     try {
       setIsSearching(true);
+      setSearchError(null);
 
       const results = await invoke('api_search_transcripts', { query }) as TranscriptSearchResult[];
       if (seq !== searchSeqRef.current) return;
@@ -229,6 +239,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       if (seq !== searchSeqRef.current) return;
       console.error('Error searching transcripts:', error);
+      // Record the failure. Clearing results alone made a backend error
+      // indistinguishable from a search that legitimately matched nothing.
+      setSearchError(
+        error instanceof Error ? error.message : String(error ?? 'Search failed')
+      );
       setSearchResults([]);
     } finally {
       if (seq === searchSeqRef.current) {
@@ -359,8 +374,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     setIsMeetingActive,
     handleRecordingToggle,
       searchTranscripts,
-      searchResults,
+searchResults,
       isSearching,
+      searchError,
       searchQuery,
       setSearchQuery,
       setServerAddress,
@@ -384,6 +400,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       searchTranscripts,
       searchResults,
       isSearching,
+      searchError,
       searchQuery,
       serverAddress,
     transcriptServerAddress,

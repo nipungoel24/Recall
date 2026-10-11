@@ -72,6 +72,8 @@ export interface MeetingWorkspaceProps {
     folder_path?: string;
   };
   summaryData: Summary | null;
+  /** Set when loading the summary failed, as distinct from having no summary. */
+  summaryError?: string | null;
   onMeetingUpdated?: () => Promise<void>;
   onRefetchTranscripts?: () => Promise<void>;
   segments?: TranscriptSegmentData[];
@@ -97,6 +99,7 @@ export interface MeetingWorkspaceProps {
 export function MeetingWorkspace({
   meeting,
   summaryData,
+  summaryError,
   onMeetingUpdated,
   onRefetchTranscripts,
   segments,
@@ -127,7 +130,7 @@ export function MeetingWorkspace({
 
 
   // Shared meeting data and operations
-  const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
+  const meetingData = useMeetingData({ meeting, summaryData, summaryError, onMeetingUpdated });
   const templates = useTemplates();
   const { modelConfig, setModelConfig } = useConfig();
   const [customPrompt, setCustomPrompt] = useState<string>('');
@@ -351,6 +354,7 @@ export function MeetingWorkspace({
               onSummaryChange={meetingData.handleSummaryChange}
               onDirtyChange={meetingData.setIsSummaryDirty}
               summaryError={summaryGeneration.summaryError}
+              summaryLoadError={summaryError}
               onRegenerateSummary={summaryGeneration.handleRegenerateSummary}
               getSummaryStatusMessage={summaryGeneration.getSummaryStatusMessage}
               availableTemplates={templates.availableTemplates}
