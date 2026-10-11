@@ -21,6 +21,12 @@ use super::models;
 // Sidecar State Management
 // ============================================================================
 
+/// How long the sidecar is given to exit after being asked to shut down.
+pub const SIDECAR_EXIT_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// How long a signalled sidecar is given to actually terminate.
+pub const SIDECAR_KILL_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Sidecar process manager with keep-alive and health monitoring
 pub struct SidecarManager {
     /// Child process handle
@@ -575,24 +581,65 @@ impl SidecarManager {
             }
             .await;
         }
+        // Take ownership of the child FIRST, then release the lock before awaiting.
+        //
+        // The previous code held the `child_process` mutex guard across
+        // `child.wait()` (a 3s timeout) and `child.kill()`. Every other task
+        // needing the handle blocked for the full timeout, and any task that
+        // awaited something else while holding another lock could deadlock
+        // against it.
+        let tracked_child = { self.child_process.lock().await.take() };
 
-        // Kill process if still running
-        {
-            let mut child_lock = self.child_process.lock().await;
-            if let Some(mut child) = child_lock.take() {
-                match tokio::time::timeout(Duration::from_secs(3), child.wait()).await {
+        if let Some(mut child) = tracked_child {
+            let pid = child.id();
+
+            // Ask the helper to exit on its own.
+            let exited = matches!(
+                tokio::time::timeout(SIDECAR_EXIT_TIMEOUT, child.wait()).await,
+                Ok(Ok(_))
+            );
+
+            if !exited {
+                log::warn!(
+                    "Sidecar (pid {:?}) did not exit gracefully; signalling termination",
+                    pid
+                );
+
+                // `start_kill` only signals. Dropping a `Child` handle without
+                // terminating it leaves the OS process running with no tracked
+                // handle -- that is exactly how a llama-helper gets orphaned.
+                if let Err(e) = child.start_kill() {
+                    log::error!(
+                        "Failed to signal sidecar (pid {:?}) for termination: {}",
+                        pid,
+                        e
+                    );
+                }
+
+                // Reap, so no zombie is left behind on Unix.
+                match tokio::time::timeout(SIDECAR_KILL_TIMEOUT, child.wait()).await {
                     Ok(Ok(status)) => {
-                        log::info!("Sidecar exited with status: {}", status);
+                        log::info!("Sidecar (pid {:?}) terminated with status: {}", pid, status);
                     }
                     Ok(Err(e)) => {
-                        log::error!("Failed to wait for sidecar: {}", e);
+                        log::error!("Failed to reap sidecar (pid {:?}): {}", pid, e);
                     }
                     Err(_) => {
-                        log::warn!("Sidecar didn't exit gracefully, killing");
-                        let _ = child.kill().await;
+                        // Do not hide this: an unkillable sidecar is an orphan we
+                        // can no longer track or clean up later.
+                        log::error!(
+                            "Sidecar (pid {:?}) did not terminate within {}s of being killed; \
+                             it may survive as an untracked process",
+                            pid,
+                            SIDECAR_KILL_TIMEOUT.as_secs()
+                        );
                     }
                 }
+            } else {
+                log::info!("Sidecar (pid {:?}) exited gracefully", pid);
             }
+        } else {
+            log::debug!("No tracked sidecar child to terminate");
         }
 
         // Clear handles

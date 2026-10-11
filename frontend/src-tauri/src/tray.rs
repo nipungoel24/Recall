@@ -46,7 +46,17 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, item_id: &str) {
                 let _ = window.eval("window.location.assign('/settings')");
             }
         }
-        "quit" => app.exit(0),
+        "quit" => {
+            // Route Quit through the same coordinator as the OS exit path.
+            //
+            // This used to call `app.exit(0)` directly, which skipped the
+            // sidecar/database teardown ordering entirely and could quit mid-
+            // recording with no statement of what happened to the session.
+            // Running the coordinator first also makes a double trigger (tray
+            // Quit while an exit is already underway) a no-op.
+            crate::lifecycle::shutdown_all(app);
+            app.exit(0);
+        }
         _ => {}
     }
 }

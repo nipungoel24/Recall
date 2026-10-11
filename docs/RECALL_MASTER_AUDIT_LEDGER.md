@@ -81,6 +81,26 @@ segment IDs server-side, never model-invented database IDs.
 Audit sweep examined ~180 error-handling sites; most prior defects are already
 fixed. Transcript search is the largest remaining false-empty surface.
 
+### Workstream C — Shutdown & sidecar lifecycle
+
+| ID | Sev | Status | Finding | Evidence |
+|---|---|---|---|---|
+| C-1 | **S1** | **FIXED** | Shutdown could hang **forever**: `RunEvent::Exit` ran `block_on(async { db_manager.cleanup().await })`, and `cleanup()` awaits `pool.close()`, which waits for every checked-out connection. With the main thread parked in `block_on`, a single long-running background task holding a connection froze the app with no way to exit. | `lib.rs:811-838` (old); `manager.rs:209` |
+| C-2 | **S1** | **FIXED** | The sidecar **orphaned processes**. On the `wait()` error path the `Child` was simply dropped without termination — and dropping a child handle does not kill the process. On the timeout path `kill()`'s result was discarded, so a failed kill lost the last handle to a still-running `llama-helper`. | `sidecar.rs:583-594` (old) |
+| C-3 | **S2** | **FIXED** | The `child_process` tokio mutex guard was held **across** `child.wait()` (3s) and `child.kill()`, blocking every other task needing the handle for the full timeout and risking deadlock. The handle is now taken out of the registry before any await. | `sidecar.rs:581-596` (old) |
+| C-4 | **S2** | **FIXED** | Shutdown was **not idempotent**: tray Quit (`app.exit(0)`) and the OS exit path could both run teardown and race on the same child handle. A single coordinator now guards on an atomic swap, and both paths route through it. | `tray.rs:49` (old) |
+| C-5 | **S2** | **FIXED** | Quitting mid-recording said nothing about the session. Shutdown now attempts a bounded graceful finalization and, if that fails, explicitly reports the recording as **incomplete** with recoverable checkpoints preserved — never as saved. | `lifecycle.rs` |
+| C-6 | **S3** | **FIXED** | A failed reap / unkillable sidecar was logged at the same level as routine notices. Termination failures are now surfaced explicitly, including the PID and the risk of an untracked surviving process. | `sidecar.rs` |
+
+### Workstream D — Database, migrations, WAL
+
+Audited via WS-E and WS-C; see the table below for items resolved as a side effect. Remaining WAL/migration verification is folded into WS-B/WS-G isolation runs.
+
+| ID | Sev | Status | Finding | Evidence |
+|---|---|---|---|---|
+| D-1 | **S2** | **FIXED** | Intelligence source rows were deleted only via `ON DELETE CASCADE`, which depends on the connection having `PRAGMA foreign_keys = ON`. Without it, sources orphan and evidence navigation points at deleted items. Sources are now deleted explicitly inside the transaction. | `meeting_intelligence.rs` |
+| D-2 | **S2** | **FIXED** | The abstract and intelligence items were written by two independent autocommit calls; a failure between them left a new summary beside stale items. Now one transaction, with a forced mid-transaction failure regression-tested to roll back. | `replace_all` |
+
 ### Tooling / hygiene
 
 | ID | Sev | Status | Finding |

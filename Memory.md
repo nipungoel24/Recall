@@ -1881,3 +1881,48 @@ Selecting 3+ contexts previously ran through a `HashSet`, whose iteration order
 is randomised per process, so which 2 survived `.take(2)` differed between
 launches. Both call sites now dedup order-preservingly, keeping the user's
 explicit selection order.
+
+## Shutdown lifecycle (authoritative)
+
+All exit paths funnel through `lifecycle::shutdown_all(app)`:
+`RunEvent::Exit` and tray Quit. Nothing else may call `app.exit(0)` directly.
+
+The coordinator is **idempotent** — it claims the shutdown with an atomic
+swap, so a tray Quit racing the OS exit path runs the teardown exactly once.
+
+Steps run in this order, and **every step is bounded by an explicit timeout**:
+
+1. Stop an active recording (max 20s).
+2. Shut down the llama-helper sidecar (max 8s).
+3. Checkpoint the WAL and close the pool (max 5s).
+
+A step that times out is logged and shutdown continues. A subsystem that hangs
+must never be able to prevent the app from exiting.
+
+### Why the bound matters
+
+`pool.close()` waits for every checked-out connection to be returned. This used
+to run inside an unbounded `block_on` on the main thread, so one background task
+holding a connection froze the app permanently. Never call `pool.close()` from
+the exit path without a timeout.
+
+### Sidecar ownership rule
+
+The child handle is **taken out of the mutex before any await**, then
+terminated, then reaped:
+
+```rust
+let tracked_child = { self.child_process.lock().await.take() };
+```
+
+Holding the lock across `child.wait()` blocked every other task for the full
+timeout. More importantly: **dropping a `Child` handle does not kill the
+process.** Termination must never be skipped, or the `llama-helper` survives as
+an untracked orphan that can never be reaped. A failed reap or an unkillable
+child is logged explicitly with its PID — it is not swallowed.
+
+### Interrupted work is never success
+
+If an active recording cannot be finalized during shutdown, the shutdown logs
+that the recording is **incomplete** and relies on Phase F1's guarantee that
+recoverable checkpoints are left on disk. It is never reported as saved.

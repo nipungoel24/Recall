@@ -45,6 +45,7 @@ pub mod context;
 pub mod contexts;
 pub mod database;
 pub mod groq;
+pub mod lifecycle;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
@@ -55,6 +56,9 @@ pub mod path_guard;
 pub mod state;
 pub mod summary;
 pub mod tray;
+
+#[cfg(test)]
+mod tests_lifecycle;
 pub mod utils;
 pub mod whisper_engine;
 
@@ -809,29 +813,12 @@ pub fn run() {
                     tray::focus_main_window(_app_handle);
                 }
                 tauri::RunEvent::Exit => {
-                    log::info!("Application exiting, cleaning up resources...");
-                    tauri::async_runtime::block_on(async {
-                        // Clean up database connection and checkpoint WAL
-                        if let Some(app_state) = _app_handle.try_state::<state::AppState>() {
-                            log::info!("Starting database cleanup...");
-                            if let Err(e) = app_state.db_manager.cleanup().await {
-                                log::error!("Failed to cleanup database: {}", e);
-                            } else {
-                                log::info!("Database cleanup completed successfully");
-                            }
-                        } else {
-                            log::warn!(
-                                "AppState not available for database cleanup (likely first launch)"
-                            );
-                        }
-
-                        // Clean up sidecar
-                        log::info!("Cleaning up sidecar...");
-                        if let Err(e) = summary::summary_engine::force_shutdown_sidecar().await {
-                            log::error!("Failed to force shutdown sidecar: {}", e);
-                        }
-                    });
-                    log::info!("Application cleanup complete");
+                    // One coordinated, idempotent, fully time-bounded teardown.
+                    // This replaces an inline `block_on` that awaited
+                    // `pool.close()` without a bound: if any pooled connection
+                    // was still checked out, the main thread parked forever and
+                    // the app could not be exited.
+                    lifecycle::shutdown_all(_app_handle);
                 }
                 _ => {}
             }
