@@ -46,13 +46,26 @@ pub fn priority_key(item: &MemoryItem) -> (u8, Reverse<i64>) {
 /// 2. `updated_at_millis` descending (more recently updated first).
 /// 3. `source_meeting_id` (Some before None, then lexicographically).
 /// 4. `id` ascending (lexicographical string comparison).
+/// Occurrence count used when no repetition data is available.
+///
+/// The frequency component of the score is `1 + min(occurrences - 1, 4) * 0.25`,
+/// which would rank repeatedly-reconfirmed memories higher. No production call
+/// site has an occurrence count to supply -- there is no `repetition_count`
+/// column and nothing computes one -- so every call passes this value and the
+/// multiplier is always `1.0`.
+///
+/// It is named rather than written as a bare `1` so the inert signal is visible
+/// at the call site instead of reading as an oversight. Supplying a real count
+/// requires a schema change and a way to derive it; until then the frequency
+/// term is documented as inactive.
+pub const UNKNOWN_OCCURRENCES: u32 = 1;
 pub fn compare_memory_views(
     a: &ContextMemoryItemView,
     b: &ContextMemoryItemView,
     now_millis: i64,
 ) -> std::cmp::Ordering {
-    let score_a = a.score(now_millis, 1);
-    let score_b = b.score(now_millis, 1);
+    let score_a = a.score(now_millis, UNKNOWN_OCCURRENCES);
+    let score_b = b.score(now_millis, UNKNOWN_OCCURRENCES);
 
     score_b
         .partial_cmp(&score_a)
@@ -82,8 +95,8 @@ pub fn rank_memory_views(
 /// 3. `source_meeting_id` (Some before None, then lexicographically).
 /// 4. `id` ascending (lexicographical string comparison).
 pub fn compare_memory_items(a: &MemoryItem, b: &MemoryItem, now_millis: i64) -> std::cmp::Ordering {
-    let score_a = a.score(now_millis, 1);
-    let score_b = b.score(now_millis, 1);
+    let score_a = a.score(now_millis, UNKNOWN_OCCURRENCES);
+    let score_b = b.score(now_millis, UNKNOWN_OCCURRENCES);
 
     score_b
         .partial_cmp(&score_a)

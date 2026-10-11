@@ -781,21 +781,6 @@ pub struct IntelligenceItem {
     pub has_evidence: bool,
 }
 
-impl IntelligenceItem {
-    fn new(text: &str) -> Self {
-        Self {
-            text: text.to_string(),
-            confidence: None,
-            owner: None,
-            due_date: None,
-            status: None,
-            source_refs: Vec::new(),
-            source_segment_ids: Vec::new(),
-            has_evidence: false,
-        }
-    }
-}
-
 /// Generate structured meeting intelligence from transcript
 ///
 /// This is the Phase 5 entry point for structured intelligence generation.

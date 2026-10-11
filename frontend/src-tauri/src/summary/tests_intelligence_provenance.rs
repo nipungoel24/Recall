@@ -544,6 +544,52 @@ fn the_generate_response_is_flat_and_matches_the_frontend_type() {
 }
 
 // ---------------------------------------------------------------------------
+// Persistence mapping
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn validated_intelligence_flattens_into_stable_persistence_rows() {
+    // The flatten order is the persisted `ordering` column, so a change here
+    // silently reshuffles every item in the UI.
+    let catalog = EvidenceCatalog::build(&[("seg_a".into(), "evidence".into(), Some(0.0))]);
+
+    let raw = crate::summary::service::StructuredIntelligence {
+        abstract_text: "Summary".into(),
+        topics: vec![new_item("Topic one", vec!["S1".into()])],
+        decisions: vec![new_item("Decision one", vec!["S1".into()])],
+        actions: vec![new_item("Action one", vec!["S1".into()])],
+        questions: vec![new_item("Question one", vec!["S1".into()])],
+        facts: vec![new_item("Fact one", vec!["S1".into()])],
+        follow_ups: vec![new_item("Follow up one", vec!["S1".into()])],
+    };
+
+    let validated = crate::summary::service::resolve_and_validate_intelligence(&catalog, raw);
+    let items = collect_persisted_items(&validated);
+
+    assert_eq!(items.len(), 6);
+    let kinds: Vec<&str> = items.iter().map(|i| i.kind.as_str()).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "topic",
+            "decision",
+            "action",
+            "question",
+            "fact",
+            "follow_up"
+        ],
+        "persistence order must be stable and category-ordered"
+    );
+    // Every item carries its resolved evidence through to persistence.
+    for item in &items {
+        assert_eq!(
+            item.sources,
+            vec!["seg_a".to_string()],
+            "resolved evidence must reach the sources table"
+        );
+    }
+}
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
