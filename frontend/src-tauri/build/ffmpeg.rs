@@ -355,21 +355,48 @@ fn find_ffmpeg_in_extracted_dir(
     ))
 }
 
-/// Get expected SHA-256 hash for target binary if known
-fn get_expected_sha256(target: &str) -> Option<&'static str> {
+/// Validate whether a string is a valid 64-character lowercase/uppercase hex SHA-256 string
+fn is_valid_sha256_hex(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Official pinned SHA-256 checksums for verified release binaries
+fn get_official_pinned_sha256(target: &str) -> Option<&'static str> {
+    if target.contains("x86_64") && target.contains("windows") {
+        // Official Gyan.dev FFmpeg 8.0.1 essentials build
+        Some("5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d")
+    } else {
+        // macOS and Linux binaries require Recall-owned mirroring and verified pinning
+        None
+    }
+}
+
+/// Resolve expected SHA-256 for target with override validation
+fn get_expected_sha256(target: &str) -> Result<Option<&'static str>, String> {
+    let pinned = get_official_pinned_sha256(target);
+
     if let Ok(env_hash) = std::env::var("RECALL_FFMPEG_SHA256") {
-        if !env_hash.is_empty() {
-            return Some(Box::leak(env_hash.into_boxed_str()));
+        let env_trimmed = env_hash.trim();
+        if !env_trimmed.is_empty() {
+            if !is_valid_sha256_hex(env_trimmed) {
+                return Err(format!(
+                    "RECALL_FFMPEG_SHA256 is invalid (must be 64-character hex string): '{}'",
+                    env_trimmed
+                ));
+            }
+            if let Some(official) = pinned {
+                if !env_trimmed.eq_ignore_ascii_case(official) {
+                    return Err(format!(
+                        "RECALL_FFMPEG_SHA256 cannot override official pinned release hash for {}: provided '{}', official '{}'",
+                        target, env_trimmed, official
+                    ));
+                }
+            }
+            return Ok(Some(Box::leak(env_trimmed.to_string().into_boxed_str())));
         }
     }
 
-    // Pinned SHA-256 hashes for official release binaries
-    if target.contains("x86_64") && target.contains("windows") {
-        // Windows x86_64 essentials build
-        Some("5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d")
-    } else {
-        None
-    }
+    Ok(pinned)
 }
 
 /// Compute SHA-256 hash of a file
@@ -396,11 +423,43 @@ fn compute_file_sha256(path: &std::path::Path) -> Result<String, String> {
 
 /// Verify FFmpeg binary integrity (SHA-256) and functionality (runs -version successfully)
 fn verify_ffmpeg_binary(path: &std::path::PathBuf, target: &str) -> bool {
-    // 1. SHA-256 integrity check
+    let is_release_build = std::env::var("PROFILE")
+        .map(|p| p.eq_ignore_ascii_case("release"))
+        .unwrap_or(false);
+
+    // 1. Resolve expected SHA-256
+    let expected = match get_expected_sha256(target) {
+        Ok(exp) => exp,
+        Err(e) => {
+            println!(
+                "cargo:warning=❌ FFmpeg checksum configuration error: {}",
+                e
+            );
+            return false;
+        }
+    };
+
+    // Fail closed in release builds if cryptographic checksum is missing
+    if expected.is_none() {
+        if is_release_build {
+            println!(
+                "cargo:warning=❌ RELEASE BUILD FAILS CLOSED: No cryptographic SHA-256 pinned for target '{}'. Functional -version execution is never a substitute for integrity verification.",
+                target
+            );
+            return false;
+        } else {
+            println!(
+                "cargo:warning=⚠️ DEBUG BUILD ONLY: No pinned SHA-256 for target '{}'. Cryptographic integrity verification will fail closed in release builds.",
+                target
+            );
+        }
+    }
+
+    // 2. SHA-256 integrity check
     match compute_file_sha256(path) {
         Ok(computed_hash) => {
-            if let Some(expected) = get_expected_sha256(target) {
-                if computed_hash.eq_ignore_ascii_case(expected) {
+            if let Some(expected_hash) = expected {
+                if computed_hash.eq_ignore_ascii_case(expected_hash) {
                     println!(
                         "cargo:warning=🔒 FFmpeg SHA-256 integrity verified: {}",
                         computed_hash
@@ -409,14 +468,14 @@ fn verify_ffmpeg_binary(path: &std::path::PathBuf, target: &str) -> bool {
                     println!(
                         "cargo:warning=❌ FFmpeg SHA-256 mismatch for {}! Expected: {}, Found: {}",
                         path.display(),
-                        expected,
+                        expected_hash,
                         computed_hash
                     );
                     return false;
                 }
             } else {
                 println!(
-                    "cargo:warning=ℹ️ Extracted FFmpeg SHA-256: {} (no pinned hash for target: {})",
+                    "cargo:warning=ℹ️ Extracted FFmpeg SHA-256: {} (unpinned target: {})",
                     computed_hash, target
                 );
             }
@@ -427,7 +486,8 @@ fn verify_ffmpeg_binary(path: &std::path::PathBuf, target: &str) -> bool {
         }
     }
 
-    // 2. Functional execution check (-version)
+    // 3. Functional execution check (-version)
+    // Execution check is NEVER a substitute for SHA-256; both must pass
     match std::process::Command::new(path).arg("-version").output() {
         Ok(output) => {
             if output.status.success() {

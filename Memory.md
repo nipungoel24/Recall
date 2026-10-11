@@ -2023,9 +2023,20 @@ recoverable checkpoints are left on disk. It is never reported as saved.
 - Fixed Phase 4 `checkPermissions` test line-ending sensitivity (`phase4-recording-experience.test.mjs`), normalizing CRLF to LF.
 - Converted `qa-routes.test.mjs` from `bun:test` to `node:test` using `loadTsModule`, making all 680 Node unit tests 100% green across all 136 suites on Windows.
 
+### Workstream 1 Resolution: Fail-Closed FFmpeg Release Cryptographic Integrity
+- Hardened `frontend/src-tauri/build/ffmpeg.rs` with fail-closed semantics in release mode (`PROFILE == "release"`).
+- Builds fail closed if target lacks a pinned hash; functional `-version` execution is strictly prohibited from substituting for cryptographic integrity.
+- Pinned official Windows x86_64 essentials binary SHA-256 (`5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d`).
+- `RECALL_FFMPEG_SHA256` validated as a 64-character hex string and prohibited from overriding official pinned hashes with conflicting values.
+- Automated regression suite added: `frontend/tests/lib/ffmpeg-integrity.test.mjs` (6/6 tests passing).
+
 ### Comprehensive Validation Scorecard
-- Rust workspace tests: 484 passed, 0 failed, 2 ignored, 1 doc test passed.
-- Frontend unit/integration tests: 680 passed, 0 failed across 136 test suites.
-- Frontend contract audit: 82 passed, 0 violations.
-- Next.js production build: 13/13 static pages prerendered successfully.
+- Rust workspace tests: 484 passed, 0 failed, 2 ignored, 1 doc test passed (`cargo test --workspace --offline`).
+- Rust code formatting: PASS (`cargo fmt --all -- --check`).
+- Rust Clippy lints: PASS (0 errors, `cargo clippy --workspace --all-targets --offline`).
+- Frontend unit/integration tests: 686 passed, 0 failed across 137 test suites (`node --test tests/lib/*.test.mjs`).
+- Frontend contract audit: 82 passed, 0 violations (`node tests/contract/audit.mjs`).
+- TypeScript compilation: clean (0 errors, `npx tsc --noEmit`).
+- Next.js production build: 13/13 static pages prerendered successfully (`npm run build`).
 - Host constraint: Manual GUI desktop smoke testing checklist documented for native execution.
+- Real user data integrity: `%APPDATA%\com.meetily.ai` database verified untouched (4,632,576 bytes, SHA-256 verified, 0 audio files).
