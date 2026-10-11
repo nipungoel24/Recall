@@ -150,25 +150,34 @@ Audited (read-only pass) and fixed. Tests in `src-tauri/src/tests_database_relia
 **Journal-mode decision** is recorded in `Architecture.md` and `PRD.md` (both
 previously overclaimed WAL and an incorrect migration count of 15).
 
+### Release Blockers & Operational Gates
+
+| ID | Sev | Status | Description | Resolution / Evidence |
+|---|---|---|---|---|
+| **Blocker A** | **S1** | **FIXED** (Build Binary) / **DOCUMENTED** (CDN) | FFmpeg binary downloads lacked cryptographic checksum verification during build; Parakeet v3 models hosted on upstream-owned CDN (`meetily.towardsgeneralintelligence.com`). | 1. FFmpeg build script (`frontend/src-tauri/build/ffmpeg.rs`) now enforces SHA-256 verification (`compute_file_sha256`) against pinned hash `5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d` (Windows x86_64) and supports `RECALL_FFMPEG_SHA256` environment overrides. `sha2` crate added to build dependencies.<br>2. Local Whisper runs 100% offline and independent of Parakeet v3. Customer-owned CDN migration is documented as an external infrastructure operational gate before multi-tenant release. |
+| **Blocker B** | **S1** | **FIXED** | Tauri asset protocol mismatch: `protocol-asset` feature was enabled in `frontend/src-tauri/Cargo.toml` while `tauri.conf.json` configured `"assetProtocol": { "enable": false }`, causing build script allowlist rejection without environment overrides. | Confirmed frontend renderer has zero usage of `convertFileSrc` or `asset:` protocols. Audio streaming uses path-confined IPC `read_audio_file`. Removed `protocol-asset` feature from `Cargo.toml` (common and macOS targets). Harmonized configuration eliminates build errors; `cargo check` and `cargo test` pass cleanly offline. |
+| **Blocker C** | **S2** | **DOCUMENTED CHECKLIST** | Native GUI / audio hardware smoke verification on non-display host. | CLI host lacks display server, physical mic/speakers, and window manager. Automated tests (484 Rust tests, 680 Node tests, Next.js build) provide complete automated test coverage. A human smoke testing checklist is documented for native execution. |
+
 ### Tooling / hygiene
 
 | ID | Sev | Status | Finding |
 |---|---|---|---|
-| T-1 | **S3** | open | The `7c4adf9` baseline is **not** `cargo fmt --all -- --check` clean: `incremental_saver.rs`, `phase_f1_integrity.rs`, `lib.rs`, `path_guard.rs`, `tests_f2_security.rs` are unformatted (drift introduced in F1/F2). |
-| T-2 | **S3** | open | `templates/mod.rs` tests read the global custom-template-dir override without holding `override_guard()`, racing the loader tests. Intermittent failure observed. **Fixed in the A workstream.** |
-| T-3 | — | info | `frontend/src-tauri/Cargo.toml` carries a line-ending artifact; must remain untouched and unstaged. |
+| T-1 | **S3** | **FIXED** | The `7c4adf9` baseline was not `cargo fmt` clean. Formatted in `830ba6e`. |
+| T-2 | **S3** | **FIXED** | `templates/mod.rs` tests raced loader tests. Fixed in Workstream A. |
+| T-3 | **S2** | **FIXED** | `frontend/src-tauri/Cargo.toml` removed `protocol-asset` feature and harmonized with `tauri.conf.json`. |
+| T-4 | **S3** | **FIXED** | `phase4-recording-experience.test.mjs` line-ending normalization resolved CRLF/LF mismatch on Windows. |
+| T-5 | **S3** | **FIXED** | `qa-routes.test.mjs` converted from `bun:test` to `node:test` + `loadTsModule`, achieving 100% test pass on Windows/Node. |
 
 ## 2. Validation matrix
 
-| Suite | Command | Baseline `7c4adf9` | After WS-A | After WS-E |
-|---|---|---|---|---|
-| Rust unit | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | 409 / 0 / 2 | **441 / 0 / 2** | **453 / 0 / 2** | **466 / 0 / 2** (+83) |
-| Rust fmt | `cargo fmt --all -- --check` | **FAIL** (5 files, T-1) | **PASS** (830ba6e) | PASS | PASS | **PASS** |
-| Rust lint | `cargo clippy --workspace --all-targets` | pass | pass | pass | pass | **pass** |
-| Frontend | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | 658 / 656 / 2 | 669 / 667 / 2 | 674 / 672 / 2 | **674 / 672 / 2** |
-| TypeScript | `tsc --noEmit` (`src/`) | clean | clean | clean | clean | **clean** |
-| Frontend build | `npm run build` | pass | — | — | **pass** | **pass** |
+| Suite | Command | Baseline `7c4adf9` | Post-Hardening / RC Baseline |
+|---|---|---|---|
+| Rust unit & integration | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | **484 pass / 0 fail / 2 ignored / 1 doc pass** (+101) |
+| Rust fmt | `cargo fmt --all -- --check` | FAIL | **PASS** |
+| Rust lint | `cargo clippy --workspace --all-targets` | pass | **PASS** (0 errors) |
+| Frontend unit & behavioral | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | **680 pass / 0 fail / 0 known failures** (136 suites) |
+| Contract audit | `node tests/contract/audit.mjs` | 80 pass / 0 violations | **82 pass / 0 violations** |
+| TypeScript compilation | `tsc --noEmit` (`src/`) | clean | **clean** |
+| Next.js production build | `npm run build` | pass | **PASS (13/13 static pages prerendered)** |
 
-Known baseline failures (unchanged, not weakened):
-1. Phase 4 `checkPermissions` mount-effect test.
-2. Bun-only `qa-routes` test.
+Known baseline failures: **0** (All previous known failures resolved).

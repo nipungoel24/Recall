@@ -25,7 +25,7 @@ const srcDir = join(import.meta.dirname, '../../src')
 const testsDir = join(import.meta.dirname, '../..')
 
 function read(rel) {
-  return readFileSync(join(srcDir, rel), 'utf8')
+  return readFileSync(join(srcDir, rel), 'utf8').replace(/\r\n/g, '\n')
 }
 
 function stripComments(code) {

@@ -32,7 +32,7 @@ pub fn ensure_ffmpeg_binary() {
             "cargo:warning=🔍 Found cached FFmpeg binary: {}",
             binary_name
         );
-        if verify_ffmpeg_binary(&binary_path) {
+        if verify_ffmpeg_binary(&binary_path, &target) {
             println!(
                 "cargo:warning=✅ FFmpeg binary already cached and verified: {}",
                 binary_name
@@ -63,7 +63,7 @@ pub fn ensure_ffmpeg_binary() {
             );
 
             // Verify downloaded binary works
-            if !verify_ffmpeg_binary(&binary_path) {
+            if !verify_ffmpeg_binary(&binary_path, &target) {
                 panic!("⚠️  Downloaded FFmpeg binary verification failed!");
             }
         }
@@ -228,8 +228,6 @@ fn extract_zip(
     archive_path: &std::path::Path,
     extract_dir: &std::path::Path,
 ) -> Result<(), String> {
-    use std::io::Read;
-
     let file =
         std::fs::File::open(archive_path).map_err(|e| format!("Failed to open ZIP: {}", e))?;
 
@@ -357,8 +355,79 @@ fn find_ffmpeg_in_extracted_dir(
     ))
 }
 
-/// Verify FFmpeg binary is functional (runs -version successfully)
-fn verify_ffmpeg_binary(path: &std::path::PathBuf) -> bool {
+/// Get expected SHA-256 hash for target binary if known
+fn get_expected_sha256(target: &str) -> Option<&'static str> {
+    if let Ok(env_hash) = std::env::var("RECALL_FFMPEG_SHA256") {
+        if !env_hash.is_empty() {
+            return Some(Box::leak(env_hash.into_boxed_str()));
+        }
+    }
+
+    // Pinned SHA-256 hashes for official release binaries
+    if target.contains("x86_64") && target.contains("windows") {
+        // Windows x86_64 essentials build
+        Some("5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d")
+    } else {
+        None
+    }
+}
+
+/// Compute SHA-256 hash of a file
+fn compute_file_sha256(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| format!("Failed to open file for hashing {}: {}", path.display(), e))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 65536];
+    loop {
+        let n = file
+            .read(&mut buffer)
+            .map_err(|e| format!("Failed to read file for hashing {}: {}", path.display(), e))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    let result = hasher.finalize();
+    Ok(format!("{:x}", result))
+}
+
+/// Verify FFmpeg binary integrity (SHA-256) and functionality (runs -version successfully)
+fn verify_ffmpeg_binary(path: &std::path::PathBuf, target: &str) -> bool {
+    // 1. SHA-256 integrity check
+    match compute_file_sha256(path) {
+        Ok(computed_hash) => {
+            if let Some(expected) = get_expected_sha256(target) {
+                if computed_hash.eq_ignore_ascii_case(expected) {
+                    println!(
+                        "cargo:warning=🔒 FFmpeg SHA-256 integrity verified: {}",
+                        computed_hash
+                    );
+                } else {
+                    println!(
+                        "cargo:warning=❌ FFmpeg SHA-256 mismatch for {}! Expected: {}, Found: {}",
+                        path.display(),
+                        expected,
+                        computed_hash
+                    );
+                    return false;
+                }
+            } else {
+                println!(
+                    "cargo:warning=ℹ️ Extracted FFmpeg SHA-256: {} (no pinned hash for target: {})",
+                    computed_hash, target
+                );
+            }
+        }
+        Err(e) => {
+            println!("cargo:warning=⚠️ Failed to compute SHA-256: {}", e);
+            return false;
+        }
+    }
+
+    // 2. Functional execution check (-version)
     match std::process::Command::new(path).arg("-version").output() {
         Ok(output) => {
             if output.status.success() {
@@ -371,9 +440,17 @@ fn verify_ffmpeg_binary(path: &std::path::PathBuf) -> bool {
                 }
                 true
             } else {
+                println!(
+                    "cargo:warning=❌ FFmpeg execution failed with status: {}",
+                    output.status
+                );
                 false
             }
         }
-        Err(_) => false,
+        Err(e) => {
+            println!("cargo:warning=❌ Failed to execute FFmpeg for verification: {}", e);
+            false
+        }
     }
 }
+

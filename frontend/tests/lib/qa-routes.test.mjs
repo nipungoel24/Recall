@@ -1,50 +1,84 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import ts from 'typescript';
+import { fileURLToPath } from 'node:url';
 
-const { routes } = await import('../../src/lib/routes');
+const modulePath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'src',
+  'lib',
+  'routes.ts'
+);
+
+function loadTsModule(filePath) {
+  const source = fs.readFileSync(filePath, 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+  }).outputText;
+
+  const moduleObj = { exports: {} };
+  vm.runInNewContext(compiled, {
+    exports: moduleObj.exports,
+    module: moduleObj,
+    require: (spec) => {
+      throw new Error(`routes.ts must not import modules (got: ${spec})`);
+    },
+  });
+  return moduleObj.exports;
+}
+
+const { routes } = loadTsModule(modulePath);
 
 describe('canonical route helpers (static-export safe)', () => {
-  test('context uses a query parameter, never a path segment', () => {
-    expect(routes.context('context-abc-123')).toBe('/context?id=context-abc-123');
-    expect(routes.context('context-abc-123')).not.toContain('/context/');
+  it('context uses a query parameter, never a path segment', () => {
+    assert.equal(routes.context('context-abc-123'), '/context?id=context-abc-123');
+    assert.ok(!routes.context('context-abc-123').includes('/context/'));
   });
 
-  test('runtime IDs with reserved characters are URL-encoded', () => {
-    expect(routes.context('my context & plans')).toBe('/context?id=my%20context%20%26%20plans');
-    expect(routes.meeting('meeting a#b?c')).toBe('/meeting-details?id=meeting%20a%23b%3Fc');
+  it('runtime IDs with reserved characters are URL-encoded', () => {
+    assert.equal(routes.context('my context & plans'), '/context?id=my%20context%20%26%20plans');
+    assert.equal(routes.meeting('meeting a#b?c'), '/meeting-details?id=meeting%20a%23b%3Fc');
   });
 
-  test('meeting supports an optional source parameter', () => {
-    expect(routes.meeting('m1')).toBe('/meeting-details?id=m1');
-    expect(routes.meeting('m1', 'recording')).toBe('/meeting-details?id=m1&source=recording');
-    expect(routes.meeting('m1', null)).toBe('/meeting-details?id=m1');
+  it('meeting supports an optional source parameter', () => {
+    assert.equal(routes.meeting('m1'), '/meeting-details?id=m1');
+    assert.equal(routes.meeting('m1', 'recording'), '/meeting-details?id=m1&source=recording');
+    assert.equal(routes.meeting('m1', null), '/meeting-details?id=m1');
   });
 
-  test('daily builds date and range variants', () => {
-    expect(routes.daily()).toBe('/daily');
-    expect(routes.daily('2026-08-11')).toBe('/daily?date=2026-08-11');
-    expect(routes.dailyRange('2026-08-11', '2026-08-13')).toBe(
-      '/daily?start=2026-08-11&end=2026-08-13',
-    );
+  it('daily builds date and range variants', () => {
+    assert.equal(routes.daily(), '/daily');
+    assert.equal(routes.daily('2026-08-11'), '/daily?date=2026-08-11');
+    assert.equal(routes.dailyRange('2026-08-11', '2026-08-13'), '/daily?start=2026-08-11&end=2026-08-13');
   });
 
-  test('calendar supports optional date and month keys', () => {
-    expect(routes.calendar()).toBe('/calendar');
-    expect(routes.calendar('2026-08-11', null)).toBe('/calendar?date=2026-08-11');
-    expect(routes.calendar(null, '2026-08')).toBe('/calendar?month=2026-08');
+  it('calendar supports optional date and month keys', () => {
+    assert.equal(routes.calendar(), '/calendar');
+    assert.equal(routes.calendar('2026-08-11', null), '/calendar?date=2026-08-11');
+    assert.equal(routes.calendar(null, '2026-08'), '/calendar?month=2026-08');
   });
 
-  test('top-level routes are plain paths', () => {
-    expect(routes.home()).toBe('/');
-    expect(routes.contexts()).toBe('/context');
-    expect(routes.templates()).toBe('/templates');
-    expect(routes.settings()).toBe('/settings');
-    expect(routes.notes('team-sync')).toBe('/notes?id=team-sync');
+  it('top-level routes are plain paths', () => {
+    assert.equal(routes.home(), '/');
+    assert.equal(routes.contexts(), '/context');
+    assert.equal(routes.templates(), '/templates');
+    assert.equal(routes.settings(), '/settings');
+    assert.equal(routes.notes('team-sync'), '/notes?id=team-sync');
   });
 
-  test('no route helper ever emits a dynamic path segment for an entity id', () => {
+  it('no route helper ever emits a dynamic path segment for an entity id', () => {
     for (const build of [routes.context, routes.meeting, routes.notes]) {
-      expect(build('x')).not.toMatch(/\/[^?]*x$/);
-      expect(build('x').includes('?')).toBe(true);
+      assert.ok(!/\/[^?]*x$/.test(build('x')));
+      assert.ok(build('x').includes('?'));
     }
   });
 });
+

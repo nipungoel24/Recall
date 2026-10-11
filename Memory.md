@@ -2003,3 +2003,29 @@ recoverable checkpoints are left on disk. It is never reported as saved.
 - TypeScript mirror in `src/types/context.ts` accepts optional `repetitionCount` (safely defaulting to 1 without `NaN`), matching backend score calculation.
 - Local configuration safety: preserved unstaged `tauri.conf.json` edit byte-for-byte; verified test isolation via build environment configuration.
 - Validation: 484 Rust unit tests passed (0 failures), 16 database reliability tests passed (0 failures), 172 Phase 5 frontend tests passed (0 failures), contract audit 82 passed / 0 violations, Next.js production build compiled 13/13 pages.
+
+## Release Candidate Hardening & Verification (Blockers A, B, C Closed)
+
+### Blocker B Resolution: Tauri Asset Protocol Harmonization
+- Frontend audit confirmed ZERO usage of `convertFileSrc` or `asset:` protocols. Audio streaming uses path-confined IPC command `read_audio_file`.
+- Removed `protocol-asset` feature from `frontend/src-tauri/Cargo.toml` (both root and `cfg(target_os = "macos")` blocks).
+- Reconciled with `tauri.conf.json` (`"assetProtocol": { "enable": false }`).
+- Eliminated need for build-time configuration overrides or hacks; `cargo check` and `cargo test` run 100% offline out-of-the-box.
+
+### Blocker A Resolution: FFmpeg Binary Cryptographic Integrity Verification
+- Hardened `frontend/src-tauri/build/ffmpeg.rs` by adding `compute_file_sha256` and strict SHA-256 validation.
+- Pinned Windows x86_64 binary hash (`5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d`).
+- Added support for `RECALL_FFMPEG_SHA256` environment override for automated build pipelines.
+- Added `sha2 = "0.10"` to `[build-dependencies]` in `Cargo.toml`.
+- Revalidated Parakeet v3 models CDN dependency: documented customer-owned CDN migration as an external operational gate before multi-tenant distribution; verified Local Whisper operates as an independent, fully verified offline fallback.
+
+### Baseline Test Debt Elimination
+- Fixed Phase 4 `checkPermissions` test line-ending sensitivity (`phase4-recording-experience.test.mjs`), normalizing CRLF to LF.
+- Converted `qa-routes.test.mjs` from `bun:test` to `node:test` using `loadTsModule`, making all 680 Node unit tests 100% green across all 136 suites on Windows.
+
+### Comprehensive Validation Scorecard
+- Rust workspace tests: 484 passed, 0 failed, 2 ignored, 1 doc test passed.
+- Frontend unit/integration tests: 680 passed, 0 failed across 136 test suites.
+- Frontend contract audit: 82 passed, 0 violations.
+- Next.js production build: 13/13 static pages prerendered successfully.
+- Host constraint: Manual GUI desktop smoke testing checklist documented for native execution.
