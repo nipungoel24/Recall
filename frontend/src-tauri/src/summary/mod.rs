@@ -34,6 +34,8 @@ pub(crate) mod daily_brief;
 pub mod daily_commands;
 pub mod daily_service;
 pub mod intelligence_commands;
+pub(crate) mod intelligence_evidence;
+pub(crate) mod intelligence_validation;
 pub(crate) mod language_detection;
 pub mod llm_client;
 pub(crate) mod metadata;
@@ -42,6 +44,9 @@ pub mod service;
 pub mod summary_engine;
 pub mod template_commands;
 pub mod templates;
+
+#[cfg(test)]
+mod tests_intelligence_provenance;
 
 // Re-export Tauri commands (with their generated __cmd__ variants)
 pub use commands::{
@@ -107,4 +112,9 @@ pub use processor::{
 pub use service::{
     generate_structured_output, validate_intelligence_provenance, IntelligenceItem,
     StructuredIntelligence, SummaryService,
+};
+
+pub use intelligence_evidence::{EvidenceCatalog, EvidenceSegment, ReferenceError};
+pub use intelligence_validation::{
+    clamp_confidence, normalize_due_date, normalize_owner, normalize_status, parse_json_output,
 };

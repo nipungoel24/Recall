@@ -1821,3 +1821,63 @@ The frontend previously typed this as `{chunks_in_queue, is_processing,
 last_activity_ms}` — fields the backend never returned — so `undefined === 0` made
 every post-stop exit condition unreachable and the UI always burned a 60s sleep.
 Those field names must not come back.
+
+## Intelligence provenance contract (authoritative)
+
+**Decision (owner): server-derived evidence references, then validate.**
+
+The model is shown a bounded, stably-numbered view of the meeting's transcript.
+Each line begins with a **request-local reference** (`[S1]`) that is meaningful
+only for that request. The model cites those references; the server maps them to
+genuine persisted segment ids and verifies membership.
+
+- The catalog *is* the meeting's own transcript rows, so a reference can only
+  ever resolve to a segment of the meeting being analysed. There is no
+  substitution step, so a citation cannot be forged onto unrelated audio.
+- An unknown reference is **rejected, never guessed**.
+- An item left with no resolvable citation is **retained as explicitly
+  unverified** (stored with zero sources; the UI hides its Source affordance).
+  It is never deleted. The previous code deleted every decision/action/question/
+  fact/follow_up whose ids failed to resolve — and since the model was never
+  shown ids, that was the normal case, leaving Tasks permanently empty while
+  reporting success.
+- A citation proves the reference points at real source material. It does not
+  prove the claim is semantically true.
+
+Module: `summary/intelligence_evidence.rs`. Cap: 150 segments, 600 chars each;
+truncation is disclosed to the model rather than applied silently.
+
+### Tauri v2 argument casing (recurring trap)
+
+Tauri camelCases the **top-level** argument key only. A nested struct is
+deserialized by serde **verbatim**, so its fields need their own
+`#[serde(rename_all = "camelCase")]`. `api_generate_meeting_intelligence` was
+100% dead for exactly this reason.
+
+### Persistence
+
+The abstract and the items are written in **one transaction**
+(`MeetingIntelligenceRepository::replace_all`). They were two independent
+autocommit calls, so a failure between them left a freshly generated abstract
+above the previous run's items.
+
+Source rows are deleted **explicitly** before their items rather than relying on
+`ON DELETE CASCADE`, which only fires when the connection has
+`PRAGMA foreign_keys = ON`. Otherwise a connection without it orphans sources and
+`get_sources_for_meeting` returns evidence pointing at deleted items.
+
+### Validation
+
+Model output is never trusted: `confidence` is clamped to `[0,1]` (a model
+returning `95` used to render as "9500%"), `dueDate` must be an ISO date
+(vague wording like "next Friday" is rejected rather than guessed), `status` is a
+closed set, text/owner are length-capped, and fenced or prose-wrapped JSON parses
+via `intelligence_validation::parse_json_output`. Malformed output is a reported
+error, never a silent empty success.
+
+### Deterministic context selection
+
+Selecting 3+ contexts previously ran through a `HashSet`, whose iteration order
+is randomised per process, so which 2 survived `.take(2)` differed between
+launches. Both call sites now dedup order-preservingly, keeping the user's
+explicit selection order.

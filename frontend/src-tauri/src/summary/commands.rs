@@ -371,13 +371,19 @@ pub async fn api_process_transcript<R: Runtime>(
     // shared across the selected contexts so prompt size stays bounded. Only
     // compact blocks are sent, never full historical transcripts. A failure
     // for one context never blocks the summary.
+    // Deduplicate while PRESERVING the user's selection order.
+    //
+    // This went through a `HashSet`, whose iteration order is randomised per
+    // process. With three or more selected contexts, which two survived
+    // `.take(2)` differed between app launches, so an identical request produced
+    // a different prompt each time.
+    let mut seen_context_ids = std::collections::HashSet::new();
     let context_ids: Vec<String> = context_ids
         .unwrap_or_default()
         .into_iter()
         .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
+        .filter(|c| seen_context_ids.insert(c.clone()))
         .take(crate::context::model::MAX_CONTEXTS_PER_SUMMARY)
         .collect();
 

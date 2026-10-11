@@ -735,25 +735,65 @@ impl SummaryService {
 /// Structured intelligence output schema
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StructuredIntelligence {
-    #[serde(rename = "abstract")]
+    #[serde(rename = "abstract", default)]
     pub abstract_text: String,
+    #[serde(default)]
     pub topics: Vec<IntelligenceItem>,
+    #[serde(default)]
     pub decisions: Vec<IntelligenceItem>,
+    #[serde(default)]
     pub actions: Vec<IntelligenceItem>,
+    #[serde(default)]
     pub questions: Vec<IntelligenceItem>,
+    #[serde(default)]
     pub facts: Vec<IntelligenceItem>,
+    #[serde(default)]
     pub follow_ups: Vec<IntelligenceItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IntelligenceItem {
+    #[serde(default)]
     pub text: String,
+    #[serde(default)]
     pub confidence: Option<f64>,
+    #[serde(default)]
     pub owner: Option<String>,
+    #[serde(rename = "dueDate", default)]
     pub due_date: Option<String>,
+    #[serde(default)]
     pub status: Option<String>,
-    #[serde(rename = "sourceSegmentIds")]
+    /// Request-local evidence references emitted by the model, e.g. `["S3"]`.
+    ///
+    /// These are meaningless outside this request. The server maps them to real
+    /// persisted segment ids; the model is never asked to produce ids it cannot
+    /// see. `sourceSegmentIds` is accepted as a legacy alias.
+    #[serde(rename = "sourceRefs", default, alias = "sourceSegmentIds")]
+    pub source_refs: Vec<String>,
+    /// Genuine persisted segment ids, resolved server-side.
+    ///
+    /// Never populated by the model and never serialized back out; the
+    /// frontend reads evidence from the persisted sources table.
+    #[serde(skip)]
     pub source_segment_ids: Vec<String>,
+    /// True when at least one citation resolved to a real segment.
+    #[serde(skip)]
+    pub has_evidence: bool,
+}
+
+impl IntelligenceItem {
+    fn new(text: &str) -> Self {
+        Self {
+            text: text.to_string(),
+            confidence: None,
+            owner: None,
+            due_date: None,
+            status: None,
+            source_refs: Vec::new(),
+            source_segment_ids: Vec::new(),
+            has_evidence: false,
+        }
+    }
 }
 
 /// Generate structured meeting intelligence from transcript
@@ -764,7 +804,7 @@ pub async fn generate_structured_intelligence(
     app: AppHandle<impl tauri::Runtime>,
     pool: SqlitePool,
     meeting_id: String,
-    transcript_text: String,
+    evidence: crate::summary::intelligence_evidence::EvidenceCatalog,
     provider: String,
     model: String,
     template: Template,
@@ -774,13 +814,22 @@ pub async fn generate_structured_intelligence(
     use crate::context::prompts::build_effective_prompt;
     use crate::database::repositories::meeting_intelligence::MeetingIntelligenceRepository;
 
-    // Load context memory for context_ids (same as summary generation)
+    if evidence.is_empty() {
+        return Err("Meeting has no transcript segments to analyse".to_string());
+    }
+
+    // Deduplicate context ids while PRESERVING the user's selection order.
+    //
+    // This previously went through a `HashSet`, whose iteration order is
+    // randomised per process. With three or more selected contexts, which two
+    // survived `.take(2)` changed between app launches, so the same request
+    // produced different prompts on different runs.
+    let mut seen_context_ids = std::collections::HashSet::new();
     let context_ids: Vec<String> = context_ids
         .into_iter()
         .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
+        .filter(|c| seen_context_ids.insert(c.clone()))
         .take(crate::context::model::MAX_CONTEXTS_PER_SUMMARY)
         .collect();
 
@@ -839,57 +888,60 @@ pub async fn generate_structured_intelligence(
         custom_prompt.as_deref().unwrap_or(""),
     );
 
-    // Create transcript with segment IDs for provenance
-    let transcript_with_ids = transcript_text.clone(); // For now, use full text; segment IDs could be added later
+    // The transcript is rendered once, as a numbered, evidence-bearing view.
+    // It used to be embedded twice — once under a "segments with IDs" heading
+    // that contained no ids, then again as raw text — which doubled prompt cost
+    // and meant only ~25% of the window held actual meeting content.
+    let transcript_view = evidence.render();
 
     let structured_prompt = format!(
         r#"{}
 
-You are an expert meeting analyst. Your task is to extract structured intelligence from the meeting transcript below.
+You are an expert meeting analyst. Extract structured intelligence from the meeting transcript below.
 
 Return ONLY valid JSON matching this exact schema:
 
 {{
   "abstract": "string - 2-3 sentence executive summary of the meeting",
   "topics": [
-    {{"text": "string", "confidence": 0.9, "sourceSegmentIds": ["seg-id-1", "seg-id-2"]}}
+    {{"text": "string", "confidence": 0.9, "sourceRefs": ["S1", "S2"]}}
   ],
   "decisions": [
-    {{"text": "string", "confidence": 0.95, "sourceSegmentIds": ["seg-id-3"]}}
+    {{"text": "string", "confidence": 0.95, "sourceRefs": ["S3"]}}
   ],
   "actions": [
-    {{"text": "string", "confidence": 0.9, "owner": "string or null", "dueDate": "ISO8601 or null", "status": "string or null", "sourceSegmentIds": ["seg-id-4"]}}
+    {{"text": "string", "confidence": 0.9, "owner": "string or null", "dueDate": "ISO8601 date or null", "status": "string or null", "sourceRefs": ["S4"]}}
   ],
   "questions": [
-    {{"text": "string", "confidence": 0.8, "sourceSegmentIds": ["seg-id-5"]}}
+    {{"text": "string", "confidence": 0.8, "sourceRefs": ["S5"]}}
   ],
   "facts": [
-    {{"text": "string", "confidence": 0.95, "sourceSegmentIds": ["seg-id-6"]}}
+    {{"text": "string", "confidence": 0.95, "sourceRefs": ["S6"]}}
   ],
   "follow_ups": [
-    {{"text": "string", "confidence": 0.85, "sourceSegmentIds": ["seg-id-7"]}}
+    {{"text": "string", "confidence": 0.85, "sourceRefs": ["S7"]}}
   ]
 }}
 
 RULES:
-1. Every item MUST include "sourceSegmentIds" - an array of transcript segment IDs that support the claim.
-2. Only reference segment IDs that exist in the transcript below. Do NOT invent IDs.
-3. If no evidence exists for a type, return an empty array.
-4. Confidence must be between 0.0 and 1.0.
-5. Owner, dueDate, status are optional (use null when unknown).
-6. Actions should be specific, actionable items with clear ownership when stated.
-7. Decisions are explicit commitments or resolutions made during the meeting.
-8. Questions are unresolved questions raised during the meeting.
-9. Facts are verifiable statements made during the meeting.
-10. Follow-ups are items requiring future action or investigation.
-11. Topics are the main themes discussed.
+1. "sourceRefs" MUST contain the bracketed reference labels shown in the transcript, for example ["S1"]. Copy them exactly.
+2. NEVER invent, guess, or reconstruct a reference. Only use labels that appear in the transcript below. A reference that does not exist is discarded.
+3. If you cannot point to supporting text for an item, return an empty "sourceRefs" array for that item rather than guessing.
+4. "confidence" MUST be a number between 0.0 and 1.0.
+5. "dueDate" MUST be an ISO8601 date such as "2026-01-31", or null. Never return vague wording like "next Friday" or "soon".
+6. "status" MUST be one of: "open", "in_progress", "done", "blocked" — or null.
+7. "owner" is the person's name exactly as spoken, or null.
+8. Actions should be specific and actionable with clear ownership when stated.
+9. Decisions are explicit commitments or resolutions made during the meeting.
+10. Questions are unresolved questions raised during the meeting.
+11. Facts are verifiable statements made during the meeting.
+12. Follow-ups are items requiring future action or investigation.
+13. Topics are the main themes discussed.
 
-Transcript segments with IDs:
+TRANSCRIPT (each line begins with a citable reference label):
 
-{}
-
-{} "#,
-        effective_prompt, transcript_with_ids, transcript_text
+{}"#,
+        effective_prompt, transcript_view
     );
 
     // Get provider config
@@ -915,108 +967,145 @@ Transcript segments with IDs:
     )
     .await?;
 
-    // Parse and validate the structured output
-    let intelligence: StructuredIntelligence = serde_json::from_str(&result)
-        .map_err(|e| format!("Failed to parse structured intelligence: {}", e))?;
+    // Parse and validate the structured output.
+    //
+    // Tolerant of ```json fences and surrounding prose, matching the
+    // context-extraction path. A missing optional key no longer fails the whole
+    // generation, but genuinely malformed output is still a reported error --
+    // it is never treated as a successful empty result.
+    let intelligence: StructuredIntelligence =
+        crate::summary::intelligence_validation::parse_json_output(&result)?;
 
-    // Validate provenance - ensure all source segment IDs exist and belong to this meeting
-    let validated_intelligence =
-        validate_intelligence_provenance(&pool, &meeting_id, intelligence).await?;
+    if intelligence.abstract_text.trim().is_empty() {
+        return Err("Intelligence generation produced no summary text".to_string());
+    }
 
-    // Persist the intelligence
-    let abstract_text = Some(validated_intelligence.abstract_text.clone());
-    MeetingIntelligenceRepository::upsert_intelligence(
+    // Resolve evidence references and validate every model-supplied field.
+    let validated_intelligence = resolve_and_validate_intelligence(&evidence, intelligence);
+
+    // Persist the intelligence.
+    //
+    // The abstract and the items are written in ONE transaction. They used to be
+    // two autocommit calls, so a failure between them left a freshly generated
+    // abstract above the previous run's items.
+    let abstract_text = validated_intelligence.abstract_text.clone();
+    let items = collect_persisted_items(&validated_intelligence);
+
+    MeetingIntelligenceRepository::replace_all(
         &pool,
         &meeting_id,
-        abstract_text.as_deref(),
+        Some(abstract_text.as_str()),
         Some(&provider),
         Some(&model),
+        items,
     )
     .await
-    .map_err(|e| format!("Failed to upsert intelligence: {}", e))?;
-
-    // Convert to items for storage
-    let mut items = Vec::new();
-    let mut ordering = 0;
-
-    for topic in &validated_intelligence.topics {
-        items.push(NewIntelligenceItem {
-            kind: "topic".to_string(),
-            text: topic.text.clone(),
-            confidence: topic.confidence,
-            owner: topic.owner.clone(),
-            due_date: topic.due_date.clone(),
-            status: topic.status.clone(),
-            sources: topic.source_segment_ids.clone(),
-        });
-        ordering += 1;
-    }
-    for decision in &validated_intelligence.decisions {
-        items.push(NewIntelligenceItem {
-            kind: "decision".to_string(),
-            text: decision.text.clone(),
-            confidence: decision.confidence,
-            owner: decision.owner.clone(),
-            due_date: decision.due_date.clone(),
-            status: decision.status.clone(),
-            sources: decision.source_segment_ids.clone(),
-        });
-        ordering += 1;
-    }
-    for action in &validated_intelligence.actions {
-        items.push(NewIntelligenceItem {
-            kind: "action".to_string(),
-            text: action.text.clone(),
-            confidence: action.confidence,
-            owner: action.owner.clone(),
-            due_date: action.due_date.clone(),
-            status: action.status.clone(),
-            sources: action.source_segment_ids.clone(),
-        });
-        ordering += 1;
-    }
-    for question in &validated_intelligence.questions {
-        items.push(NewIntelligenceItem {
-            kind: "question".to_string(),
-            text: question.text.clone(),
-            confidence: question.confidence,
-            owner: question.owner.clone(),
-            due_date: question.due_date.clone(),
-            status: question.status.clone(),
-            sources: question.source_segment_ids.clone(),
-        });
-        ordering += 1;
-    }
-    for fact in &validated_intelligence.facts {
-        items.push(NewIntelligenceItem {
-            kind: "fact".to_string(),
-            text: fact.text.clone(),
-            confidence: fact.confidence,
-            owner: fact.owner.clone(),
-            due_date: fact.due_date.clone(),
-            status: fact.status.clone(),
-            sources: fact.source_segment_ids.clone(),
-        });
-        ordering += 1;
-    }
-    for follow_up in &validated_intelligence.follow_ups {
-        items.push(NewIntelligenceItem {
-            kind: "follow_up".to_string(),
-            text: follow_up.text.clone(),
-            confidence: follow_up.confidence,
-            owner: follow_up.owner.clone(),
-            due_date: follow_up.due_date.clone(),
-            status: follow_up.status.clone(),
-            sources: follow_up.source_segment_ids.clone(),
-        });
-        ordering += 1;
-    }
-
-    MeetingIntelligenceRepository::replace_items(&pool, &meeting_id, items)
-        .await
-        .map_err(|e| format!("Failed to save intelligence items: {}", e))?;
+    .map_err(|e| format!("Failed to save intelligence: {}", e))?;
 
     Ok(validated_intelligence)
+}
+
+/// Resolve evidence references and normalise every model-supplied field.
+///
+/// # Evidence policy
+///
+/// A citation that resolves becomes a genuine source link. A citation that does
+/// not resolve is **dropped**, never substituted. An item that ends up with no
+/// citations is **retained as explicitly unverified** — it is stored with zero
+/// sources and the UI hides its Source affordance.
+///
+/// The previous behaviour deleted every decision, action, question, fact and
+/// follow-up whose ids failed to resolve. Because the model was never shown the
+/// ids, that deleted essentially all of them and left Tasks permanently empty,
+/// while reporting success.
+pub(crate) fn resolve_and_validate_intelligence(
+    catalog: &crate::summary::intelligence_evidence::EvidenceCatalog,
+    mut intelligence: StructuredIntelligence,
+) -> StructuredIntelligence {
+    let mut unresolved_refs = 0usize;
+
+    for item in intelligence
+        .topics
+        .iter_mut()
+        .chain(intelligence.decisions.iter_mut())
+        .chain(intelligence.actions.iter_mut())
+        .chain(intelligence.questions.iter_mut())
+        .chain(intelligence.facts.iter_mut())
+        .chain(intelligence.follow_ups.iter_mut())
+    {
+        let text = match crate::summary::intelligence_validation::normalize_text(&item.text) {
+            Some(t) => t,
+            // An item with no text is not intelligence; drop just this one.
+            None => {
+                item.text = String::new();
+                continue;
+            }
+        };
+        item.text = text;
+        item.confidence =
+            crate::summary::intelligence_validation::clamp_confidence(item.confidence);
+        item.owner =
+            crate::summary::intelligence_validation::normalize_owner(item.owner.as_deref());
+        item.due_date =
+            crate::summary::intelligence_validation::normalize_due_date(item.due_date.as_deref());
+        item.status =
+            crate::summary::intelligence_validation::normalize_status(item.status.as_deref());
+
+        let (resolved, errors) = catalog.resolve_all(&item.source_refs);
+        unresolved_refs += errors.len();
+        item.source_segment_ids = resolved;
+        item.has_evidence = !item.source_segment_ids.is_empty();
+    }
+
+    // Drop only genuinely empty items, across every category.
+    for list in [
+        &mut intelligence.topics,
+        &mut intelligence.decisions,
+        &mut intelligence.actions,
+        &mut intelligence.questions,
+        &mut intelligence.facts,
+        &mut intelligence.follow_ups,
+    ] {
+        list.retain(|item| !item.text.trim().is_empty());
+    }
+
+    if unresolved_refs > 0 {
+        warn!(
+            "Meeting intelligence: {} evidence reference(s) from the model did not match any \
+             transcript segment and were discarded. Affected items are stored without a source link.",
+            unresolved_refs
+        );
+    }
+
+    intelligence
+}
+
+/// Flatten validated intelligence into rows for persistence, in a stable order.
+pub(crate) fn collect_persisted_items(
+    intelligence: &StructuredIntelligence,
+) -> Vec<NewIntelligenceItem> {
+    let mut items = Vec::new();
+    for (kind, list) in [
+        ("topic", &intelligence.topics),
+        ("decision", &intelligence.decisions),
+        ("action", &intelligence.actions),
+        ("question", &intelligence.questions),
+        ("fact", &intelligence.facts),
+        ("follow_up", &intelligence.follow_ups),
+    ] {
+        for item in list {
+            items.push(NewIntelligenceItem {
+                kind: kind.to_string(),
+                text: item.text.clone(),
+                confidence: item.confidence,
+                owner: item.owner.clone(),
+                due_date: item.due_date.clone(),
+                status: item.status.clone(),
+                sources: item.source_segment_ids.clone(),
+            });
+        }
+    }
+    items
 }
 
 /// Generate structured JSON output from the LLM
@@ -1130,47 +1219,40 @@ pub async fn validate_intelligence_provenance(
     let valid_ids: std::collections::HashSet<String> =
         valid_segments.into_iter().map(|(id,)| id).collect();
 
-    // Filter out invalid source IDs from each item
-    let filter_sources = |ids: &mut Vec<String>| {
-        ids.retain(|id| valid_ids.contains(id));
+    // Filter out invalid source IDs from each item.
+    //
+    // Policy: an id that does not belong to this meeting is discarded, but the
+    // ITEM IS KEPT. The previous code additionally deleted every item left with
+    // no sources, which silently removed all decisions, actions, questions,
+    // facts and follow-ups whenever the model's ids failed to resolve -- and the
+    // model was never shown the real ids, so that was the normal case.
+    let filter_sources = |item: &mut IntelligenceItem| {
+        item.source_segment_ids.retain(|id| valid_ids.contains(id));
+        item.has_evidence = !item.source_segment_ids.is_empty();
     };
 
     for item in &mut intelligence.topics {
-        filter_sources(&mut item.source_segment_ids);
+        filter_sources(item);
     }
     for item in &mut intelligence.decisions {
-        filter_sources(&mut item.source_segment_ids);
+        filter_sources(item);
     }
     for item in &mut intelligence.actions {
-        filter_sources(&mut item.source_segment_ids);
+        filter_sources(item);
     }
     for item in &mut intelligence.questions {
-        filter_sources(&mut item.source_segment_ids);
+        filter_sources(item);
     }
     for item in &mut intelligence.facts {
-        filter_sources(&mut item.source_segment_ids);
+        filter_sources(item);
     }
     for item in &mut intelligence.follow_ups {
-        filter_sources(&mut item.source_segment_ids);
+        filter_sources(item);
     }
 
-    // Remove items with no valid sources (for provenance-sensitive types)
-    intelligence
-        .decisions
-        .retain(|item| !item.source_segment_ids.is_empty());
-    intelligence
-        .actions
-        .retain(|item| !item.source_segment_ids.is_empty());
-    intelligence
-        .questions
-        .retain(|item| !item.source_segment_ids.is_empty());
-    intelligence
-        .facts
-        .retain(|item| !item.source_segment_ids.is_empty());
-    intelligence
-        .follow_ups
-        .retain(|item| !item.source_segment_ids.is_empty());
-    // Topics can exist without direct evidence
+    // An item with no resolvable evidence is retained as explicitly unverified:
+    // it is stored with zero sources and the UI hides its Source affordance.
+    // Dropping a real decision is worse than showing one without a link.
 
     Ok(intelligence)
 }

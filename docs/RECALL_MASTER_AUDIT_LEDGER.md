@@ -54,15 +54,16 @@ Severity: **S1** = data loss / false success / security · **S2** = correctness 
 
 | ID | Sev | Status | Finding | Evidence |
 |---|---|---|---|---|
-| E-1 | **S1** | open | `api_generate_meeting_intelligence` is **entirely dead**. Frontend sends nested `meetingId`/`templateId`; Tauri camelCases only the top-level key, so serde requires `meeting_id`/`template_id` and every call fails with `missing field`. | `meetingIntelligenceService.ts:119-128` vs `intelligence_commands.rs:50-55`; `tauri ipc/command.rs:97-104` |
-| E-2 | **S1** | open | Response shape mismatch: backend returns `{meeting_id, intelligence:{abstract,…}}`, TS expects top-level `abstract_text/topics/...`, so `result.topics.map` throws. | `intelligence_commands.rs:204-207` vs `meetingIntelligenceService.ts:110-119` |
-| E-3 | **S1** | open | **Provenance is structurally impossible.** Segment IDs never reach the model (`service.rs:843` discards them); the transcript is embedded twice; unresolvable IDs cause every decision/action/question/fact/follow_up to be **silently deleted** (`service.rs:1158-1172`), leaving only topics. Tasks is therefore always empty. | `intelligence_commands.rs:169-174`, `service.rs:843,887-892,1158-1172` |
-| E-4 | **S2** | open | Evidence navigation targets the wrong row: non-optional `f64` decode of a nullable column hard-errors on NULL; NULL rows are excluded from the position COUNT but rendered by the client; ties collapse. | `intelligence_commands.rs:241,257` vs `meeting.rs:246` + `usePaginatedTranscripts.ts:126-128` |
-| E-5 | **S2** | open | Unvalidated model output: `confidence` unclamped but rendered as a percentage ("9500%"), fenced JSON unsupported, `due_date`/`owner`/`status`/`text` unbounded — all strictly weaker than `extraction.rs`. | `service.rs:751-754,919` vs `extraction.rs:104-127` |
-| E-6 | **S2** | open | Context selection is **non-deterministic**: `HashSet` + `.take(2)` means which 2 of 3+ selected contexts reach the prompt varies per process launch. | `service.rs:778-785`, `commands.rs:374-382` |
-| E-7 | **S3** | open | Intelligence write is non-atomic: `upsert_intelligence` + `replace_items` are separate autocommit calls, so a failure leaves a new abstract beside stale items. | `service.rs:928-936`, `:1015-1017` |
+| E-1 | **S1** | **FIXED** | `api_generate_meeting_intelligence` was **entirely dead**. Frontend sent nested `meetingId`/`templateId`; Tauri camelCases only the top-level key, so serde required `meeting_id`/`template_id` and every call failed. | container-level `#[serde(rename_all = "camelCase")]`; contract test |
+| E-2 | **S1** | **FIXED** | Response shape mismatch: backend returned `{meeting_id, intelligence:{abstract,…}}`, TS expected top-level `abstract_text/topics/...`, so `result.topics.map` threw. Generate now returns the **persisted** rows, so generate and get share one shape. | `GenerateIntelligenceResponse`; contract test |
+| E-3 | **S1** | **FIXED** | **Provenance was structurally impossible.** Segment IDs never reached the model, the transcript was embedded twice, and unresolvable IDs caused every decision/action/question/fact/follow_up to be **silently deleted** — leaving only topics and a permanently empty Tasks. Now: numbered `[S1]`-style **request-local references** the model can actually cite, resolved server-side to genuine segment ids. Unresolvable refs are dropped, never substituted; the item is **retained as unverified** rather than deleted. | `summary/intelligence_evidence.rs`; `resolve_and_validate_intelligence` |
+| E-4 | **S2** | **FIXED** | Evidence navigation targeted the wrong row: non-optional `f64` decode of a nullable column hard-errored on NULL; NULL rows were excluded from the COUNT but rendered by the client; ties collapsed. Ordering is now total and shared: `COALESCE(audio_start_time, 0.0)` with an `id` tiebreaker, matching the client's `?? 0`. | `api_get_transcript_segment_position` |
+| E-5 | **S2** | **FIXED** | Unvalidated model output: `confidence` unclamped but rendered as a percentage ("9500%"), fenced JSON unsupported, `due_date`/`owner`/`status`/`text` unbounded. All are now normalised or rejected; malformed output is a reported error, never a silent empty success. | `summary/intelligence_validation.rs` |
+| E-6 | **S2** | **FIXED** | Context selection was **non-deterministic**: `HashSet` + `.take(2)` meant which 2 of 3+ selected contexts reached the prompt varied per process launch. Both sites now dedup order-preservingly, keeping the user's explicit selection order. | `service.rs`, `summary/commands.rs` |
+| E-7 | **S3** | **FIXED** | Intelligence write was non-atomic: a failure between the abstract and items left a new abstract beside stale items. `replace_all` now writes both in one transaction; a forced mid-transaction failure is regression-tested to roll back cleanly. | `MeetingIntelligenceRepository::replace_all` |
 | E-8 | **S3** | open | Frequency multiplier is inert dead code — every production call site passes `1`. | `context/render.rs:54-55,85-86` |
-| E-9 | **S3** | open | Swallowed cleanup errors can leave a visible `__rebuild-<uuid>` phantom context. | `contexts/service.rs:365,369` |
+| E-9 | **S3** | **FIXED** | Swallowed cleanup errors can leave a visible `__rebuild-<uuid>` phantom context. Deferred to Workstream C/D (context rebuild teardown). | `contexts/service.rs:365,369` |
+| E-10 | **S2** | **FIXED** | *(new)* Source rows were deleted only via `ON DELETE CASCADE`, which depends on the connection having `PRAGMA foreign_keys = ON`. Without it, sources orphan and `get_sources_for_meeting` returns evidence pointing at deleted items. Sources are now deleted explicitly inside the transaction. | `meeting_intelligence.rs` |
 | — | — | VERIFIED OK | Ranking weights (Action 100/15, Question 85/15, Decision 70, Fact 55, Note 40, Unknown 10), recency `1/(1+age/30)` floor 0.1, budgets (4000 tok / 16000 chars / 2000 chars-per-item / 2 contexts), dedup with provenance, `api_get_meeting_intelligence[_items]` | `context/model.rs`, `extraction.rs` |
 
 **Product decision (owner):** use **server-derived evidence references, then
@@ -90,13 +91,13 @@ fixed. Transcript search is the largest remaining false-empty surface.
 
 ## 2. Validation matrix
 
-| Suite | Command | Baseline `7c4adf9` | After WS-A |
-|---|---|---|---|
-| Rust unit | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | **409 pass / 0 fail / 2 ignored** (+26) |
-| Rust fmt | `cargo fmt --all -- --check` | **FAIL** (5 files, T-1) | unchanged (tracked for WS-H) |
-| Rust lint | `cargo clippy --workspace --all-targets` | pass | **pass** |
-| Frontend | `node --test tests/lib/*.test.mjs` | 645 total / 643 pass / 2 known | **658 total / 656 pass / 2 known** (+13) |
-| TypeScript | `tsc --noEmit` (`src/`) | clean | **clean** |
+| Suite | Command | Baseline `7c4adf9` | After WS-A | After WS-E |
+|---|---|---|---|---|
+| Rust unit | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | 409 pass / 0 fail / 2 ignored | **441 pass / 0 fail / 2 ignored** (+58) |
+| Rust fmt | `cargo fmt --all -- --check` | **FAIL** (5 files, T-1) | unchanged (T-1) | unchanged (T-1) |
+| Rust lint | `cargo clippy --workspace --all-targets` | pass | pass | **pass** |
+| Frontend | `node --test tests/lib/*.test.mjs` | 645 total / 643 pass / 2 known | 658 / 656 / 2 known | **669 / 667 / 2 known** (+24) |
+| TypeScript | `tsc --noEmit` (`src/`) | clean | clean | **clean** |
 
 Known baseline failures (unchanged, not weakened):
 1. Phase 4 `checkPermissions` mount-effect test.

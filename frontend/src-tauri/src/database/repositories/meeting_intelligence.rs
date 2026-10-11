@@ -43,6 +43,31 @@ impl MeetingIntelligenceRepository {
             ));
         }
 
+        Self::upsert_intelligence_tx_on(pool, meeting_id, abstract_text, provider, model).await
+    }
+
+    async fn upsert_intelligence_tx(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        meeting_id: &str,
+        abstract_text: Option<&str>,
+        provider: Option<&str>,
+        model: Option<&str>,
+    ) -> Result<(), SqlxError> {
+        Self::upsert_intelligence_tx_on(&mut **tx, meeting_id, abstract_text, provider, model).await
+    }
+
+    /// Shared upsert body. Accepts anything sqlx can execute against, so the
+    /// autocommit and transactional callers cannot drift apart.
+    async fn upsert_intelligence_tx_on<'e, E>(
+        executor: E,
+        meeting_id: &str,
+        abstract_text: Option<&str>,
+        provider: Option<&str>,
+        model: Option<&str>,
+    ) -> Result<(), SqlxError>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+    {
         let now = Utc::now();
         let generated_at = now.to_rfc3339();
 
@@ -65,7 +90,7 @@ impl MeetingIntelligenceRepository {
         .bind(model)
         .bind(now)
         .bind(now)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
@@ -150,7 +175,20 @@ impl MeetingIntelligenceRepository {
 
         let mut tx = pool.begin().await?;
 
-        // Delete existing items and their sources (cascades)
+        // Delete sources explicitly before the items.
+        //
+        // The schema declares `ON DELETE CASCADE` on `item_id`, but that only
+        // fires when the connection has `PRAGMA foreign_keys = ON`. Relying on
+        // an implicit pragma for correctness means a connection without it
+        // silently orphans source rows, and `get_sources_for_meeting` would then
+        // return evidence pointing at items that no longer exist. Explicitly
+        // deleting makes the outcome independent of connection state.
+        sqlx::query("DELETE FROM meeting_intelligence_item_sources WHERE meeting_id = ?")
+            .bind(meeting_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Delete existing items (their sources are already gone)
         sqlx::query("DELETE FROM meeting_intelligence_items WHERE meeting_id = ?")
             .bind(meeting_id)
             .execute(&mut *tx)
@@ -183,6 +221,88 @@ impl MeetingIntelligenceRepository {
             .await?;
 
             // Insert sources
+            for source_id in item.sources {
+                let source_row_id = format!("mis-{}", Uuid::new_v4());
+                sqlx::query(
+                    r#"
+                    INSERT INTO meeting_intelligence_item_sources (
+                        id, item_id, transcript_segment_id, meeting_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    "#,
+                )
+                .bind(source_row_id)
+                .bind(&item_id)
+                .bind(&source_id)
+                .bind(meeting_id)
+                .bind(now)
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Replace the abstract AND every item for a meeting in one transaction.
+    ///
+    /// `upsert_intelligence` + `replace_items` used to be two independent
+    /// autocommit calls. If the second failed, the meeting kept a freshly
+    /// generated abstract next to the previous run's items — the UI reads them
+    /// together, so it displayed a summary that described nothing below it.
+    ///
+    /// Generation output is derived data: on failure it is better to keep the
+    /// previous consistent state than to leave a mismatched half-write.
+    pub async fn replace_all(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        abstract_text: Option<&str>,
+        provider: Option<&str>,
+        model: Option<&str>,
+        items: Vec<NewIntelligenceItem>,
+    ) -> Result<(), SqlxError> {
+        if meeting_id.trim().is_empty() {
+            return Err(SqlxError::Protocol(
+                "meeting_id cannot be empty".to_string(),
+            ));
+        }
+
+        let mut tx = pool.begin().await?;
+
+        Self::upsert_intelligence_tx(&mut tx, meeting_id, abstract_text, provider, model).await?;
+
+        // Delete existing items and their sources (cascades)
+        sqlx::query("DELETE FROM meeting_intelligence_items WHERE meeting_id = ?")
+            .bind(meeting_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let now = Utc::now();
+
+        for (index, item) in items.into_iter().enumerate() {
+            let item_id = format!("mii-{}", Uuid::new_v4());
+
+            sqlx::query(
+                r#"
+                INSERT INTO meeting_intelligence_items (
+                    id, meeting_id, kind, text, ordering, confidence, owner, due_date, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(&item_id)
+            .bind(meeting_id)
+            .bind(&item.kind)
+            .bind(&item.text)
+            .bind(index as i64)
+            .bind(item.confidence)
+            .bind(item.owner)
+            .bind(item.due_date)
+            .bind(item.status)
+            .bind(now)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+
             for source_id in item.sources {
                 let source_row_id = format!("mis-{}", Uuid::new_v4());
                 sqlx::query(
