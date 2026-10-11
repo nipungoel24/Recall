@@ -109,10 +109,20 @@ export function useRecordingStop(): UseRecordingStopReturn {
           audio_error?: string | null;
           /** Terminal transcription verdict, so failure is not read as silence. */
           transcription?: {
-            outcome: 'idle' | 'running' | 'completed' | 'failed';
+            outcome:
+              | 'idle'
+              | 'running'
+              | 'completed'
+              | 'partial'
+              | 'failed'
+              | 'cancelled'
+              | 'timed_out';
+            is_complete?: boolean;
             chunks_queued: number;
+            chunks_completed?: number;
             chunks_succeeded: number;
             chunks_failed: number;
+            chunks_pending?: number;
             is_processing: boolean;
             last_error?: string | null;
           };
@@ -230,30 +240,38 @@ export function useRecordingStop(): UseRecordingStopReturn {
         transcriptionComplete = true;
       });
 
-      // Poll for transcription status
+      // Poll for transcription status.
+      //
+      // The Rust stop path already drains transcription before emitting
+      // `recording-stopped`, so this is a confirmation loop rather than the
+      // thing that waits for the work. It previously read
+      // `status.chunks_in_queue` and `status.last_activity_ms`, neither of which
+      // the backend returns, so `undefined === 0` made every exit condition
+      // unreachable and the loop always ran to MAX_WAIT_TIME.
       while (elapsedTime < MAX_WAIT_TIME && !transcriptionComplete) {
         try {
           const status = await transcriptService.getTranscriptionStatus();
           console.log('Transcription status:', status);
 
-          // Check if transcription is complete
-          if (!status.is_processing && status.chunks_in_queue === 0) {
-            console.log('Transcription complete - no active processing and no chunks in queue');
-            transcriptionComplete = true;
-            break;
-          }
+          const pending = status.chunks_pending ?? 0;
 
-          // If no activity for more than 8 seconds and no chunks in queue, consider it done (increased from 5s to 8s)
-          if (status.last_activity_ms > 8000 && status.chunks_in_queue === 0) {
-            console.log('Transcription likely complete - no recent activity and empty queue');
+          // The run is over once nothing is processing and every queued chunk
+          // has been accounted for.
+          if (!status.is_processing && pending === 0) {
+            console.log(
+              `Transcription settled - outcome=${status.outcome} (${status.chunks_completed}/${status.chunks_queued} chunks)`
+            );
             transcriptionComplete = true;
             break;
           }
 
           // Update user with current status
-          if (status.chunks_in_queue > 0) {
-            console.log(`Processing ${status.chunks_in_queue} remaining audio chunks...`);
-            setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, `Processing ${status.chunks_in_queue} remaining chunks...`);
+          if (pending > 0) {
+            console.log(`Processing ${pending} remaining audio chunks...`);
+            setStatus(
+              RecordingStatus.PROCESSING_TRANSCRIPTS,
+              `Processing ${pending} remaining chunks...`
+            );
           }
 
           // Wait before next check
@@ -329,7 +347,20 @@ export function useRecordingStop(): UseRecordingStopReturn {
         }
 
         const audioSaved = outcome.audio_saved !== false;
-        const transcriptionFailed = outcome.transcription?.outcome === 'failed';
+
+        // A transcript is only trustworthy when the backend says it is complete.
+        // `partial`, `cancelled` and `timed_out` are all cases where chunks were
+        // left unprocessed; treating them as success is exactly the false-success
+        // bug this guard exists to prevent.
+        const transcriptionOutcome = outcome.transcription?.outcome;
+        // A transcript is only trustworthy when the backend says it is complete.
+        // `partial`, `cancelled` and `timed_out` are all cases where chunks were
+        // left unprocessed; treating them as success is exactly the false-success
+        // bug this guard exists to prevent.
+        const transcriptionFailed =
+          transcriptionOutcome !== undefined &&
+          transcriptionOutcome !== 'completed' &&
+          transcriptionOutcome !== 'idle';
 
         if (!audioSaved) {
           const reason =

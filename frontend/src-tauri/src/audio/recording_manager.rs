@@ -329,23 +329,26 @@ impl RecordingManager {
         match saved {
             Ok(Some(file_path)) => {
                 // A recorded checkpoint failure means the audio on disk is incomplete, even if
-        // a partial merge happened to produce a file. Surface it rather than let
-        // the caller claim a clean success.
-        if let Some(checkpoint_error) = self.recording_saver.take_checkpoint_failure() {
-            return Err(anyhow::anyhow!(
+                // a partial merge happened to produce a file. Surface it rather than let
+                // the caller claim a clean success.
+                if let Some(checkpoint_error) = self.recording_saver.take_checkpoint_failure() {
+                    return Err(anyhow::anyhow!(
                 "Audio could not be fully encoded during recording: {}. The recording is incomplete.",
                 checkpoint_error
             ));
-        }
+                }
 
-        // Do not trust the caller's "success": prove the artifact exists
+                // Do not trust the caller's "success": prove the artifact exists
                 // and is not empty, using the same helper the regression tests
                 // exercise. A missing or zero-byte audio file means the recording
                 // is NOT recoverable, and saying otherwise is the P0 this fixes.
                 let path = PathBuf::from(&file_path);
                 match super::incremental_saver::verify_audio_artifact(&path) {
                     Ok(bytes) => {
-                        info!("Recording saved successfully to: {} ({} bytes)", file_path, bytes);
+                        info!(
+                            "Recording saved successfully to: {} ({} bytes)",
+                            file_path, bytes
+                        );
                         Ok(Some(path))
                     }
                     Err(e) => Err(anyhow::anyhow!(e)),
@@ -499,6 +502,17 @@ impl RecordingManager {
     /// Add a structured transcript segment to be saved later
     pub fn add_transcript_segment(&self, segment: super::recording_saver::TranscriptSegment) {
         self.recording_saver.add_transcript_segment(segment);
+    }
+
+    /// A cloneable handle for persisting transcript segments.
+    ///
+    /// The `transcript-update` listener must outlive the whole transcription
+    /// drain, including the part that runs after the stop path has taken this
+    /// manager out of the global registry. Handing the listener a sink instead
+    /// of resolving the manager on every event is what keeps the tail of the
+    /// transcript from being discarded.
+    pub fn transcript_sink(&self) -> super::recording_saver::TranscriptSegmentSink {
+        self.recording_saver.transcript_sink()
     }
 
     /// Add a transcript chunk to be saved later (legacy method)

@@ -759,7 +759,7 @@ deliberately and visibly, never silently.
 While applying the page-root edits, PowerShell `Get-Content -Raw` /
 `[System.IO.File]::WriteAllText` round-tripped UTF-8 through the console code page
 and corrupted every non-ASCII character in the files it rewrote -- em dashes became
-`Aˢ�?`, and a repair script that treated legitimate `�` and `.` as mojibake then
+`Aˢ�?`, and a repair script that treated legitimate `�` and `.` as mojibake then
 damaged six files that were never meant to change.
 
 Resolution, in order:
@@ -1023,7 +1023,7 @@ editor tool, never a PowerShell text cmdlet. `audit-bytes.ps1` reports drift on
 exactly two files -- `meetings/page.tsx` and `notes/page.tsx` -- and both are the
 intentional full rewrites, which replaced em dashes and an ellipsis with ASCII.
 Every other file preserves its non-ASCII bytes exactly, and a mojibake sweep
-(`�?`, `â`, U+FFFD) across `frontend/src` returns nothing. The em dash in
+(`�?`, `â`, U+FFFD) across `frontend/src` returns nothing. The em dash in
 "System audio is optional - mic-only recording" and the bullet in "0 Meetings -
 Updated" were confirmed intact on the rendered page.
 
@@ -1745,3 +1745,79 @@ mismatch, and provenance generation.
 - Phase 4 test `checkPermissions` mount effect fails (pre-existing; documented in Phase 4 report).
 - `cargo clippy -D warnings` fails on 2 PRE-EXISTING lints in the unmodified `src-tauri/build/ffmpeg.rs` (unused `std::io::Read` import; `Iterator::last` on a `DoubleEndedIterator`). This blocks clippy before it reaches the lib target, so `--all-targets` and `--lib` both abort. Unrelated to the UI tranche, which changes zero Rust files.
 - `frontend/build-gpu.bat` hardcodes Windows SDK `10.0.22621.0` while this host has `10.0.26100.0`, producing `LNK1181: cannot open input file 'kernel32.lib'`. Use the manual CUDA path (cargo + LLVM + CUDA on PATH, `TAURI_GPU_FEATURE=cuda`). The script was intentionally NOT modified.
+
+---
+
+# MASTER ENGINEERING MISSION — Reliability / Security / Intelligence / Release Readiness
+
+Full ledger: [docs/RECALL_MASTER_AUDIT_LEDGER.md](docs/RECALL_MASTER_AUDIT_LEDGER.md).
+
+Baseline: `7c4adf9`, branch `phase/5-meeting-workspace-provenance`, upstream `80a1485`,
+ahead 22 / behind 0. `upstream` (meetily) is reference-only and is never pushed to.
+The live DB matched the historical fingerprint exactly before any test
+(SHA-256 `4911B87F…19BA51`, 4,632,576 bytes, WAL 20,632, SHM 32,768, 0 audio files).
+
+## Transcription completion semantics (authoritative)
+
+The terminal verdict for a transcription run is `transcription::outcome`. It is the
+only place that decides how a run ended, and the stop path, the status command and
+the UI all read it.
+
+| State | Meaning | Complete? |
+|---|---|---|
+| `idle` | No run was ever started in this session | no |
+| `running` | Still running — never a terminal verdict | no |
+| `completed` | Drained every queued chunk, no failures, no truncation | **yes** |
+| `partial` | Ended with work outstanding (worker stopped early) | no |
+| `failed` | At least one chunk hard-failed | no |
+| `cancelled` | Deliberately cancelled by the user or shutdown | no |
+| `timed_out` | The drain ceiling was reached with chunks still queued | no |
+
+**Invariant: only `completed` means the transcript covers the whole meeting.** A
+timeout or cancellation must never masquerade as completion. A zero-segment
+`completed` run is legitimate (nobody spoke) and is deliberately *not* a failure.
+
+Precedence in `outcome()`: running → explicit terminal verdict set by the stop
+path → failed chunk counter → never started → completed. The stop path's verdict
+outranks the failure counter because it observed truncation directly; the failed
+chunk count stays visible in the snapshot so nothing is hidden.
+
+Chunk accounting is keyed on chunk id (`record_chunk_completed`) and is therefore
+idempotent: a duplicated completion cannot inflate progress or make the queue look
+empty early. `chunks_pending()` is saturating and can never underflow.
+
+## The drain-window transcript loss (A-1) — why the listener is a sink now
+
+The `transcript-update` listener used to resolve the recording from the global
+`RECORDING_MANAGER` registry on every event. `stop_recording` **takes** that manager
+out of the registry *and* unregistered the listener **before** waiting for the drain.
+Every segment produced during the drain therefore hit `None` and was discarded: the
+tail of essentially every transcript was silently lost while the app reported
+success.
+
+Transcript segments now reach storage through a cloneable `TranscriptSegmentSink`
+obtained once at listener registration. It holds the saver's shared `Arc` buffers,
+so persistence is independent of whatever the stop path does with the registry. The
+listener is torn down **after** the drain, and on the drain ceiling the worker is
+aborted rather than detached, so the persisted set is exactly what was accounted for.
+
+## Shutdown ordering (do not reorder these)
+
+1. Stop audio streams (no new chunks).
+2. **Keep** the transcript listener alive.
+3. Drain the transcription worker (ceiling `TRANSCRIPTION_DRAIN_CEILING`, 600s).
+4. Abort the worker if the ceiling was hit; record `timed_out`.
+5. **Now** remove the transcript listener.
+6. Unload the transcription model.
+7. Finalize audio, then emit `recording-stopped`.
+
+## Outcome payload contract
+
+`get_transcription_status` returns `TranscriptionOutcomeSnapshot`:
+`outcome`, `is_complete`, `chunks_queued`, `chunks_completed`, `chunks_succeeded`,
+`chunks_failed`, `chunks_pending`, `is_processing`, `last_error`.
+
+The frontend previously typed this as `{chunks_in_queue, is_processing,
+last_activity_ms}` — fields the backend never returned — so `undefined === 0` made
+every post-stop exit condition unreachable and the UI always burned a 60s sleep.
+Those field names must not come back.

@@ -59,6 +59,14 @@ pub fn start_transcription_task<R: Runtime>(
             Ok(engine) => engine,
             Err(e) => {
                 error!("Failed to initialize transcription engine: {}", e);
+                // Without this the run never terminates: `mark_started` already
+                // ran, so the status command would report `running` forever and
+                // the stop path would snapshot a run that is still "going".
+                outcome::record_failure(format!(
+                    "Transcription engine failed to initialize: {}",
+                    e
+                ));
+                outcome::mark_finished();
                 let _ = app.emit("transcription-error", serde_json::json!({
                     "error": e,
                     "userMessage": "Recording failed: Unable to initialize speech recognition. Please check your model settings.",
@@ -135,9 +143,14 @@ pub fn start_transcription_task<R: Runtime>(
 
                     match chunk {
                         Some(chunk) => {
+                            // The chunk is consumed by the provider below, so its
+                            // id is captured now: the completion accounting is
+                            // keyed on it and must survive the move.
+                            let chunk_id = chunk.chunk_id;
+
                             // PERFORMANCE OPTIMIZATION: Reduce logging in hot path
                             // Only log every 10th chunk per worker to reduce I/O overhead
-                            let should_log_this_chunk = chunk.chunk_id % 10 == 0;
+                            let should_log_this_chunk = chunk_id % 10 == 0;
 
                             if should_log_this_chunk {
                                 info!(
@@ -156,9 +169,9 @@ pub fn start_transcription_task<R: Runtime>(
                                 // run's terminal state "failed" instead of letting an
                                 // empty transcript read as silence.
                                 outcome::record_failure("Transcription model was not loaded");
-                                warn!("⚠️ Worker {}: Model unloaded, but continuing to preserve chunk {}", worker_id, chunk.chunk_id);
+                                warn!("⚠️ Worker {}: Model unloaded, but continuing to preserve chunk {}", worker_id, chunk_id);
                                 // Still count as completed even if we can't process
-                                chunks_completed_clone.fetch_add(1, Ordering::SeqCst);
+                                outcome::record_chunk_completed(chunk_id);
                                 continue;
                             }
 
@@ -268,7 +281,7 @@ pub fn start_transcription_task<R: Runtime>(
                                         TranscriptionError::AudioTooShort { .. } => {
                                             // Skip silently, this is expected for very short chunks
                                             info!("Worker {}: {}", worker_id, e);
-                                            chunks_completed_clone.fetch_add(1, Ordering::SeqCst);
+                                            outcome::record_chunk_completed(chunk_id);
                                             continue;
                                         }
                                         TranscriptionError::ModelNotLoaded => {
@@ -279,12 +292,14 @@ pub fn start_transcription_task<R: Runtime>(
                                             // `record_failure` makes the run's terminal
                                             // state "failed" so the stop path cannot
                                             // present it as silence.
-                                            outcome::record_failure("Transcription model was not loaded");
+                                            outcome::record_failure(
+                                                "Transcription model was not loaded",
+                                            );
                                             warn!(
                                                 "Worker {}: Model unloaded during transcription",
                                                 worker_id
                                             );
-                                            chunks_completed_clone.fetch_add(1, Ordering::SeqCst);
+                                            outcome::record_chunk_completed(chunk_id);
                                             continue;
                                         }
                                         _ => {
@@ -310,7 +325,10 @@ pub fn start_transcription_task<R: Runtime>(
                                 }
                             }
 
-                            // Mark chunk as completed
+                            // Mark chunk as completed. The id-keyed accounting is idempotent, so a
+                            // duplicated completion cannot push progress past 100%
+                            // or let the drain loop exit before real work is done.
+                            outcome::record_chunk_completed(chunk_id);
                             let completed =
                                 chunks_completed_clone.fetch_add(1, Ordering::SeqCst) + 1;
                             let queued = chunks_queued_clone.load(Ordering::SeqCst);
@@ -368,11 +386,10 @@ pub fn start_transcription_task<R: Runtime>(
                 }
 
                 info!("👷 Worker {} completed", worker_id);
-                // Close the run so `outcome()` can return a terminal state. The
-                // stop path and the status command both read this, so a worker
-                // that exits (normally or by draining) publishes the real result
-                // instead of leaving the run looking like it is still going.
-                outcome::mark_finished();
+                // NOTE: the run is closed in the parent task, after every worker
+                // has been joined and the final chunk accounting has been
+                // verified. Closing it here published a terminal state before the
+                // result was known, so a truncated run could read as complete.
             });
 
             worker_handles.push(worker_handle);
@@ -382,12 +399,21 @@ pub fn start_transcription_task<R: Runtime>(
         let mut receiver = transcription_receiver;
         while let Some(chunk) = receiver.recv().await {
             let queued = chunks_queued.fetch_add(1, Ordering::SeqCst) + 1;
+            // The status command and the `recording-stopped` payload report the
+            // queued count. It used to stay at zero because nothing ever called
+            // this, so the UI was told there was no work in flight.
+            outcome::record_queued();
             info!(
                 "📥 Dispatching chunk {} to workers (total queued: {})",
                 chunk.chunk_id, queued
             );
 
             if let Err(_) = work_sender.send(chunk) {
+                // The workers are gone, so this chunk is never transcribed. That
+                // is a failure, not a completed chunk.
+                outcome::record_failure(
+                    "Transcription workers stopped before the chunk could be queued",
+                );
                 error!("❌ Failed to send chunk to workers - this should not happen!");
                 break;
             }
@@ -438,10 +464,19 @@ pub fn start_transcription_task<R: Runtime>(
                 // Wait a bit for any remaining chunks to be processed
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             } else {
+                let lost = final_queued.saturating_sub(final_completed);
                 error!(
                     "❌ CRITICAL: After {} attempts, chunk loss detected: {} queued, {} completed",
                     MAX_VERIFICATION_ATTEMPTS, final_queued, final_completed
                 );
+
+                // A run that could not account for every chunk it accepted is
+                // incomplete. Recording it here is what stops the stop path from
+                // presenting a truncated transcript as a finished one.
+                outcome::record_failure(format!(
+                    "{} of {} transcript chunks could not be processed",
+                    lost, final_queued
+                ));
 
                 // Emit critical error event
                 let _ = app.emit(
@@ -449,13 +484,25 @@ pub fn start_transcription_task<R: Runtime>(
                     serde_json::json!({
                         "chunks_queued": final_queued,
                         "chunks_completed": final_completed,
-                        "chunks_lost": final_queued - final_completed,
+                        "chunks_lost": lost,
                         "message": "Some transcript chunks may have been lost during shutdown"
                     }),
                 );
                 break;
             }
         }
+
+        // Every worker has been joined and the chunk accounting has been checked.
+        // Only now is the run actually over.
+        outcome::mark_finished();
+        let final_snapshot = outcome::snapshot();
+        info!(
+            "✅ Transcription task finished: outcome={} ({}/{} chunks completed, {} failed)",
+            final_snapshot.outcome,
+            final_snapshot.chunks_completed,
+            final_snapshot.chunks_queued,
+            final_snapshot.chunks_failed
+        );
 
         info!("✅ Parallel transcription task completed - all workers finished, ready for model unload");
     })

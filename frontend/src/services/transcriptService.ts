@@ -9,10 +9,44 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptUpdate, Transcript } from '@/types';
 
+/**
+ * Terminal state of a transcription run, as reported by the Rust
+ * `transcription::outcome` module.
+ *
+ * Only `completed` means the transcript covers the whole meeting. `partial`,
+ * `failed`, `cancelled` and `timed_out` all mean the transcript is short of
+ * the meeting and must not be presented as a complete result.
+ */
+export type TranscriptionOutcome =
+  | 'idle'
+  | 'running'
+  | 'completed'
+  | 'partial'
+  | 'failed'
+  | 'cancelled'
+  | 'timed_out';
+
+/**
+ * Real payload of the `get_transcription_status` command.
+ *
+ * This interface previously declared `chunks_in_queue` and `last_activity_ms`.
+ * The backend has never returned those fields, so `status.chunks_in_queue === 0`
+ * compared `undefined` to `0` and was therefore always false — which made the
+ * post-stop completion checks unreachable and left the UI relying on a fixed
+ * 60 second sleep.
+ */
 export interface TranscriptionStatus {
-  chunks_in_queue: number;
+  outcome: TranscriptionOutcome;
+  /** True only when the transcript is known to cover the whole meeting. */
+  is_complete: boolean;
+  chunks_queued: number;
+  chunks_completed: number;
+  chunks_succeeded: number;
+  chunks_failed: number;
+  /** Chunks that left the queue without being accounted for. */
+  chunks_pending: number;
   is_processing: boolean;
-  last_activity_ms: number;
+  last_error: string | null;
 }
 
 export interface TranscriptionErrorPayload {

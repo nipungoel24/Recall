@@ -278,32 +278,51 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Store listener ID for cleanup during stop_recording to ensure microphone is released
     {
         use tauri::Listener;
-        let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
-            // Parse the transcript update from the event payload
-            if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
-                // Create structured transcript segment
-                let segment = crate::audio::recording_saver::TranscriptSegment {
-                    id: format!("seg_{}", update.sequence_id),
-                    text: update.text.clone(),
-                    audio_start_time: update.audio_start_time,
-                    audio_end_time: update.audio_end_time,
-                    duration: update.duration,
-                    display_time: update.timestamp.clone(), // Use wall-clock timestamp for display
-                    confidence: update.confidence,
-                    sequence_id: update.sequence_id,
-                };
 
-                // Save to recording manager
-                if let Ok(manager_guard) = RECORDING_MANAGER.lock() {
-                    if let Some(manager) = manager_guard.as_ref() {
-                        manager.add_transcript_segment(segment);
+        // The listener resolves a segment sink ONCE, at registration time.
+        //
+        // It used to look the recording up in the global `RECORDING_MANAGER`
+        // registry on every event. `stop_recording` takes that manager out of
+        // the registry before it waits for transcription to drain, so every
+        // `transcript-update` emitted during the drain hit a `None` and was
+        // dropped: the tail of the meeting's transcript was silently lost while
+        // the app still reported a successful recording. Holding the sink keeps
+        // persistence alive for the entire run.
+        let sink = {
+            let mut global_manager = RECORDING_MANAGER.lock().unwrap();
+            global_manager
+                .as_ref()
+                .map(|manager| manager.transcript_sink())
+        };
+
+        match sink {
+            Some(sink) => {
+                let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
+                    // Parse the transcript update from the event payload
+                    if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
+                        // Create structured transcript segment
+                        let segment = crate::audio::recording_saver::TranscriptSegment {
+                            id: format!("seg_{}", update.sequence_id),
+                            text: update.text.clone(),
+                            audio_start_time: update.audio_start_time,
+                            audio_end_time: update.audio_end_time,
+                            duration: update.duration,
+                            display_time: update.timestamp.clone(),
+                            confidence: update.confidence,
+                            sequence_id: update.sequence_id,
+                        };
+
+                        sink.add(segment);
                     }
-                }
+                });
+                let mut global_listener = TRANSCRIPT_LISTENER_ID.lock().unwrap();
+                *global_listener = Some(listener_id);
+                info!("✅ Transcript-update event listener registered for history persistence");
             }
-        });
-        let mut global_listener = TRANSCRIPT_LISTENER_ID.lock().unwrap();
-        *global_listener = Some(listener_id);
-        info!("✅ Transcript-update event listener registered for history persistence");
+            None => {
+                error!("❌ Recording manager unavailable; transcript persistence disabled for this session");
+            }
+        }
     }
 
     // Emit success event
@@ -460,32 +479,51 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     // Store listener ID for cleanup during stop_recording to ensure microphone is released
     {
         use tauri::Listener;
-        let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
-            // Parse the transcript update from the event payload
-            if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
-                // Create structured transcript segment
-                let segment = crate::audio::recording_saver::TranscriptSegment {
-                    id: format!("seg_{}", update.sequence_id),
-                    text: update.text.clone(),
-                    audio_start_time: update.audio_start_time,
-                    audio_end_time: update.audio_end_time,
-                    duration: update.duration,
-                    display_time: update.timestamp.clone(), // Use wall-clock timestamp for display
-                    confidence: update.confidence,
-                    sequence_id: update.sequence_id,
-                };
 
-                // Save to recording manager
-                if let Ok(manager_guard) = RECORDING_MANAGER.lock() {
-                    if let Some(manager) = manager_guard.as_ref() {
-                        manager.add_transcript_segment(segment);
+        // The listener resolves a segment sink ONCE, at registration time.
+        //
+        // It used to look the recording up in the global `RECORDING_MANAGER`
+        // registry on every event. `stop_recording` takes that manager out of
+        // the registry before it waits for transcription to drain, so every
+        // `transcript-update` emitted during the drain hit a `None` and was
+        // dropped: the tail of the meeting's transcript was silently lost while
+        // the app still reported a successful recording. Holding the sink keeps
+        // persistence alive for the entire run.
+        let sink = {
+            let mut global_manager = RECORDING_MANAGER.lock().unwrap();
+            global_manager
+                .as_ref()
+                .map(|manager| manager.transcript_sink())
+        };
+
+        match sink {
+            Some(sink) => {
+                let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
+                    // Parse the transcript update from the event payload
+                    if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
+                        // Create structured transcript segment
+                        let segment = crate::audio::recording_saver::TranscriptSegment {
+                            id: format!("seg_{}", update.sequence_id),
+                            text: update.text.clone(),
+                            audio_start_time: update.audio_start_time,
+                            audio_end_time: update.audio_end_time,
+                            duration: update.duration,
+                            display_time: update.timestamp.clone(),
+                            confidence: update.confidence,
+                            sequence_id: update.sequence_id,
+                        };
+
+                        sink.add(segment);
                     }
-                }
+                });
+                let mut global_listener = TRANSCRIPT_LISTENER_ID.lock().unwrap();
+                *global_listener = Some(listener_id);
+                info!("✅ Transcript-update event listener registered for history persistence");
             }
-        });
-        let mut global_listener = TRANSCRIPT_LISTENER_ID.lock().unwrap();
-        *global_listener = Some(listener_id);
-        info!("✅ Transcript-update event listener registered for history persistence");
+            None => {
+                error!("❌ Recording manager unavailable; transcript persistence disabled for this session");
+            }
+        }
     }
 
     // Emit success event
@@ -565,17 +603,12 @@ pub async fn stop_recording<R: Runtime>(
         }
     }
 
-    // Step 1.5: Clean up transcript listener to release microphone
-    // Unlisten transcript-update event to prevent lingering references
-    {
-        use tauri::Listener;
-        if let Some(listener_id) = TRANSCRIPT_LISTENER_ID.lock().unwrap().take() {
-            app.unlisten(listener_id);
-            info!("✅ Transcript-update listener removed");
-        }
-    }
-
     // Step 2: Signal transcription workers to finish processing ALL queued chunks
+    //
+    // NOTE: the `transcript-update` listener is intentionally NOT removed here.
+    // It is the only thing that persists transcript segments, and the drain below
+    // is exactly when the remaining segments are produced. Removing it before the
+    // wait discarded the tail of the transcript. It is torn down after the drain.
     let _ = app.emit(
         "recording-shutdown-progress",
         serde_json::json!({
@@ -591,7 +624,7 @@ pub async fn stop_recording<R: Runtime>(
         global_task.take()
     };
 
-    if let Some(task_handle) = transcription_task {
+    if let Some(mut task_handle) = transcription_task {
         info!("⏳ Waiting for ALL transcription chunks to be processed (no timeout - preserving every chunk)");
 
         // Enhanced progress monitoring during shutdown
@@ -617,23 +650,46 @@ pub async fn stop_recording<R: Runtime>(
             }
         });
 
-        // Wait up to 10 minutes for transcription completion to prevent indefinite hangs
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(600), // 10 minutes max
-            task_handle,
-        )
-        .await
-        {
+        // A hard ceiling on the drain. This is NOT "how long a meeting may be":
+        // the worker itself has no timeout and will process a long meeting for as
+        // long as it takes. Reaching this bound means work is still outstanding,
+        // so the run is recorded as `timed_out` and the user is told the
+        // transcript is partial. It must never read as success.
+        const TRANSCRIPTION_DRAIN_CEILING: std::time::Duration =
+            std::time::Duration::from_secs(600);
+
+        match tokio::time::timeout(TRANSCRIPTION_DRAIN_CEILING, &mut task_handle).await {
             Ok(Ok(())) => {
-                info!("✅ ALL transcription chunks processed successfully - no data lost");
+                info!("✅ Transcription worker finished");
             }
             Ok(Err(e)) => {
+                // A panicking or cancelled worker leaves chunks unaccounted for.
                 warn!("⚠️ Transcription task completed with error: {:?}", e);
-                // Continue anyway - the worker may have processed most chunks
+                transcription::outcome::force_terminal(
+                    transcription::outcome::TerminalKind::Partial,
+                    format!("Transcription worker stopped unexpectedly: {:?}", e),
+                );
             }
             Err(_) => {
-                warn!("⏱️ Transcription timeout (10 minutes) reached, continuing shutdown to prevent indefinite hang");
-                // Continue shutdown even on timeout - better to lose some chunks than hang forever
+                // The worker keeps running when its JoinHandle is simply dropped,
+                // which would let it keep emitting `transcript-update` into a
+                // session that is already being torn down. Abort it so the set of
+                // persisted segments is exactly what was accounted for here.
+                task_handle.abort();
+
+                let pending = transcription::outcome::chunks_pending();
+                error!(
+                    "⏱️ Transcription drain ceiling reached with {} chunk(s) still pending",
+                    pending
+                );
+                transcription::outcome::force_terminal(
+                    transcription::outcome::TerminalKind::TimedOut,
+                    format!(
+                        "Transcription did not finish within {}s; {} chunk(s) were not processed",
+                        TRANSCRIPTION_DRAIN_CEILING.as_secs(),
+                        pending
+                    ),
+                );
             }
         }
 
@@ -641,6 +697,18 @@ pub async fn stop_recording<R: Runtime>(
         progress_task.abort();
     } else {
         info!("ℹ️ No transcription task found to wait for");
+    }
+
+    // The drain is over and any still-running worker has been aborted, so no
+    // further `transcript-update` events can arrive. Only now is it safe to drop
+    // the listener: it is what persists segments, and taking it down earlier is
+    // what silently truncated transcripts.
+    {
+        use tauri::Listener;
+        if let Some(listener_id) = TRANSCRIPT_LISTENER_ID.lock().unwrap().take() {
+            app.unlisten(listener_id);
+            info!("✅ Transcript-update listener removed after transcription drain");
+        }
     }
 
     // Step 3: Now safely unload Whisper model after ALL chunks are processed
@@ -750,32 +818,33 @@ pub async fn stop_recording<R: Runtime>(
         info!("🧹 Performing final cleanup and saving recording data");
 
         // Extract meeting info BEFORE async operations
-let meeting_folder = manager.get_meeting_folder();
+        let meeting_folder = manager.get_meeting_folder();
         let meeting_name = manager.get_meeting_name();
 
         match tokio::time::timeout(
-        tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
-        manager.save_recording_only(&app),
-    )
-    .await
-    {
-        Ok(Ok(_)) => {
-            info!("✅ Recording data saved successfully during cleanup");
+            tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
+            manager.save_recording_only(&app),
+        )
+        .await
+        {
+            Ok(Ok(_)) => {
+                info!("✅ Recording data saved successfully during cleanup");
+            }
+            Ok(Err(e)) => {
+                // A save failure means the user's audio is NOT recoverable. Record
+                // it and surface it; do NOT let this become a success event.
+                // Recoverable checkpoints are deliberately left on disk so the user
+                // can still attempt recovery -- they are never deleted here.
+                error!("❌ Recording save failed: {}", e);
+                audio_save_error = Some(e.to_string());
+            }
+            Err(_) => {
+                let msg =
+                    "File I/O timeout (5 minutes) reached while saving the recording".to_string();
+                error!("⏱️ {}", msg);
+                audio_save_error = Some(msg);
+            }
         }
-        Ok(Err(e)) => {
-            // A save failure means the user's audio is NOT recoverable. Record
-            // it and surface it; do NOT let this become a success event.
-            // Recoverable checkpoints are deliberately left on disk so the user
-            // can still attempt recovery -- they are never deleted here.
-            error!("❌ Recording save failed: {}", e);
-            audio_save_error = Some(e.to_string());
-        }
-        Err(_) => {
-            let msg = "File I/O timeout (5 minutes) reached while saving the recording".to_string();
-            error!("⏱️ {}", msg);
-            audio_save_error = Some(msg);
-        }
-    }
 
         (meeting_folder, meeting_name)
     } else {
@@ -839,7 +908,25 @@ let meeting_folder = manager.get_meeting_folder();
     // Update tray menu to reflect stopped state
     crate::tray::update_tray_menu(&app);
 
-    info!("🎉 Recording stopped successfully with ZERO transcript chunks lost");
+    // Log what actually happened. This used to be an unconditional
+    // "Recording stopped successfully with ZERO transcript chunks lost", printed
+    // even after the drain ceiling had cut chunks off -- a false record in the one
+    // log a user is likely to paste into a bug report.
+    match transcription::outcome::outcome() {
+        o if o == transcription::outcome::TranscriptionOutcome::Completed => {
+            info!("🎉 Recording stopped; transcript complete")
+        }
+        o => {
+            warn!(
+                "🎉 Audio saved, but the transcript is incomplete ({}): {}",
+                o.as_str(),
+                transcription_snapshot
+                    .last_error
+                    .as_deref()
+                    .unwrap_or("no further detail available")
+            )
+        }
+    }
     Ok(())
 }
 

@@ -43,9 +43,9 @@
 mod defaults;
 pub mod loader;
 pub(crate) mod store;
-mod types;
 #[cfg(test)]
 mod tests_f2_security;
+mod types;
 
 pub use loader::{
     get_template, get_template_json_raw, is_builtin_template_id, list_template_ids, list_templates,
@@ -61,6 +61,13 @@ mod tests {
 
     #[test]
     fn test_module_integration() {
+        // `list_template_ids()` reads the global custom-template-directory
+        // override. The loader tests mutate that same global and hold
+        // `override_guard()`, so this test must hold it too -- otherwise it
+        // enumerates a half-built temp directory and fails on a template another
+        // test created milliseconds earlier.
+        let _guard = loader::override_guard();
+
         // Test that we can load all built-in templates
         let ids = list_template_ids();
         assert!(!ids.is_empty());
@@ -78,6 +85,8 @@ mod tests {
 
     #[test]
     fn test_template_metadata() {
+        let _guard = loader::override_guard();
+
         let templates = list_templates();
         assert!(!templates.is_empty());
 

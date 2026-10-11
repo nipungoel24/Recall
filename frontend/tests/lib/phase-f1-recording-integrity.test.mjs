@@ -192,8 +192,8 @@ describe('phase F1: a transcription failure is not an empty transcript', () => {
     )
     assert.match(
       stopHook,
-      /transcription\?\.outcome === 'failed'/,
-      'a failed transcription must be recognised explicitly',
+      /transcriptionOutcome !== 'completed'[\s\S]{0,80}transcriptionOutcome !== 'idle'/,
+      "a transcript that is anything other than 'completed' must be recognised as not-successful",
     )
     assert.match(
       stopHook,
