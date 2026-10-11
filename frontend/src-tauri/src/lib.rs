@@ -59,6 +59,8 @@ pub mod tray;
 
 #[cfg(test)]
 mod tests_lifecycle;
+#[cfg(test)]
+mod tests_recording_e2e;
 pub mod utils;
 pub mod whisper_engine;
 

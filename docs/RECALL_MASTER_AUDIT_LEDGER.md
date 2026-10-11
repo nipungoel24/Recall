@@ -81,6 +81,33 @@ segment IDs server-side, never model-invented database IDs.
 Audit sweep examined ~180 error-handling sites; most prior defects are already
 fixed. Transcript search is the largest remaining false-empty surface.
 
+### Workstream B — Isolated recording E2E
+
+Automated in `src-tauri/src/tests_recording_e2e.rs` (13 tests) against a
+temporary app-data dir, temporary SQLite database, and temporary
+recordings/checkpoint root. The real user profile is never opened.
+
+| Step | Coverage | Result |
+|---|---|---|
+| Synthetic audio → checkpoints | real `IncrementalAudioSaver::add_chunk`; 30s (1.44M-sample) flush threshold crossed deliberately | PASS |
+| Finalize → artifact | real `finalize()` + real `verify_audio_artifact()`; exercised the actual FFmpeg path | PASS |
+| Missing / zero-byte artifact | must fail verification, never pass | PASS |
+| Failed finalization | corrupted checkpoints; checkpoints preserved, or success implies a verified artifact | PASS |
+| Deterministic transcription | fake `TranscriptionProvider`, no model loaded | PASS |
+| Segment persistence order/timing | real sink → saver, ordering + timestamps + content asserted | PASS |
+| Re-emitted segment | upserts in place, does not duplicate | PASS |
+| Meeting + transcript round-trip | real `save_transcript` → `get_meeting` | PASS |
+| Failed replacement preserves data | original transcript intact | PASS |
+| Meeting isolation | transcripts never leak between meetings | PASS |
+| Recovery safety | path guard allows in-root, refuses escape; unrelated files untouched | PASS |
+| Terminal outcome (no speech / failed chunk) | real outcome module | PASS |
+
+**Explicitly NOT covered by automation** (procedure in
+`docs/RECALL_ISOLATED_RECORDING_SMOKE.md`): microphone capture, a real local
+model, and the Tauri event bridge (`tauri` is built without its `test` feature,
+so no `AppHandle` exists in-process). These require the manual isolated-profile
+smoke test and are **NOT RUN** in this environment.
+
 ### Workstream C — Shutdown & sidecar lifecycle
 
 | ID | Sev | Status | Finding | Evidence |
@@ -113,11 +140,12 @@ Audited via WS-E and WS-C; see the table below for items resolved as a side effe
 
 | Suite | Command | Baseline `7c4adf9` | After WS-A | After WS-E |
 |---|---|---|---|---|
-| Rust unit | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | 409 pass / 0 fail / 2 ignored | **441 pass / 0 fail / 2 ignored** (+58) |
-| Rust fmt | `cargo fmt --all -- --check` | **FAIL** (5 files, T-1) | unchanged (T-1) | unchanged (T-1) |
-| Rust lint | `cargo clippy --workspace --all-targets` | pass | pass | **pass** |
-| Frontend | `node --test tests/lib/*.test.mjs` | 645 total / 643 pass / 2 known | 658 / 656 / 2 known | **669 / 667 / 2 known** (+24) |
-| TypeScript | `tsc --noEmit` (`src/`) | clean | clean | **clean** |
+| Rust unit | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | 409 / 0 / 2 | **441 / 0 / 2** | **453 / 0 / 2** | **466 / 0 / 2** (+83) |
+| Rust fmt | `cargo fmt --all -- --check` | **FAIL** (5 files, T-1) | **PASS** (830ba6e) | PASS | PASS | **PASS** |
+| Rust lint | `cargo clippy --workspace --all-targets` | pass | pass | pass | pass | **pass** |
+| Frontend | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | 658 / 656 / 2 | 669 / 667 / 2 | 674 / 672 / 2 | **674 / 672 / 2** |
+| TypeScript | `tsc --noEmit` (`src/`) | clean | clean | clean | clean | **clean** |
+| Frontend build | `npm run build` | pass | — | — | **pass** | **pass** |
 
 Known baseline failures (unchanged, not weakened):
 1. Phase 4 `checkPermissions` mount-effect test.
