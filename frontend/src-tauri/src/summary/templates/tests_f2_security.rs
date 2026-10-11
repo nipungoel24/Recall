@@ -37,7 +37,10 @@ fn tmp(tag: &str) -> std::path::PathBuf {
 
 #[test]
 fn a_valid_identifier_is_accepted_and_normalised() {
-    assert_eq!(sanitize_template_id("my-template_1").unwrap(), "my-template_1");
+    assert_eq!(
+        sanitize_template_id("my-template_1").unwrap(),
+        "my-template_1"
+    );
     // Normalised to lowercase so ids are unambiguous on Windows/macOS.
     assert_eq!(sanitize_template_id("MyTemplate").unwrap(), "mytemplate");
 }
@@ -100,10 +103,7 @@ fn a_traversal_identifier_cannot_read_a_file_out_of_the_templates_dir() {
     // Give the loader a controlled templates directory.
     loader::set_custom_templates_dir_override(Some(templates_dir.clone()));
 
-    let traversal = format!(
-        "{}/secret",
-        secret_dir.to_string_lossy().replace('\\', "/")
-    );
+    let traversal = format!("{}/secret", secret_dir.to_string_lossy().replace('\\', "/"));
 
     let loaded = loader::get_template_json_raw(&traversal);
     assert!(

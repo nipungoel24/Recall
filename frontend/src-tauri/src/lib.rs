@@ -226,8 +226,12 @@ fn get_transcription_status() -> audio::transcription::outcome::TranscriptionOut
 /// if anything can execute script in the webview. It is now confined to the
 /// recordings roots.
 #[tauri::command]
-async fn read_audio_file<R: Runtime>(app: AppHandle<R>, file_path: String) -> Result<Vec<u8>, String> {
-    let resolved = path_guard::confine_recording_path(&app, std::path::Path::new(&file_path)).await?;
+async fn read_audio_file<R: Runtime>(
+    app: AppHandle<R>,
+    file_path: String,
+) -> Result<Vec<u8>, String> {
+    let resolved =
+        path_guard::confine_recording_path(&app, std::path::Path::new(&file_path)).await?;
     match std::fs::read(&resolved) {
         Ok(data) => Ok(data),
         Err(e) => Err(format!("Failed to read audio file: {}", e)),
@@ -246,7 +250,8 @@ async fn save_transcript<R: Runtime>(
     file_path: String,
     content: String,
 ) -> Result<(), String> {
-    let resolved = path_guard::confine_recording_path(&app, std::path::Path::new(&file_path)).await?;
+    let resolved =
+        path_guard::confine_recording_path(&app, std::path::Path::new(&file_path)).await?;
     log_info!("Saving transcript to a validated recordings path");
 
     if let Some(parent) = resolved.parent() {

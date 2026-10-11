@@ -11,9 +11,7 @@
 
 // Phase F1 regression tests live in `audio::tests`; reach the outcome module by
 // its absolute path so the test does not depend on module nesting depth.
-use crate::audio::transcription::outcome::{
-    self as use_outcome, TranscriptionOutcome,
-};
+use crate::audio::transcription::outcome::{self as use_outcome, TranscriptionOutcome};
 
 // ---------------------------------------------------------------------------
 // Audio artifact verification (P0-A)
@@ -51,7 +49,10 @@ fn ffmpeg_missing_does_not_verify_as_success() {
         "no encoder ran, so audio.mp4 must not exist"
     );
     let err = verify_audio_artifact(&expected).expect_err("missing audio must fail");
-    assert!(err.contains("missing"), "error must say the file is missing: {err}");
+    assert!(
+        err.contains("missing"),
+        "error must say the file is missing: {err}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -63,7 +64,10 @@ fn empty_output_file_is_rejected_not_treated_as_success() {
     let audio = dir.join("audio.mp4");
     std::fs::write(&audio, b"").unwrap();
     let err = verify_audio_artifact(&audio).expect_err("empty audio must fail");
-    assert!(err.contains("empty"), "error must say the file is empty: {err}");
+    assert!(
+        err.contains("empty"),
+        "error must say the file is empty: {err}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -134,10 +138,7 @@ fn zero_segments_without_failure_is_a_valid_empty_transcript() {
     use_outcome::mark_finished();
 
     // This is the legitimate "nobody spoke" case and must stay Completed.
-    assert_eq!(
-        use_outcome::outcome(),
-        TranscriptionOutcome::Completed
-    );
+    assert_eq!(use_outcome::outcome(), TranscriptionOutcome::Completed);
     let snap = use_outcome::snapshot();
     assert_eq!(snap.chunks_succeeded, 0);
     assert_eq!(snap.chunks_failed, 0);
@@ -156,7 +157,10 @@ fn failed_chunks_are_counted_separately_from_successes() {
 
     let snap = use_outcome::snapshot();
     assert_eq!(snap.chunks_queued, 2);
-    assert_eq!(snap.chunks_succeeded, 1, "one chunk genuinely produced text");
+    assert_eq!(
+        snap.chunks_succeeded, 1,
+        "one chunk genuinely produced text"
+    );
     assert_eq!(snap.chunks_failed, 1, "the failed chunk is not a success");
     assert_eq!(snap.outcome, "failed");
 }
@@ -213,9 +217,7 @@ fn error_text_carries_no_transcript_content() {
     let _g = OUTCOME_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     use_outcome::reset();
     use_outcome::record_failure("Engine returned an error");
-    let msg = use_outcome::snapshot()
-        .last_error
-        .unwrap_or_default();
+    let msg = use_outcome::snapshot().last_error.unwrap_or_default();
     assert!(!msg.to_lowercase().contains("api key"));
     assert!(!msg.to_lowercase().contains("bearer"));
 }

@@ -28,7 +28,6 @@ pub fn verify_audio_artifact(path: &std::path::Path) -> Result<u64, String> {
     }
 }
 
-
 /// Audio data without device type (we only store mixed audio)
 #[derive(Clone)]
 struct AudioData {
@@ -297,15 +296,16 @@ pub async fn recover_audio_from_checkpoints<R: Runtime>(
     // directory on the machine and overwrite files there. It also must never run
     // against a live recording, whose checkpoints are still being written.
     if crate::audio::recording_commands::is_recording().await {
-        return Err(
-            "Cannot recover audio while a recording is in progress.".to_string(),
-        );
+        return Err("Cannot recover audio while a recording is in progress.".to_string());
     }
 
     let resolved_folder =
         crate::path_guard::confine_recording_path(&app, PathBuf::from(&meeting_folder).as_path())
             .await?;
-    info!("Starting audio recovery for folder: {}", resolved_folder.display());
+    info!(
+        "Starting audio recovery for folder: {}",
+        resolved_folder.display()
+    );
 
     let folder_path = resolved_folder;
     let checkpoints_dir = folder_path.join(".checkpoints");
@@ -461,13 +461,14 @@ pub async fn cleanup_checkpoints<R: Runtime>(
     //   2. confine the target to the recordings roots;
     //   3. refuse to delete a root or an ancestor of one.
     if crate::audio::recording_commands::is_recording().await {
-        return Err(
-            "Cannot clean up checkpoints while a recording is in progress.".to_string(),
-        );
+        return Err("Cannot clean up checkpoints while a recording is in progress.".to_string());
     }
 
-    let folder_path = crate::path_guard::confine_recording_deletion(&app, PathBuf::from(&meeting_folder).as_path())
-        .await?;
+    let folder_path = crate::path_guard::confine_recording_deletion(
+        &app,
+        PathBuf::from(&meeting_folder).as_path(),
+    )
+    .await?;
     let checkpoints_dir = folder_path.join(".checkpoints");
 
     if checkpoints_dir.exists() {
@@ -491,7 +492,8 @@ pub async fn has_audio_checkpoints<R: Runtime>(
     // Phase F2: this was an unconfined existence oracle over any directory the
     // renderer named. Confine it to the recordings roots.
     let folder_path =
-        crate::path_guard::confine_recording_path(&app, PathBuf::from(&meeting_folder).as_path()).await?;
+        crate::path_guard::confine_recording_path(&app, PathBuf::from(&meeting_folder).as_path())
+            .await?;
     let checkpoints_dir = folder_path.join(".checkpoints");
 
     // Check if checkpoints directory exists

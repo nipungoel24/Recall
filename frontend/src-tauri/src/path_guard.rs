@@ -99,7 +99,10 @@ pub fn resolve_within(candidate: &Path, allowed_roots: &[PathBuf]) -> Result<Pat
 ///   * the target must not be an ancestor of an allowed root (deleting `/data`
 ///     would satisfy `starts_with("/data/recordings")` on a prefix basis and
 ///     would destroy the database, models and settings that live beside it).
-pub fn resolve_for_deletion(candidate: &Path, allowed_roots: &[PathBuf]) -> Result<PathBuf, String> {
+pub fn resolve_for_deletion(
+    candidate: &Path,
+    allowed_roots: &[PathBuf],
+) -> Result<PathBuf, String> {
     let resolved = canonicalize_lenient(candidate)?;
 
     let canonical_roots: Vec<PathBuf> = allowed_roots
