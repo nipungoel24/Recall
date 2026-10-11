@@ -1558,6 +1558,133 @@ Also unchanged and still open from Phase E: path containment plus
 `fs:read-all`/`fs:write-all`, the orphanable llama-helper sidecar, the unbounded
 `pool.close()` shutdown wait, and no teardown for an active recording on exit.
 
+# Phase F2 - Filesystem Security + Least-Privilege Hardening
+
+Phase F2 closes the filesystem and capability defects Phase E found. It changes
+no product behaviour: recording, export and template workflows all still work.
+
+## What was verified before changing anything
+
+The Phase E findings were re-checked against the current code rather than taken
+on trust, and the audit was widened: 19 registered commands take a path-shaped
+argument, not the four named in the report. Each was traced to its frontend
+callers.
+
+The decisive measurement: **`@tauri-apps/plugin-fs` has zero imports anywhere in
+the frontend.** The only filesystem-adjacent call is `appDataDir()` from the
+read-only `core:path` API. So `fs:read-all`, `fs:write-all` and the rest of the
+`fs` family were not merely over-broad, they were entirely unused.
+
+## Path confinement
+
+New `src/path_guard.rs`:
+
+- `resolve_within(candidate, roots)` canonicalises, then requires the result to
+  be under an allowed root using `Path::starts_with`, which compares whole path
+  components. A string-prefix check would have wrongly accepted
+  `.../recordings-evil` for the root `.../recordings`; there is a test for it.
+- `canonicalize_lenient` validates targets that do not exist yet by
+  canonicalising the nearest existing ancestor and re-attaching the tail, so
+  "the file will be created" cannot bypass the check.
+- Symlinks are resolved before the comparison, so a link inside the root that
+  points outside is rejected rather than followed.
+- `resolve_for_deletion` additionally refuses the root itself and any ancestor
+  of it. Those checks run BEFORE the containment test so the error names the
+  real problem instead of a misleading "outside the permitted directories".
+- `recording_roots()` includes the user's configured folder (a real product
+  requirement) and the default. It is async because preferences need an
+  `AppHandle`; if preferences cannot be read it falls back to the default root
+  only, so a transient failure fails closed.
+
+Guarded: `read_audio_file`, `save_transcript`, `cleanup_checkpoints`,
+`recover_audio_from_checkpoints`, `has_audio_checkpoints`. `save_transcript` is
+now also atomic (temp + rename), because a crash mid-write previously left a
+truncated transcript JSON with no reader-side recovery.
+
+Deliberately NOT confined, because tracing shows each is user-initiated or
+disclosure-only: the `select_*` commands (native file dialog), the
+`open_*_folder` commands (reveal in Explorer), and
+`get_default_recordings_folder_path`. Confinement is at the point of use, not
+assumed from the frontend.
+
+## Recursive deletion
+
+`cleanup_checkpoints` now requires all three of: not while a recording is live,
+confinement to the recordings roots, and the deletion guard. Tests cover valid
+child, root deletion, ancestor deletion, and symlink escape.
+
+## Recording recovery safety
+
+The real bug: `useTranscriptRecovery` fell back to `get_meeting_folder_path`
+when crash metadata lacked a folder -- and that command returns the folder of the
+**currently active recording**. Recovery then merged checkpoints into that live
+folder and `remove_dir_all`'d them, destroying an in-progress capture whose
+finalize would subsequently fail. The user was told the recording was saved.
+
+Fixed on both sides: the fallback is removed (fail closed), and the backend
+refuses recovery and checkpoint cleanup while `is_recording()` is true.
+
+## Template identifiers
+
+`sanitize_template_id` was thorough but ran only on writes. Every read built
+`dir.join(format!("{}.json", template_id))` from raw input, so a traversal id
+could read -- and via `get_template_json_raw` return the contents of -- any
+`.json` reachable from the templates directory. A value read back from
+`settings.defaultTemplateId` is no safer than one typed in.
+
+Now sanitized at all four read sites, and `template_file_path` validates
+internally so it is safe for any caller rather than safe-if-the-caller-is-careful.
+
+## Capability reduction
+
+Removed: `fs:default`, `fs:allow-read-file`, `fs:read-all`, `fs:write-all`,
+`fs:allow-app-read`, `fs:allow-app-write`, `fs:allow-download-write`,
+`fs:allow-download-read`, `fs:scope-download`, `fs:scope`.
+Retained: `core:path:default` (needed for `appDataDir()`), `core:event`,
+`core:window`, `core:app`, `core:resources`, `core:menu`, `core:tray`,
+`core:window:allow-set-title`, `store:default`, `notification:default`,
+`notification:allow-is-permission-granted`.
+
+No CSP change. No new capability.
+
+## Validation
+
+- `cargo test --workspace`: **383 passed, 0 failed, 2 ignored** (baseline 365; +18)
+- `node --test`: **645 tests, 643 pass, 2 known pre-existing failures**
+  (baseline 629/643; +16 from `phase-f2-filesystem-security.test.mjs`)
+- `tsc --noEmit`: src/ clean
+- production build: `npx tauri build` succeeded with zero `fs:` permissions
+- encoding: 0 U+FFFD, 0 mojibake across every changed file
+- user data byte-identical: sha256 `4911B87F...`, 4,632,576 bytes, WAL 20,632,
+  SHM 32,768 (both unchanged), 0 audio files
+
+## Runtime verification (packaged production build)
+
+- `plugin:fs|read_file` on `C:\Windows\win.ini` -> **DENIED**
+- `plugin:fs|write_file` on `C:\Users\Public\f2-probe.txt` -> **DENIED**, and
+  the file was **not** created
+- `get_transcription_status` -> still works (`idle`), so the reduction did not
+  break legitimate commands
+- `read_audio_file` / `cleanup_checkpoints` / `has_audio_checkpoints` against
+  out-of-root paths -> all **DENIED** with
+  "Access denied: ... is outside the permitted application directories."
+
+This is the packaged build, not the source config. String-scanning the binary
+still finds `fs:read-all` because the fs plugin is linked; the capability is
+what grants it, and the capability is gone.
+
+## Known limitation
+
+Deletion confinement is keyed to the recordings roots. A user who once pointed
+recordings at, say, `D:\Archive` and then moved them elsewhere would find
+cleanup/refusal on the old location. This fails closed (refuses to delete) and is
+recoverable by restoring the preference; it cannot delete something it should not.
+
+Still open and explicitly out of scope here: sidecar shutdown lifecycle, the
+database shutdown timeout, active-recording shutdown teardown, the transcription
+drain cap, `journal_mode`/WAL configuration, the intelligence generation payload
+mismatch, and provenance generation.
+
 # Next Exact Step
 
 1. Gates 1 through 8 complete. Phase 0 `a3c196b`, A1 `5df672a`, A2 `4a89d1f`,

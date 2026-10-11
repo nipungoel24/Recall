@@ -127,12 +127,16 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
 
 
       if (!folderPath) {
-        // Try to get from backend (might exist if only app crashed, not system)
-        try {
-          folderPath = await invoke<string>('get_meeting_folder_path');
-        } catch (error) {
-          folderPath = undefined;
-        }
+        // Phase F2: the previous fallback called `get_meeting_folder_path`,
+        // which returns the folder of the CURRENTLY ACTIVE recording. Recovery
+        // then merged checkpoints into that live folder and later deleted them,
+        // destroying an in-progress capture -- its finalize would fail with
+        // "Checkpoint file missing" and the user was told the recording was
+        // saved. A value from the crash metadata is the only safe source here.
+        //
+        // The backend now also refuses recovery while a recording is running,
+        // so this path fails closed rather than guessing.
+        folderPath = undefined;
       }
 
       // 4. Attempt audio recovery if folder path exists

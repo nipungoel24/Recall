@@ -61,8 +61,10 @@ pub(crate) fn custom_templates_dir() -> Option<PathBuf> {
 /// # Returns
 /// The template JSON content if found, None otherwise
 fn load_bundled_template(template_id: &str) -> Option<String> {
+    // Phase F2: validate the id BEFORE it reaches the filesystem.
+    let safe_id = store::sanitize_template_id(template_id).ok()?;
     let bundled_dir = bundled_templates_dir()?;
-    let template_path = bundled_dir.join(format!("{}.json", template_id));
+    let template_path = bundled_dir.join(format!("{}.json", safe_id));
 
     debug!("Checking for bundled template at: {:?}", template_path);
 
@@ -89,8 +91,10 @@ fn load_bundled_template(template_id: &str) -> Option<String> {
 /// # Returns
 /// The template JSON content if found, None otherwise
 fn load_custom_template(template_id: &str) -> Option<String> {
+    // Phase F2: validate the id BEFORE it reaches the filesystem.
+    let safe_id = store::sanitize_template_id(template_id).ok()?;
     let custom_dir = custom_templates_dir()?;
-    let template_path = custom_dir.join(format!("{}.json", template_id));
+    let template_path = custom_dir.join(format!("{}.json", safe_id));
 
     debug!("Checking for custom template at: {:?}", template_path);
 
@@ -181,14 +185,16 @@ pub fn validate_and_parse_template(json_content: &str) -> Result<Template, Strin
 /// Checks custom, bundled, then built-in — mirroring the load order of
 /// `get_template`.
 pub fn template_source(id: &str) -> Option<TemplateSource> {
+    let safe_id = store::sanitize_template_id(id).ok()?;
+
     if let Some(custom_dir) = custom_templates_dir() {
-        if store::template_file_path(&custom_dir, id).is_file() {
+        if store::template_file_path(&custom_dir, &safe_id).is_file() {
             return Some(TemplateSource::Custom);
         }
     }
 
     if let Some(bundled_dir) = bundled_templates_dir() {
-        if bundled_dir.join(format!("{}.json", id)).is_file() {
+        if bundled_dir.join(format!("{}.json", safe_id)).is_file() {
             return Some(TemplateSource::Bundled);
         }
     }
@@ -208,8 +214,13 @@ pub fn is_builtin_template_id(id: &str) -> bool {
         return true;
     }
 
+    let safe_id = match store::sanitize_template_id(id) {
+        Ok(safe) => safe,
+        // An id that cannot be valid is, by definition, not a built-in id.
+        Err(_) => return false,
+    };
     if let Some(bundled_dir) = bundled_templates_dir() {
-        if bundled_dir.join(format!("{}.json", id)).is_file() {
+        if bundled_dir.join(format!("{}.json", safe_id)).is_file() {
             return true;
         }
     }
@@ -298,16 +309,22 @@ pub fn list_templates() -> Vec<(String, String, String)> {
         .collect()
 }
 
+/// Serialize access to the global template-directory overrides so parallel
+/// tests never observe each other's directories.
+///
+/// Defined at module scope (not inside `mod tests`) because the Phase F2
+/// security tests mutate the same global and must take the SAME lock -- two
+/// separate locks over one global is exactly how `test_discovery_after_save`
+/// started failing.
+#[cfg(test)]
+pub(crate) fn override_guard() -> std::sync::MutexGuard<'static, ()> {
+    static MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    MUTEX.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Serialize access to the global template-directory overrides so
-    /// parallel tests never observe each other's directories.
-    fn override_guard() -> std::sync::MutexGuard<'static, ()> {
-        static MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        MUTEX.lock().expect("test override mutex poisoned")
-    }
 
     #[test]
     fn test_get_builtin_template() {

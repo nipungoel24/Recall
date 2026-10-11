@@ -40,20 +40,11 @@
             "capabilities": [
                 {
                     "identifier": "main",
-                    "description": "Main window capability with file system and media access",
+                    "description": "Main window capability. Least privilege: the renderer performs NO filesystem access itself. Every read and write goes through a Rust command that validates its path. Phase F2 removed the whole `fs` permission family (fs:default, fs:allow-read-file, fs:read-all, fs:write-all, fs:allow-app-read, fs:allow-app-write, fs:allow-download-write, fs:allow-download-read, fs:scope-download, fs:scope) after verifying that `@tauri-apps/plugin-fs` had zero imports in the frontend; `appDataDir()` comes from the read-only `core:path` API, which is retained.",
                     "windows": [
                         "main"
                     ],
                     "permissions": [
-                        "fs:default",
-                        "fs:allow-read-file",
-                        "fs:read-all",
-                        "fs:write-all",
-                        "fs:allow-app-read",
-                        "fs:allow-app-write",
-                        "fs:allow-download-write",
-                        "fs:allow-download-read",
-                        "fs:scope-download",
                         "core:path:default",
                         "core:event:default",
                         "core:window:default",
@@ -64,15 +55,7 @@
                         "core:window:allow-set-title",
                         "store:default",
                         "notification:default",
-                        "notification:allow-is-permission-granted",
-                        {
-                            "identifier": "fs:scope",
-                            "allow": [
-                                {
-                                    "path": "$APPDATA/*"
-                                }
-                            ]
-                        }
+                        "notification:allow-is-permission-granted"
                     ]
                 }
             ]

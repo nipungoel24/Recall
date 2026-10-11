@@ -171,9 +171,19 @@ pub fn sanitize_template_id(raw: &str) -> Result<String, TemplateError> {
     Ok(id.to_ascii_lowercase())
 }
 
-/// Path of a template JSON file inside a custom templates directory.
+/// Path of a template JSON file inside a templates directory.
+///
+/// Phase F2: this used to interpolate the id straight into the path, so it was
+/// a traversal primitive for any caller that did not remember to sanitize
+/// first. It now validates the id itself, which makes it safe by default rather
+/// than safe-if-the-caller-is-careful.
 pub fn template_file_path(dir: &Path, id: &str) -> PathBuf {
-    dir.join(format!("{}.json", id))
+    match sanitize_template_id(id) {
+        Ok(safe) => dir.join(format!("{}.json", safe)),
+        // An invalid id cannot name a valid template, so it maps to a filename
+        // that will not exist rather than to an attacker-controlled path.
+        Err(_) => dir.join("__invalid_template_id__"),
+    }
 }
 
 /// Resolve the application data templates directory for command use.

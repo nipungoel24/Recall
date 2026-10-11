@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tauri::{AppHandle, Runtime};
 
 use super::ffmpeg::find_ffmpeg_path;
 /// Verify that a finalized audio artifact actually exists and is non-empty.
@@ -286,13 +287,27 @@ pub struct AudioRecoveryStatus {
 /// Recover audio from checkpoint files
 /// This is called by the transcript recovery system to merge audio chunks after a crash
 #[tauri::command]
-pub async fn recover_audio_from_checkpoints(
+pub async fn recover_audio_from_checkpoints<R: Runtime>(
+    app: AppHandle<R>,
     meeting_folder: String,
     _sample_rate: u32,
 ) -> Result<AudioRecoveryStatus, String> {
-    info!("Starting audio recovery for folder: {}", meeting_folder);
+    // Phase F2: recovery merges checkpoints into `audio.mp4` inside the target
+    // folder. Unconfined, a compromised renderer could point it at any
+    // directory on the machine and overwrite files there. It also must never run
+    // against a live recording, whose checkpoints are still being written.
+    if crate::audio::recording_commands::is_recording().await {
+        return Err(
+            "Cannot recover audio while a recording is in progress.".to_string(),
+        );
+    }
 
-    let folder_path = PathBuf::from(&meeting_folder);
+    let resolved_folder =
+        crate::path_guard::confine_recording_path(&app, PathBuf::from(&meeting_folder).as_path())
+            .await?;
+    info!("Starting audio recovery for folder: {}", resolved_folder.display());
+
+    let folder_path = resolved_folder;
     let checkpoints_dir = folder_path.join(".checkpoints");
 
     // Check if checkpoints directory exists
@@ -435,10 +450,24 @@ pub async fn recover_audio_from_checkpoints(
 /// Clean up checkpoint files after successful recording or recovery
 /// This command is called by the frontend after successful save to clean up checkpoint files
 #[tauri::command]
-pub async fn cleanup_checkpoints(meeting_folder: String) -> Result<(), String> {
-    info!("Cleaning up checkpoints for folder: {}", meeting_folder);
+pub async fn cleanup_checkpoints<R: Runtime>(
+    app: AppHandle<R>,
+    meeting_folder: String,
+) -> Result<(), String> {
+    // Phase F2 security: this used to `remove_dir_all` whatever path the
+    // renderer supplied. Three guards now apply:
+    //   1. refuse while a recording is live (recovery must never destroy an
+    //      in-progress capture -- that was a real data-loss path);
+    //   2. confine the target to the recordings roots;
+    //   3. refuse to delete a root or an ancestor of one.
+    if crate::audio::recording_commands::is_recording().await {
+        return Err(
+            "Cannot clean up checkpoints while a recording is in progress.".to_string(),
+        );
+    }
 
-    let folder_path = PathBuf::from(&meeting_folder);
+    let folder_path = crate::path_guard::confine_recording_deletion(&app, PathBuf::from(&meeting_folder).as_path())
+        .await?;
     let checkpoints_dir = folder_path.join(".checkpoints");
 
     if checkpoints_dir.exists() {
@@ -455,8 +484,14 @@ pub async fn cleanup_checkpoints(meeting_folder: String) -> Result<(), String> {
 /// Check if a meeting folder has audio checkpoint files
 /// Returns true if .checkpoints/ directory exists and contains .mp4 files
 #[tauri::command]
-pub async fn has_audio_checkpoints(meeting_folder: String) -> Result<bool, String> {
-    let folder_path = PathBuf::from(&meeting_folder);
+pub async fn has_audio_checkpoints<R: Runtime>(
+    app: AppHandle<R>,
+    meeting_folder: String,
+) -> Result<bool, String> {
+    // Phase F2: this was an unconfined existence oracle over any directory the
+    // renderer named. Confine it to the recordings roots.
+    let folder_path =
+        crate::path_guard::confine_recording_path(&app, PathBuf::from(&meeting_folder).as_path()).await?;
     let checkpoints_dir = folder_path.join(".checkpoints");
 
     // Check if checkpoints directory exists

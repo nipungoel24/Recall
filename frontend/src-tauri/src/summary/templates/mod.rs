@@ -44,6 +44,8 @@ mod defaults;
 pub mod loader;
 pub(crate) mod store;
 mod types;
+#[cfg(test)]
+mod tests_f2_security;
 
 pub use loader::{
     get_template, get_template_json_raw, is_builtin_template_id, list_template_ids, list_templates,

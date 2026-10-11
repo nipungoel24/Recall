@@ -51,6 +51,7 @@ pub mod onboarding;
 pub mod openai;
 pub mod openrouter;
 pub mod parakeet_engine;
+pub mod path_guard;
 pub mod state;
 pub mod summary;
 pub mod tray;
@@ -218,31 +219,59 @@ fn get_transcription_status() -> audio::transcription::outcome::TranscriptionOut
     audio::transcription::outcome::snapshot()
 }
 
+/// Read a recording's audio file.
+///
+/// Phase F2 security: this previously accepted ANY absolute path from the
+/// renderer and returned its bytes, which is an arbitrary-file-read primitive
+/// if anything can execute script in the webview. It is now confined to the
+/// recordings roots.
 #[tauri::command]
-fn read_audio_file(file_path: String) -> Result<Vec<u8>, String> {
-    match std::fs::read(&file_path) {
+async fn read_audio_file<R: Runtime>(app: AppHandle<R>, file_path: String) -> Result<Vec<u8>, String> {
+    let resolved = path_guard::confine_recording_path(&app, std::path::Path::new(&file_path)).await?;
+    match std::fs::read(&resolved) {
         Ok(data) => Ok(data),
         Err(e) => Err(format!("Failed to read audio file: {}", e)),
     }
 }
 
+/// Write a transcript to disk.
+///
+/// Phase F2 security: `create_dir_all` + `fs::write` on an unvalidated renderer
+/// path is an arbitrary-write primitive. Now confined to the recordings roots,
+/// and the write is atomic (temp + rename) so a crash cannot leave a truncated
+/// transcript JSON that later fails to parse with no recovery.
 #[tauri::command]
-async fn save_transcript(file_path: String, content: String) -> Result<(), String> {
-    log_info!("Saving transcript to: {}", file_path);
+async fn save_transcript<R: Runtime>(
+    app: AppHandle<R>,
+    file_path: String,
+    content: String,
+) -> Result<(), String> {
+    let resolved = path_guard::confine_recording_path(&app, std::path::Path::new(&file_path)).await?;
+    log_info!("Saving transcript to a validated recordings path");
 
-    // Ensure parent directory exists
-    if let Some(parent) = std::path::Path::new(&file_path).parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
-        }
+    if let Some(parent) = resolved.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
-    // Write content to file
-    std::fs::write(&file_path, content)
-        .map_err(|e| format!("Failed to write transcript: {}", e))?;
+    // Write to a sibling temp file then rename, so readers never observe a
+    // partially written transcript.
+    let temp = resolved.with_extension(format!(
+        "tmp-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::write(&temp, content).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        format!("Failed to write transcript: {}", e)
+    })?;
+    std::fs::rename(&temp, &resolved).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        format!("Failed to finalize transcript: {}", e)
+    })?;
 
-    log_info!("Transcript saved successfully");
     Ok(())
 }
 
