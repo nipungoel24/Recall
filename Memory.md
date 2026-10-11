@@ -2028,15 +2028,24 @@ recoverable checkpoints are left on disk. It is never reported as saved.
 - Builds fail closed if target lacks a pinned hash; functional `-version` execution is strictly prohibited from substituting for cryptographic integrity.
 - Pinned official Windows x86_64 essentials binary SHA-256 (`5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d`).
 - `RECALL_FFMPEG_SHA256` validated as a 64-character hex string and prohibited from overriding official pinned hashes with conflicting values.
-- Automated regression suite added: `frontend/tests/lib/ffmpeg-integrity.test.mjs` (6/6 tests passing).
+- Automated regression suite expanded: `frontend/tests/lib/ffmpeg-integrity.test.mjs` (10/10 tests passing).
+
+### Workstream 2 Resolution: Content Security Policy & Least Privilege Hardening
+- Production CSP in `frontend/src-tauri/tauri.conf.json` tightened to strictly necessary origins:
+  - `default-src: 'self'`
+  - `style-src: 'self' 'unsafe-inline'` (required for dynamic CSS variable widths and inline layout custom properties)
+  - `img-src: 'self' data:` (removed obsolete `asset.localhost`)
+  - `connect-src: 'self' ipc: http://ipc.localhost` (removed dead Meetily ports `5167`, `8178`, `11434`, and external `api.ollama.ai`)
+- Automated regression suite added: `frontend/tests/lib/security-csp.test.mjs` (8/8 tests passing).
+- Documented 10-point manual desktop QA handoff checklist in `docs/PHYSICAL_DESKTOP_QA_CHECKLIST.md` (all marked NOT RUN pending physical workstation verification).
 
 ### Comprehensive Validation Scorecard
 - Rust workspace tests: 484 passed, 0 failed, 2 ignored, 1 doc test passed (`cargo test --workspace --offline`).
 - Rust code formatting: PASS (`cargo fmt --all -- --check`).
 - Rust Clippy lints: PASS (0 errors, `cargo clippy --workspace --all-targets --offline`).
-- Frontend unit/integration tests: 686 passed, 0 failed across 137 test suites (`node --test tests/lib/*.test.mjs`).
+- Frontend unit/integration tests: 698 passed, 0 failed across 138 test suites (`node --test tests/lib/*.test.mjs`).
 - Frontend contract audit: 82 passed, 0 violations (`node tests/contract/audit.mjs`).
 - TypeScript compilation: clean (0 errors, `npx tsc --noEmit`).
 - Next.js production build: 13/13 static pages prerendered successfully (`npm run build`).
-- Host constraint: Manual GUI desktop smoke testing checklist documented for native execution.
+- Physical desktop verification: 10-point checklist documented in `docs/PHYSICAL_DESKTOP_QA_CHECKLIST.md` (NOT RUN).
 - Real user data integrity: `%APPDATA%\com.meetily.ai` database verified untouched (4,632,576 bytes, SHA-256 verified, 0 audio files).

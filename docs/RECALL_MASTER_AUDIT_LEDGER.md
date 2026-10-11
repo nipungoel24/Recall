@@ -168,6 +168,7 @@ previously overclaimed WAL and an incorrect migration count of 15).
 | T-4 | **S3** | **FIXED** | `phase4-recording-experience.test.mjs` line-ending normalization resolved CRLF/LF mismatch on Windows. |
 | T-5 | **S3** | **FIXED** | `qa-routes.test.mjs` converted from `bun:test` to `node:test` + `loadTsModule`, achieving 100% test pass on Windows/Node. |
 | T-6 | **S3** | **FIXED** | `tsconfig.json` excludes `tests`, ensuring `npx tsc --noEmit` validates application code with 0 errors. |
+| T-7 | **S2** | **FIXED** | Production CSP in `tauri.conf.json` tightened: removed obsolete ports (5167, 8178, 11434), external registry (api.ollama.ai), and disabled asset protocol (asset.localhost). Automated regression tests added in `security-csp.test.mjs`. |
 
 ## 2. Validation matrix
 
@@ -176,9 +177,10 @@ previously overclaimed WAL and an incorrect migration count of 15).
 | Rust unit & integration | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | **484 pass / 0 fail / 2 ignored / 1 doc pass** (+101) |
 | Rust fmt | `cargo fmt --all -- --check` | FAIL | **PASS** |
 | Rust lint | `cargo clippy --workspace --all-targets` | pass | **PASS** (0 errors) |
-| Frontend unit & behavioral | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | **686 pass / 0 fail / 0 known failures** (137 suites) |
+| Frontend unit & behavioral | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | **698 pass / 0 fail / 0 known failures** (138 suites) |
 | Contract audit | `node tests/contract/audit.mjs` | 80 pass / 0 violations | **82 pass / 0 violations** |
 | TypeScript compilation | `tsc --noEmit` (`src/`) | clean | **clean** (0 errors) |
 | Next.js production build | `npm run build` | pass | **PASS (13/13 static pages prerendered)** |
+| Physical desktop QA | `docs/PHYSICAL_DESKTOP_QA_CHECKLIST.md` | none | **Documented 10-point checklist (NOT RUN)** |
 
 Known baseline failures: **0** (All previous known failures resolved).
