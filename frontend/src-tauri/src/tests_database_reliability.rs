@@ -457,3 +457,145 @@ fn context_rebuild_cleanup_no_longer_swallows_database_errors() {
         "cleanup failures must be reported"
     );
 }
+
+#[test]
+fn context_memory_repetition_count_persists_and_clamps_on_refresh() {
+    use crate::context::model::MemoryItem;
+    use crate::context::repository::ContextMemoryRepository;
+
+    rt().block_on(async {
+        let db = TestDb::new("context-rep").await;
+
+        sqlx::query(
+            "INSERT INTO contexts (id, name, created_at, updated_at) VALUES ('ctx-1', 'Test Context', '2026-10-11T00:00:00Z', '2026-10-11T00:00:00Z')",
+        )
+        .execute(&db.pool)
+        .await
+        .expect("insert context");
+
+        let item = MemoryItem {
+            id: "cmi-1".to_string(),
+            context_id: "ctx-1".to_string(),
+            source_meeting_id: None,
+            kind: "fact".to_string(),
+            content: "Architecture fact".to_string(),
+            status: None,
+            repetition_count: 1,
+            created_at: "2026-10-11T00:00:00Z".to_string(),
+            updated_at: "2026-10-11T00:00:00Z".to_string(),
+        };
+        ContextMemoryRepository::insert_item(&db.pool, &item)
+            .await
+            .expect("insert item");
+
+        let views = ContextMemoryRepository::list_item_views(&db.pool, "ctx-1", 10)
+            .await
+            .expect("list views");
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].repetition_count, 1);
+
+        for i in 2..=5 {
+            ContextMemoryRepository::refresh_item(
+                &db.pool,
+                "cmi-1",
+                "Updated content",
+                "2026-10-11T01:00:00Z",
+            )
+            .await
+            .expect("refresh item");
+            let count: i64 = sqlx::query_scalar(
+                "SELECT repetition_count FROM context_memory_items WHERE id = 'cmi-1'",
+            )
+            .fetch_one(&db.pool)
+            .await
+            .expect("fetch count");
+            assert_eq!(count, i);
+        }
+
+        // 6th refresh stays clamped at 5
+        ContextMemoryRepository::refresh_item(
+            &db.pool,
+            "cmi-1",
+            "Updated content again",
+            "2026-10-11T02:00:00Z",
+        )
+        .await
+        .expect("refresh item");
+        let count: i64 = sqlx::query_scalar(
+            "SELECT repetition_count FROM context_memory_items WHERE id = 'cmi-1'",
+        )
+        .fetch_one(&db.pool)
+        .await
+        .expect("fetch count");
+        assert_eq!(count, 5);
+
+        // Verify score reflects 5 repetitions (2.0x factor: 55 * 2.0 = 110)
+        let views = ContextMemoryRepository::list_item_views(&db.pool, "ctx-1", 10)
+            .await
+            .expect("list views");
+        assert_eq!(views[0].repetition_count, 5);
+        let now_millis = chrono::DateTime::parse_from_rfc3339("2026-10-11T02:00:00Z")
+            .unwrap()
+            .timestamp_millis();
+        assert_eq!(views[0].score(now_millis), 110.0);
+    });
+}
+
+#[test]
+fn context_memory_upgrade_from_pre_repetition_schema_defaults_to_one() {
+    rt().block_on(async {
+        let path = std::env::temp_dir().join(format!(
+            "recall-d-upgrade-old-{}.sqlite",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let opts = sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true);
+        let pool = sqlx::SqlitePool::connect_with(opts)
+            .await
+            .expect("connect");
+
+        sqlx::query(
+            "CREATE TABLE context_memory_items (
+                id TEXT PRIMARY KEY,
+                context_id TEXT NOT NULL,
+                source_meeting_id TEXT,
+                kind TEXT NOT NULL,
+                content TEXT NOT NULL,
+                status TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create old table");
+
+        sqlx::query(
+            "INSERT INTO context_memory_items (id, context_id, kind, content, created_at, updated_at)
+             VALUES ('old-1', 'ctx-old', 'fact', 'Old Fact', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert old row");
+
+        let migration_sql = include_str!("../migrations/20261011000000_add_context_memory_repetition_count.sql");
+        sqlx::query(migration_sql)
+            .execute(&pool)
+            .await
+            .expect("apply additive migration");
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT repetition_count FROM context_memory_items WHERE id = 'old-1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read upgraded count");
+        assert_eq!(count, 1, "existing records must default to 1 occurrence");
+
+        let _ = std::fs::remove_file(&path);
+    });
+}

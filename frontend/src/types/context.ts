@@ -42,6 +42,7 @@ export interface ContextMemoryItem {
   kind: ContextMemoryItemKind;
   content: string;
   status?: string | null;
+  repetitionCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +143,7 @@ export function normalizeContextMemoryItem(raw: UnknownRecord): ContextMemoryIte
     kind: isContextMemoryItemKind(kindValue) ? kindValue : 'note',
     content: asString(firstDefined(raw, 'content', 'content'), ''),
     status: asOptionalString(firstDefined(raw, 'status', 'status')) || null,
+    repetitionCount: Math.max(1, Math.min(5, asNumber(firstDefined(raw, 'repetitionCount', 'repetition_count'), 1))),
     createdAt: asString(firstDefined(raw, 'createdAt', 'created_at'), ''),
     updatedAt: asString(firstDefined(raw, 'updatedAt', 'updated_at'), ''),
   };
@@ -326,9 +328,9 @@ const TERMINAL_STATUSES = new Set(['done', 'blocked', 'resolved', 'closed']);
  * recency decay, and frequency signals. Mirrors the Rust implementation.
  */
 export function calculateMemoryItemScore(
-  item: Pick<ContextMemoryItem, 'kind' | 'status' | 'updatedAt' | 'createdAt'>,
+  item: Pick<ContextMemoryItem, 'kind' | 'status' | 'updatedAt' | 'createdAt'> & { repetitionCount?: number },
   nowMillis: number = Date.now(),
-  repetitionCount: number = 1,
+  repetitionCount?: number,
 ): number {
   const statusLower = item.status ? item.status.toLowerCase().trim() : '';
   const isClosed = TERMINAL_STATUSES.has(statusLower);
@@ -368,7 +370,13 @@ export function calculateMemoryItemScore(
     recencyFactor = 1.0 / (1.0 + ageDays / 30.0);
   }
 
-  const occurrences = Math.max(1, repetitionCount);
+  const rawCount =
+    typeof repetitionCount === 'number'
+      ? repetitionCount
+      : typeof item.repetitionCount === 'number'
+      ? item.repetitionCount
+      : 1;
+  const occurrences = Math.max(1, Math.min(5, Number.isFinite(rawCount) ? rawCount : 1));
   const frequencyMultiplier = 1.0 + Math.min(occurrences - 1, 4) * 0.25;
 
   const raw = baseWeight * recencyFactor * frequencyMultiplier;
@@ -387,8 +395,8 @@ export function compareContextMemoryItems(
   b: ContextMemoryItem,
   nowMillis: number = Date.now(),
 ): number {
-  const scoreA = calculateMemoryItemScore(a, nowMillis, 1);
-  const scoreB = calculateMemoryItemScore(b, nowMillis, 1);
+  const scoreA = calculateMemoryItemScore(a, nowMillis);
+  const scoreB = calculateMemoryItemScore(b, nowMillis);
 
   if (scoreB !== scoreA) {
     return scoreB - scoreA;

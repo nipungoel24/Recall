@@ -122,6 +122,7 @@ pub struct MemoryItem {
     pub kind: String,
     pub content: String,
     pub status: Option<String>,
+    pub repetition_count: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -227,13 +228,13 @@ impl MemoryItem {
     }
 
     /// Calculates item relevance score.
-    pub fn score(&self, now_millis: i64, repetition_count: u32) -> f64 {
+    pub fn score(&self, now_millis: i64) -> f64 {
         calculate_memory_score(
             self.kind(),
             self.status.as_deref(),
             self.updated_at_millis(),
             now_millis,
-            repetition_count,
+            self.repetition_count.clamp(1, 5) as u32,
         )
     }
 }
@@ -248,6 +249,7 @@ pub struct ContextMemoryItemView {
     pub kind: String,
     pub content: String,
     pub status: Option<String>,
+    pub repetition_count: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -273,13 +275,13 @@ impl ContextMemoryItemView {
             .unwrap_or(0)
     }
 
-    pub fn score(&self, now_millis: i64, repetition_count: u32) -> f64 {
+    pub fn score(&self, now_millis: i64) -> f64 {
         calculate_memory_score(
             self.kind(),
             self.status.as_deref(),
             self.updated_at_millis(),
             now_millis,
-            repetition_count,
+            self.repetition_count.clamp(1, 5) as u32,
         )
     }
 }

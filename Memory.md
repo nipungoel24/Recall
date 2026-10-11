@@ -1986,3 +1986,20 @@ child is logged explicitly with its PID — it is not swallowed.
 If an active recording cannot be finalized during shutdown, the shutdown logs
 that the recording is **incomplete** and relies on Phase F1's guarantee that
 recoverable checkpoints are left on disk. It is never reported as saved.
+
+
+## Context frequency weighting & persistence (Finding E-8 closed)
+
+### Migration & persistence semantics
+- Migration `frontend/src-tauri/migrations/20261011000000_add_context_memory_repetition_count.sql`:
+  `ALTER TABLE context_memory_items ADD COLUMN repetition_count INTEGER NOT NULL DEFAULT 1;`
+- Checksum recorded in `migrations/checksums.json` (SHA-384).
+- Repetition counter behavior:
+  - New memory items created with `repetition_count = 1`.
+  - Evidence-backed deduplication refresh (`ContextMemoryRepository::refresh_item` and `MemoryEngine::merge_item`) increments the counter: `MIN(repetition_count + 1, 5)`.
+  - User direct edits (`update_item`) and read-only ranking passes never alter the counter.
+  - Scoring uses `1.0 + min(occurrences - 1, 4) * 0.25`, mapping 1 -> 1.0x, 2 -> 1.25x, 3 -> 1.5x, 4 -> 1.75x, 5+ -> 2.0x.
+  - Deterministic 4-stage tie-breaking: score desc -> updated_at desc -> source_meeting_id -> item ID asc.
+- TypeScript mirror in `src/types/context.ts` accepts optional `repetitionCount` (safely defaulting to 1 without `NaN`), matching backend score calculation.
+- Local configuration safety: preserved unstaged `tauri.conf.json` edit byte-for-byte; verified test isolation via build environment configuration.
+- Validation: 484 Rust unit tests passed (0 failures), 16 database reliability tests passed (0 failures), 172 Phase 5 frontend tests passed (0 failures), contract audit 82 passed / 0 violations, Next.js production build compiled 13/13 pages.

@@ -61,7 +61,7 @@ Severity: **S1** = data loss / false success / security · **S2** = correctness 
 | E-5 | **S2** | **FIXED** | Unvalidated model output: `confidence` unclamped but rendered as a percentage ("9500%"), fenced JSON unsupported, `due_date`/`owner`/`status`/`text` unbounded. All are now normalised or rejected; malformed output is a reported error, never a silent empty success. | `summary/intelligence_validation.rs` |
 | E-6 | **S2** | **FIXED** | Context selection was **non-deterministic**: `HashSet` + `.take(2)` meant which 2 of 3+ selected contexts reached the prompt varied per process launch. Both sites now dedup order-preservingly, keeping the user's explicit selection order. | `service.rs`, `summary/commands.rs` |
 | E-7 | **S3** | **FIXED** | Intelligence write was non-atomic: a failure between the abstract and items left a new abstract beside stale items. `replace_all` now writes both in one transaction; a forced mid-transaction failure is regression-tested to roll back cleanly. | `MeetingIntelligenceRepository::replace_all` |
-| E-8 | **S3** | open | Frequency multiplier is inert dead code — every production call site passes `1`. | `context/render.rs:54-55,85-86` |
+| E-8 | **S3** | **FIXED** | Frequency multiplier was inert without persistence: migration `20261011000000_add_context_memory_repetition_count.sql` adds column defaulting to 1; refreshes increment counter bounded at 5; model and ranking use real count with 1.0x-2.0x factor; TypeScript mirrors contract. | `migrations/20261011000000_add_context_memory_repetition_count.sql`, `context/repository.rs`, `context/model.rs`, `types/context.ts` |
 | E-9 | **S3** | **FIXED** | Swallowed cleanup errors can leave a visible `__rebuild-<uuid>` phantom context. Deferred to Workstream C/D (context rebuild teardown). | `contexts/service.rs:365,369` |
 | E-10 | **S2** | **FIXED** | *(new)* Source rows were deleted only via `ON DELETE CASCADE`, which depends on the connection having `PRAGMA foreign_keys = ON`. Without it, sources orphan and `get_sources_for_meeting` returns evidence pointing at deleted items. Sources are now deleted explicitly inside the transaction. | `meeting_intelligence.rs` |
 | — | — | VERIFIED OK | Ranking weights (Action 100/15, Question 85/15, Decision 70, Fact 55, Note 40, Unknown 10), recency `1/(1+age/30)` floor 0.1, budgets (4000 tok / 16000 chars / 2000 chars-per-item / 2 contexts), dedup with provenance, `api_get_meeting_intelligence[_items]` | `context/model.rs`, `extraction.rs` |
@@ -74,9 +74,9 @@ segment IDs server-side, never model-invented database IDs.
 
 | ID | Sev | Status | Finding | Evidence |
 |---|---|---|---|---|
-| F-1 | **S2** | open | Meeting search failure sets `searchResults([])` with no error state, so a failed search renders "No matching meetings." | `SidebarProvider.tsx:229-232`, `meetings/page.tsx:129-131,203-213` |
-| F-2 | **S2** | open | Summary fetch failure sets summary null and renders "No Summary Generated Yet." | `meeting-details/page.tsx:284-288` |
-| F-3 | **S3** | open | `api_delete_api_key` is implemented but unregistered (dead command). | Phase E command inventory |
+| F-1 | **S2** | **FIXED** | Meeting search failure sets `searchResults([])` with no error state. Fixed in 4fce614: `searchError` state tracked, retryable error rendered. | `SidebarProvider.tsx`, `meetings/page.tsx` |
+| F-2 | **S2** | **FIXED** | Summary fetch failure sets summary null and renders empty state. Fixed in 4fce614: `summaryLoadError` channel rendered. | `SummaryPanel.tsx`, `useMeetingData.ts` |
+| F-3 | **S3** | **FIXED** | `api_delete_api_key` was dead and unregistered. Fixed in 0c75a3f: unreachable command removed safely while preserving data repository. | `api/api.rs` |
 
 Audit sweep examined ~180 error-handling sites; most prior defects are already
 fixed. Transcript search is the largest remaining false-empty surface.

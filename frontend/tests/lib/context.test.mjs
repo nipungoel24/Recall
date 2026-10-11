@@ -176,6 +176,7 @@ assert.equal(normalizedItem.sourceMeetingId, 'meeting-9');
 assert.equal(normalizedItem.sourceMeetingTitle, 'Customer Interview');
 assert.equal(normalizedItem.kind, 'decision');
 assert.equal(normalizedItem.status, 'open');
+assert.equal(normalizedItem.repetitionCount, 1);
 
 assert.equal(
   normalizeContextMemoryItem({ id: 'cmi-2', kind: 'not-a-kind', content: 'x' }).kind,
@@ -205,6 +206,7 @@ assert.deepEqual(
         kind: 'fact',
         content: 'Team of 4',
         status: null,
+        repetitionCount: 1,
         createdAt: '',
         updatedAt: '',
       },
@@ -383,21 +385,24 @@ const rfcNow = new Date(fixedNow).toISOString();
 const rfc15DaysAgo = new Date(fixedNow - 15 * dayMs).toISOString();
 const rfc30DaysAgo = new Date(fixedNow - 30 * dayMs).toISOString();
 const rfc60DaysAgo = new Date(fixedNow - 60 * dayMs).toISOString();
+const scoredItem = (kind, status, updatedAt, repetitionCount = 1) => ({
+  kind, status, updatedAt, createdAt: updatedAt, repetitionCount,
+});
 
 // Base weights hierarchy
-assert.equal(calculateMemoryItemScore({ kind: 'action', status: 'open', updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 100.0);
-assert.equal(calculateMemoryItemScore({ kind: 'question', status: 'open', updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 85.0);
-assert.equal(calculateMemoryItemScore({ kind: 'decision', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 70.0);
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 55.0);
-assert.equal(calculateMemoryItemScore({ kind: 'note', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 40.0);
-assert.equal(calculateMemoryItemScore({ kind: 'action', status: 'done', updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 15.0);
-assert.equal(calculateMemoryItemScore({ kind: 'question', status: 'resolved', updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 15.0);
+assert.equal(calculateMemoryItemScore(scoredItem('action', 'open', rfcNow), fixedNow), 100.0);
+assert.equal(calculateMemoryItemScore(scoredItem('question', 'open', rfcNow), fixedNow), 85.0);
+assert.equal(calculateMemoryItemScore(scoredItem('decision', null, rfcNow), fixedNow), 70.0);
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, rfcNow), fixedNow), 55.0);
+assert.equal(calculateMemoryItemScore(scoredItem('note', null, rfcNow), fixedNow), 40.0);
+assert.equal(calculateMemoryItemScore(scoredItem('action', 'done', rfcNow), fixedNow), 15.0);
+assert.equal(calculateMemoryItemScore(scoredItem('question', 'resolved', rfcNow), fixedNow), 15.0);
 
 // Monotonic recency decay
-const score0d = calculateMemoryItemScore({ kind: 'decision', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1);
-const score15d = calculateMemoryItemScore({ kind: 'decision', status: null, updatedAt: rfc15DaysAgo, createdAt: rfc15DaysAgo }, fixedNow, 1);
-const score30d = calculateMemoryItemScore({ kind: 'decision', status: null, updatedAt: rfc30DaysAgo, createdAt: rfc30DaysAgo }, fixedNow, 1);
-const score60d = calculateMemoryItemScore({ kind: 'decision', status: null, updatedAt: rfc60DaysAgo, createdAt: rfc60DaysAgo }, fixedNow, 1);
+const score0d = calculateMemoryItemScore(scoredItem('decision', null, rfcNow), fixedNow);
+const score15d = calculateMemoryItemScore(scoredItem('decision', null, rfc15DaysAgo), fixedNow);
+const score30d = calculateMemoryItemScore(scoredItem('decision', null, rfc30DaysAgo), fixedNow);
+const score60d = calculateMemoryItemScore(scoredItem('decision', null, rfc60DaysAgo), fixedNow);
 
 assert.equal(score0d, 70.0);
 assert.equal(score30d, 35.0); // 70 * 0.5
@@ -406,29 +411,29 @@ assert.ok(score15d > score30d, '15d score must exceed 30d score');
 assert.ok(score30d > score60d, '30d score must exceed 60d score');
 
 // Frequency multiplier
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 1), 55.0);
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 2), 68.75); // 1.25x
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 3), 82.5); // 1.5x
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 5), 110.0); // 2.0x (max)
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: rfcNow, createdAt: rfcNow }, fixedNow, 10), 110.0); // clamped at 2.0x
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, rfcNow, 1), fixedNow), 55.0);
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, rfcNow, 2), fixedNow), 68.75); // 1.25x
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, rfcNow, 3), fixedNow), 82.5); // 1.5x
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, rfcNow, 5), fixedNow), 110.0); // 2.0x (max)
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, rfcNow, 10), fixedNow), 110.0); // clamped at 2.0x
 
 // Invalid and future timestamps
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: 'invalid-date', createdAt: '' }, fixedNow, 1), 5.5); // 55 * 0.1
-assert.equal(calculateMemoryItemScore({ kind: 'fact', status: null, updatedAt: new Date(fixedNow + 100000).toISOString(), createdAt: '' }, fixedNow, 1), 55.0);
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, 'invalid-date'), fixedNow), 5.5); // 55 * 0.1
+assert.equal(calculateMemoryItemScore(scoredItem('fact', null, new Date(fixedNow + 100000).toISOString()), fixedNow), 55.0);
 
 // Deterministic ranking and tie-breaking
-const itemAction = { id: 'a1', contextId: 'c1', kind: 'action', content: 'Action 1', status: 'open', updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm1' };
-const itemOlderAction = { id: 'a2', contextId: 'c1', kind: 'action', content: 'Action 2', status: 'open', updatedAt: new Date(fixedNow - 10 * dayMs).toISOString(), createdAt: '', sourceMeetingId: 'm1' };
-const itemDecision = { id: 'd1', contextId: 'c1', kind: 'decision', content: 'Decision 1', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm1' };
-const itemFact = { id: 'f1', contextId: 'c1', kind: 'fact', content: 'Fact 1', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm1' };
+const itemAction = { id: 'a1', contextId: 'c1', kind: 'action', content: 'Action 1', status: 'open', updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm1', repetitionCount: 1 };
+const itemOlderAction = { id: 'a2', contextId: 'c1', kind: 'action', content: 'Action 2', status: 'open', updatedAt: new Date(fixedNow - 10 * dayMs).toISOString(), createdAt: '', sourceMeetingId: 'm1', repetitionCount: 1 };
+const itemDecision = { id: 'd1', contextId: 'c1', kind: 'decision', content: 'Decision 1', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm1', repetitionCount: 1 };
+const itemFact = { id: 'f1', contextId: 'c1', kind: 'fact', content: 'Fact 1', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm1', repetitionCount: 1 };
 
 const rankedItems = rankContextMemoryItems([itemFact, itemDecision, itemOlderAction, itemAction], fixedNow);
 assert.deepEqual(plain(rankedItems.map(i => i.id)), ['a1', 'a2', 'd1', 'f1'], 'items must rank by score descending');
 
 // Tie breaking on sourceMeetingId and id
-const tieZ = { id: 'id-z', contextId: 'c1', kind: 'fact', content: 'Fact', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm-alpha' };
-const tieA = { id: 'id-a', contextId: 'c1', kind: 'fact', content: 'Fact', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm-alpha' };
-const tieBeta = { id: 'id-1', contextId: 'c1', kind: 'fact', content: 'Fact', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm-beta' };
+const tieZ = { id: 'id-z', contextId: 'c1', kind: 'fact', content: 'Fact', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm-alpha', repetitionCount: 1 };
+const tieA = { id: 'id-a', contextId: 'c1', kind: 'fact', content: 'Fact', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm-alpha', repetitionCount: 1 };
+const tieBeta = { id: 'id-1', contextId: 'c1', kind: 'fact', content: 'Fact', status: null, updatedAt: rfcNow, createdAt: rfcNow, sourceMeetingId: 'm-beta', repetitionCount: 1 };
 
 const rankedTies = rankContextMemoryItems([tieZ, tieBeta, tieA], fixedNow);
 assert.deepEqual(plain(rankedTies.map(i => i.id)), ['id-a', 'id-z', 'id-1'], 'ties must break on sourceMeetingId then id');

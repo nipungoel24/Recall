@@ -54,7 +54,8 @@ impl ContextMemoryRepository {
             r#"
             SELECT cmi.id, cmi.context_id, cmi.source_meeting_id,
                    m.title AS source_meeting_title,
-                   cmi.kind, cmi.content, cmi.status, cmi.created_at, cmi.updated_at
+                   cmi.kind, cmi.content, cmi.status, cmi.repetition_count,
+                   cmi.created_at, cmi.updated_at
             FROM context_memory_items cmi
             LEFT JOIN meetings m ON m.id = cmi.source_meeting_id
             WHERE cmi.context_id = ?
@@ -72,8 +73,8 @@ impl ContextMemoryRepository {
         sqlx::query(
             r#"
             INSERT INTO context_memory_items
-                (id, context_id, source_meeting_id, kind, content, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, context_id, source_meeting_id, kind, content, status, repetition_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&item.id)
@@ -82,6 +83,7 @@ impl ContextMemoryRepository {
         .bind(&item.kind)
         .bind(&item.content)
         .bind(&item.status)
+        .bind(item.repetition_count.clamp(1, 5))
         .bind(&item.created_at)
         .bind(&item.updated_at)
         .execute(pool)
@@ -97,12 +99,16 @@ impl ContextMemoryRepository {
         content: &str,
         updated_at: &str,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query("UPDATE context_memory_items SET content = ?, updated_at = ? WHERE id = ?")
-            .bind(content)
-            .bind(updated_at)
-            .bind(item_id)
-            .execute(pool)
-            .await?;
+        sqlx::query(
+            "UPDATE context_memory_items
+             SET content = ?, updated_at = ?, repetition_count = MIN(repetition_count + 1, 5)
+             WHERE id = ?",
+        )
+        .bind(content)
+        .bind(updated_at)
+        .bind(item_id)
+        .execute(pool)
+        .await?;
         Ok(())
     }
 

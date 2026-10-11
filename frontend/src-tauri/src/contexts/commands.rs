@@ -108,6 +108,7 @@ impl From<ContextMemoryItemRow> for ContextMemoryItemView {
             kind: row.kind,
             content: row.content,
             status: row.status,
+            repetition_count: row.repetition_count,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
@@ -263,6 +264,7 @@ pub async fn api_get_context_memory(
             kind: r.item.kind,
             content: r.item.content,
             status: r.item.status,
+            repetition_count: r.item.repetition_count,
             created_at: r.item.created_at,
             updated_at: r.item.updated_at,
         })

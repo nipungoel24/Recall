@@ -29,6 +29,7 @@ pub struct ContextMemoryItemRow {
     pub kind: String,
     pub content: String,
     pub status: Option<String>,
+    pub repetition_count: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -121,6 +122,7 @@ impl ContextMemoryItemsRepository {
             kind: kind.to_string(),
             content: content.to_string(),
             status: status.map(str::to_string),
+            repetition_count: 1,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -163,13 +165,14 @@ impl ContextMemoryItemsRepository {
             String,
             String,
             Option<String>,
+            i64,
             String,
             String,
             Option<String>,
         );
         let rows: Vec<RowTuple> = sqlx::query_as(
             "SELECT i.id, i.context_id, i.source_meeting_id, i.kind, i.content, i.status,
-                    i.created_at, i.updated_at, m.title
+                    i.repetition_count, i.created_at, i.updated_at, m.title
              FROM context_memory_items i
              LEFT JOIN meetings m ON m.id = i.source_meeting_id
              WHERE i.context_id = ?
@@ -189,6 +192,7 @@ impl ContextMemoryItemsRepository {
                     kind,
                     content,
                     status,
+                    repetition_count,
                     created_at,
                     updated_at,
                     source_meeting_title,
@@ -201,6 +205,7 @@ impl ContextMemoryItemsRepository {
                             kind,
                             content,
                             status,
+                            repetition_count,
                             created_at,
                             updated_at,
                         },

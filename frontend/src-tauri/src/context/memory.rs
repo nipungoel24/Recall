@@ -129,6 +129,7 @@ mod tests {
                 kind TEXT NOT NULL,
                 content TEXT NOT NULL,
                 status TEXT,
+                repetition_count INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )"#,

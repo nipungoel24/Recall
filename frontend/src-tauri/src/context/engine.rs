@@ -203,6 +203,7 @@ async fn merge_item(
         if let Some(item) = items.iter_mut().find(|i| i.id == existing.id) {
             item.content = longer_content;
             item.updated_at = now.to_string();
+            item.repetition_count = (item.repetition_count + 1).min(5);
         }
         report.refreshed += 1;
         return Ok(());
@@ -215,6 +216,7 @@ async fn merge_item(
         kind: candidate.kind.as_str().to_string(),
         content: candidate.content.clone(),
         status: candidate.status.clone(),
+        repetition_count: 1,
         created_at: now.to_string(),
         updated_at: now.to_string(),
     };
@@ -317,6 +319,7 @@ mod tests {
             kind TEXT NOT NULL,
             content TEXT NOT NULL,
             status TEXT,
+            repetition_count INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -431,6 +434,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(items.len(), 1);
+        assert_eq!(items[0].repetition_count, 1);
         assert_eq!(items[0].source_meeting_id.as_deref(), Some("meeting-1"));
         assert_eq!(items[0].kind, "fact");
         assert!(items[0].id.starts_with("cmi-"));
@@ -514,6 +518,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(items.len(), 1);
+        assert_eq!(items[0].repetition_count, 2);
     }
 
     #[tokio::test]
@@ -777,6 +782,7 @@ mod tests {
             kind: "action".to_string(),
             content: "Ship v2 to production by Friday".to_string(),
             status: Some("open".to_string()),
+            repetition_count: 1,
             created_at: "2026-08-01T00:00:00+00:00".to_string(),
             updated_at: "2026-08-01T00:00:00+00:00".to_string(),
         };
