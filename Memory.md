@@ -2068,3 +2068,25 @@ recoverable checkpoints are left on disk. It is never reported as saved.
 - Next.js production build: 13/13 static pages prerendered successfully (`npm run build`).
 - Physical desktop verification: 10-point checklist documented in `docs/PHYSICAL_DESKTOP_QA_CHECKLIST.md` (NOT RUN).
 - Real user data integrity: `%APPDATA%\com.meetily.ai` database verified untouched (4,632,576 bytes, SHA-256 verified, 0 audio files).
+
+### Daily Brief Desktop Reproduction & End-to-End Verification (August 5, 2026)
+- **Isolated Test Profile Support (`RECALL_DATA_DIR`):** Added `crate::brand_paths::resolve_app_data_dir()` and `resolve_app_data_dir_from_env()` in `frontend/src-tauri/src/brand_paths.rs` supporting `RECALL_DATA_DIR` (with `MEETILY_DATA_DIR` legacy fallback). Wired consistently across `database/manager.rs`, `database/commands.rs`, `summary/daily_service.rs`, `summary/service.rs`, `summary/summary_engine/commands.rs`, `contexts/commands.rs`, `parakeet_engine/commands.rs`, `whisper_engine/commands.rs`, and `tray.rs`.
+- **Date Switching State Reset Fix:** In `frontend/src/hooks/daily/useDailyBrief.ts`, changed `hydrate()` on `dateKey` change to immediately reset `brief` state to `{ status: 'loading', markdown: null, sources: [], error: null }`, preventing completed briefs from previously viewed dates leaking during hydration.
+- **Physical Workstation Desktop Reproduction:**
+  - Application launched with isolated test profile (`RECALL_DATA_DIR` pointing to cloned test DB, symlinked model directory).
+  - Webview connected via Chrome DevTools Protocol (CDP) WebSocket on port 9222.
+  - Navigated to `/daily?date=2026-08-05`: verified orphaned PENDING state from previous crash reconciled to failed on startup (`Generation was interrupted when the application was closed.`), timeline rendered 12 meetings (1h 52m), Retry button displayed.
+  - Triggered generation by clicking Retry: `DailyBriefService::is_active` kept task status active and protected against premature stale reconciliation during the 492-second local LLM run (`llama-helper.exe` with `Qwen3.5-4B-Q4_K_M.gguf`).
+  - Successfully produced and rendered authentic `# Daily Brief: August 5, 2026 - Operations Overhaul & Asset Management` with key decisions, team action items, and topic sections.
+  - Verified date switching: Navigating to `2026-08-04` immediately cleared August 5 brief without stale leakage; navigating back to `2026-08-05` cleanly rehydrated the completed brief.
+  - Verified database preservation: 51 meetings, 7627 transcripts, and 12 August 5 meetings intact.
+  - Live production database `%APPDATA%\com.meetily.ai\meeting_minutes.sqlite` remained 100% untouched (`36D8EC023AF44B8B286760E656C49BC14E930269E45B9715C4B54861984EBBC4`).
+- **Comprehensive Validation Scorecard:**
+  - Rust workspace tests: 489 passed, 0 failed, 2 ignored, 1 doc test passed (`cargo test --workspace --offline`).
+  - Rust formatting: PASS (`cargo fmt --all -- --check`).
+  - Rust Clippy: PASS (0 errors, `cargo clippy --workspace --all-targets --offline`).
+  - Frontend unit tests: 706 passed, 0 failed across 138 suites (`node --test tests/lib/*.test.mjs`).
+  - Contract audit: 82 passed, 0 violations, 1 note (`node tests/contract/audit.mjs`).
+  - TypeScript compilation: clean (0 errors, `npx tsc --noEmit`).
+  - Next.js production build: 13/13 static pages prerendered (`npm run build`).
+  - Live database hash: identical before and after (`36D8EC023AF44B8B286760E656C49BC14E930269E45B9715C4B54861984EBBC4`).

@@ -332,7 +332,7 @@ impl DailyBriefService {
             info!("Detected daily brief transcript language: {}", code);
         }
 
-        let app_data_dir = app.path().app_data_dir().ok();
+        let app_data_dir = crate::brand_paths::resolve_app_data_dir(app).ok();
         let client = reqwest::Client::new();
 
         generate_daily_brief(
@@ -389,5 +389,40 @@ mod tests {
             let _guard = DailyBriefActiveGuard(test_date.to_string());
         }
         assert!(!DailyBriefService::is_active(test_date));
+    }
+
+    #[test]
+    fn test_daily_brief_concurrency_and_independent_cancellation() {
+        let date_a = "2026-08-05";
+        let date_b = "2026-08-06";
+
+        let guard_a = DailyBriefActiveGuard(date_a.to_string());
+        let token_a = DailyBriefService::register_active(date_a);
+
+        let guard_b = DailyBriefActiveGuard(date_b.to_string());
+        let token_b = DailyBriefService::register_active(date_b);
+
+        assert!(DailyBriefService::is_active(date_a));
+        assert!(DailyBriefService::is_active(date_b));
+        assert!(!token_a.is_cancelled());
+        assert!(!token_b.is_cancelled());
+
+        // Cancel date_a only
+        assert!(DailyBriefService::cancel(date_a));
+        assert!(token_a.is_cancelled());
+        assert!(
+            !token_b.is_cancelled(),
+            "Date B must NOT be cancelled when Date A is cancelled"
+        );
+
+        drop(guard_a);
+        assert!(!DailyBriefService::is_active(date_a));
+        assert!(
+            DailyBriefService::is_active(date_b),
+            "Date B must remain active"
+        );
+
+        drop(guard_b);
+        assert!(!DailyBriefService::is_active(date_b));
     }
 }

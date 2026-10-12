@@ -249,3 +249,99 @@ impl SummaryProcessesRepository {
         Ok(count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("failed to open in-memory sqlite");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("failed to run migrations");
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_reconcile_stale_in_progress_summary_processes() {
+        let pool = test_pool().await;
+
+        // Insert test meetings
+        for id in &["m1", "m2", "m3"] {
+            sqlx::query(
+                "INSERT INTO meetings (id, title, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))"
+            )
+            .bind(id)
+            .bind(format!("Meeting {}", id))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        // m1: completed
+        sqlx::query(
+            "INSERT INTO summary_processes (meeting_id, status, created_at, updated_at, result) VALUES (?, 'completed', datetime('now'), datetime('now'), ?)"
+        )
+        .bind("m1")
+        .bind(r#"{"summary": "m1 done"}"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // m2: pending with previous result_backup
+        sqlx::query(
+            "INSERT INTO summary_processes (meeting_id, status, created_at, updated_at, result, result_backup, result_backup_timestamp) VALUES (?, 'pending', datetime('now'), datetime('now'), NULL, ?, datetime('now'))"
+        )
+        .bind("m2")
+        .bind(r#"{"summary": "m2 backup"}"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // m3: processing without backup
+        sqlx::query(
+            "INSERT INTO summary_processes (meeting_id, status, created_at, updated_at, result) VALUES (?, 'processing', datetime('now'), datetime('now'), NULL)"
+        )
+        .bind("m3")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let reconciled = SummaryProcessesRepository::reconcile_stale_in_progress(&pool)
+            .await
+            .unwrap();
+        assert_eq!(reconciled, 2);
+
+        // Verify m1 is untouched
+        let p1 = SummaryProcessesRepository::get_summary_data(&pool, "m1")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(p1.status, "completed");
+        assert_eq!(p1.result.unwrap(), r#"{"summary": "m1 done"}"#);
+
+        // Verify m2 restored backup
+        let p2 = SummaryProcessesRepository::get_summary_data(&pool, "m2")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(p2.status, "failed");
+        assert_eq!(p2.result.unwrap(), r#"{"summary": "m2 backup"}"#);
+        assert!(p2.error.unwrap().contains("interrupted"));
+
+        // Verify m3 failed with None result
+        let p3 = SummaryProcessesRepository::get_summary_data(&pool, "m3")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(p3.status, "failed");
+        assert_eq!(p3.result, None);
+        assert!(p3.error.unwrap().contains("interrupted"));
+    }
+}

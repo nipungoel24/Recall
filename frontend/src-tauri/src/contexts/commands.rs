@@ -384,6 +384,6 @@ pub async fn api_rebuild_context_memory(
     }
 
     let pool = state.db_manager.pool().clone();
-    let app_data_dir = app.path().app_data_dir().ok();
+    let app_data_dir = crate::brand_paths::resolve_app_data_dir(&app).ok();
     ContextService::rebuild_context_memory(&pool, app_data_dir, &context_id).await
 }

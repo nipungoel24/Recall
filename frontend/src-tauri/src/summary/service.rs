@@ -512,7 +512,7 @@ impl SummaryService {
             };
 
         // Get app data directory for BuiltInAI provider
-        let app_data_dir = _app.path().app_data_dir().ok();
+        let app_data_dir = crate::brand_paths::resolve_app_data_dir(&_app).ok();
 
         if let Some(code) = &summary_language {
             info!("📝 Summary language preference: {}", code);
@@ -828,7 +828,7 @@ pub async fn generate_structured_intelligence(
 
     let mut memory_blocks: Vec<String> = Vec::new();
     if !context_ids.is_empty() {
-        let app_data_dir = app.path().app_data_dir().ok();
+        let app_data_dir = crate::brand_paths::resolve_app_data_dir(&app).ok();
         let provider_config = resolve_provider_runtime_config(&pool, &provider, &model).await?;
         let client = reqwest::Client::new();
         let extractor = LlmMemoryExtractor::new(
@@ -939,7 +939,7 @@ TRANSCRIPT (each line begins with a citable reference label):
 
     // Get provider config
     let provider_config = resolve_provider_runtime_config(&pool, &provider, &model).await?;
-    let app_data_dir = app.path().app_data_dir().ok();
+    let app_data_dir = crate::brand_paths::resolve_app_data_dir(&app).ok();
 
     // Generate using the existing summary infrastructure
     let client = reqwest::Client::new();

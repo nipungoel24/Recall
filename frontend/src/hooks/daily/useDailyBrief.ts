@@ -302,9 +302,7 @@ export function useDailyBrief({ dateKey, meetings }: UseDailyBriefOptions): UseD
     }
 
     const hydrate = async () => {
-      setBrief((prev) =>
-        prev.status === 'completed' ? prev : { status: 'loading', markdown: null, sources: [], error: null },
-      );
+      setBrief({ status: 'loading', markdown: null, sources: [], error: null });
 
       try {
         const result = await getDailyBriefStatus(currentDateKey);

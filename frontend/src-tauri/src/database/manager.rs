@@ -91,9 +91,7 @@ impl DatabaseManager {
     // (Newly created .sqlite with the copied content from .db)
     pub async fn new_from_app_handle(app_handle: &tauri::AppHandle) -> Result<Self> {
         // Resolve the app's data directory
-        let app_data_dir = app_handle
-            .path()
-            .app_data_dir()
+        let app_data_dir = crate::brand_paths::resolve_app_data_dir(app_handle)
             .expect("failed to get app data dir");
         if !app_data_dir.exists() {
             fs::create_dir_all(&app_data_dir).map_err(|e| sqlx::Error::Io(e))?;
@@ -170,9 +168,7 @@ impl DatabaseManager {
 
     /// Check if this is the first launch (sqlite database doesn't exist yet)
     pub async fn is_first_launch(app_handle: &tauri::AppHandle) -> Result<bool> {
-        let app_data_dir = app_handle
-            .path()
-            .app_data_dir()
+        let app_data_dir = crate::brand_paths::resolve_app_data_dir(app_handle)
             .expect("failed to get app data dir");
 
         let tauri_db_path = app_data_dir.join("meeting_minutes.sqlite");
@@ -185,9 +181,7 @@ impl DatabaseManager {
         app_handle: &tauri::AppHandle,
         legacy_db_path: &str,
     ) -> Result<Self> {
-        let app_data_dir = app_handle
-            .path()
-            .app_data_dir()
+        let app_data_dir = crate::brand_paths::resolve_app_data_dir(app_handle)
             .expect("failed to get app data dir");
 
         if !app_data_dir.exists() {

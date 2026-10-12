@@ -120,6 +120,32 @@ pub fn default_recordings_folder_under(base: PathBuf) -> PathBuf {
     current
 }
 
+/// Check environment variable override for application data directory.
+/// Supports `RECALL_DATA_DIR` with `MEETILY_DATA_DIR` fallback.
+pub fn resolve_app_data_dir_from_env() -> Option<PathBuf> {
+    if let Some(override_dir) = resolve_env("RECALL_DATA_DIR", "MEETILY_DATA_DIR") {
+        let trimmed = override_dir.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+    None
+}
+
+/// Resolve the application data directory, honoring `RECALL_DATA_DIR` / `MEETILY_DATA_DIR`
+/// environment variable overrides for isolated profiles or automated testing.
+pub fn resolve_app_data_dir<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<PathBuf, String> {
+    if let Some(path) = resolve_app_data_dir_from_env() {
+        return Ok(path);
+    }
+    use tauri::Manager;
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,5 +181,22 @@ mod tests {
             resolve_env("RECALL_TEST_MISSING_XYZ", "MEETILY_TEST_MISSING_XYZ"),
             None
         );
+    }
+
+    #[test]
+    fn test_resolve_app_data_dir_from_env_override() {
+        std::env::set_var("RECALL_DATA_DIR", "C:\\temp\\recall_custom_test");
+        std::env::set_var("MEETILY_DATA_DIR", "C:\\temp\\meetily_custom_test");
+        assert_eq!(
+            resolve_app_data_dir_from_env(),
+            Some(PathBuf::from("C:\\temp\\recall_custom_test"))
+        );
+        std::env::remove_var("RECALL_DATA_DIR");
+        assert_eq!(
+            resolve_app_data_dir_from_env(),
+            Some(PathBuf::from("C:\\temp\\meetily_custom_test"))
+        );
+        std::env::remove_var("MEETILY_DATA_DIR");
+        assert_eq!(resolve_app_data_dir_from_env(), None);
     }
 }
