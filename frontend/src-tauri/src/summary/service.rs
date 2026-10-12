@@ -396,6 +396,14 @@ impl SummaryService {
         }
     }
 
+    /// Checks whether an in-flight summary generation task is currently active for the given key/meeting.
+    pub fn is_active(meeting_id: &str) -> bool {
+        if let Ok(registry) = CANCELLATION_REGISTRY.lock() {
+            return registry.contains_key(meeting_id);
+        }
+        false
+    }
+
     async fn read_detected_summary_language(pool: &SqlitePool, meeting_id: &str) -> Option<String> {
         let meeting = match MeetingsRepository::get_meeting_metadata(pool, meeting_id).await {
             Ok(Some(meeting)) => meeting,

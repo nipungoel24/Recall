@@ -24,6 +24,12 @@ const MAX_POLLS = 200; // ~16.5 minutes, mirrors the existing summary polling bu
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+function formatErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'string' && error.trim().length > 0) return error.trim();
+  if (error instanceof Error && error.message.trim().length > 0) return error.message.trim();
+  return fallback;
+}
+
 interface UseDailyBriefOptions {
   dateKey: string | null;
   meetings: DailyMeeting[];
@@ -96,7 +102,7 @@ export function useDailyBrief({ dateKey, meetings }: UseDailyBriefOptions): UseD
           console.error('Daily brief poll failed:', error);
           result = {
             status: 'failed',
-            error: error instanceof Error ? error.message : 'Daily brief poll failed',
+            error: formatErrorMessage(error, 'Daily brief poll failed'),
           };
           break;
         }
@@ -223,7 +229,7 @@ export function useDailyBrief({ dateKey, meetings }: UseDailyBriefOptions): UseD
         status: 'error',
         markdown: null,
         sources: [],
-        error: error instanceof Error ? error.message : 'Failed to start daily brief generation.',
+        error: formatErrorMessage(error, 'Failed to start daily brief generation.'),
       });
       return;
     }
@@ -270,7 +276,7 @@ export function useDailyBrief({ dateKey, meetings }: UseDailyBriefOptions): UseD
         status: 'error',
         markdown: null,
         sources: [],
-        error: error instanceof Error ? error.message : 'Daily brief generation failed.',
+        error: formatErrorMessage(error, 'Daily brief generation failed.'),
       });
     }
   }, [stopPolling, pollStatus, finishFromStatus, generateViaLegacyPipeline]);
@@ -308,10 +314,14 @@ export function useDailyBrief({ dateKey, meetings }: UseDailyBriefOptions): UseD
           finishFromStatus(result);
           return;
         }
-        if (status === 'processing') {
+        if (status === 'processing' || status === 'pending') {
           cancelledRef.current = false;
           const finalResult = await pollStatus(() => getDailyBriefStatus(currentDateKey));
           if (!cancelled) finishFromStatus(finalResult);
+          return;
+        }
+        if (status === 'failed' || status === 'error') {
+          finishFromStatus(result);
           return;
         }
         setBrief({ status: 'idle', markdown: null, sources: [], error: null });
@@ -324,6 +334,12 @@ export function useDailyBrief({ dateKey, meetings }: UseDailyBriefOptions): UseD
             if (cancelled) return;
             const status = String(result.status ?? '').toLowerCase();
             if (status === 'completed') {
+              finishFromStatus(result);
+            } else if (status === 'processing' || status === 'pending') {
+              cancelledRef.current = false;
+              const finalResult = await pollStatus(() => getLegacyDailyBriefStatus(currentDateKey));
+              if (!cancelled) finishFromStatus(finalResult);
+            } else if (status === 'failed' || status === 'error') {
               finishFromStatus(result);
             } else {
               setBrief({ status: 'idle', markdown: null, sources: [], error: null });

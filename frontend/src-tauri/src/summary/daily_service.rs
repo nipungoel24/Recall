@@ -34,10 +34,33 @@ const LANGUAGE_DETECTION_CHAR_CAP: usize = 4000;
 
 pub struct DailyBriefService;
 
+struct DailyBriefActiveGuard(String);
+
+impl Drop for DailyBriefActiveGuard {
+    fn drop(&mut self) {
+        DailyBriefService::cleanup_active(&self.0);
+    }
+}
+
 impl DailyBriefService {
     /// Cancels an in-flight daily brief generation for the given day.
     pub fn cancel(date_key: &str) -> bool {
         SummaryService::cancel_summary(&daily_cancel_key(date_key))
+    }
+
+    /// Checks if a daily brief generation is currently in-flight for the given day.
+    pub fn is_active(date_key: &str) -> bool {
+        SummaryService::is_active(&daily_cancel_key(date_key))
+    }
+
+    /// Registers an in-flight daily brief cancellation token synchronously.
+    pub fn register_active(date_key: &str) -> CancellationToken {
+        SummaryService::register_cancellation_token(&daily_cancel_key(date_key))
+    }
+
+    /// Cleans up the active daily brief cancellation token.
+    pub fn cleanup_active(date_key: &str) {
+        SummaryService::cleanup_cancellation_token(&daily_cancel_key(date_key));
     }
 
     /// Resolves the meeting ids that belong to the requested local calendar
@@ -123,15 +146,15 @@ impl DailyBriefService {
         custom_prompt: String,
         template_id: String,
         summary_language: Option<String>,
+        cancellation_token: CancellationToken,
     ) {
+        let _guard = DailyBriefActiveGuard(date_key.clone());
         let start_time = Instant::now();
-        let cancel_key = daily_cancel_key(&date_key);
         info!(
             "Starting daily brief background processing for {} ({} meeting(s))",
             date_key,
             meeting_ids.len()
         );
-        let cancellation_token = SummaryService::register_cancellation_token(&cancel_key);
 
         let result = Self::run_pipeline(
             &app,
@@ -148,7 +171,6 @@ impl DailyBriefService {
         .await;
 
         let duration = start_time.elapsed().as_secs_f64();
-        SummaryService::cleanup_cancellation_token(&cancel_key);
 
         match result {
             Ok((final_markdown, provenance, num_units)) => {
@@ -336,5 +358,36 @@ impl DailyBriefService {
         )
         .await
         .map(|(markdown, count)| (markdown, provenance, count))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_daily_brief_active_tracking_and_guard() {
+        let test_date = "2099-01-01";
+        assert!(!DailyBriefService::is_active(test_date));
+
+        let token = DailyBriefService::register_active(test_date);
+        assert!(DailyBriefService::is_active(test_date));
+        assert!(!token.is_cancelled());
+
+        // Cancel should trigger token and report true
+        assert!(DailyBriefService::cancel(test_date));
+        assert!(token.is_cancelled());
+
+        // Cleanup clears the active status
+        DailyBriefService::cleanup_active(test_date);
+        assert!(!DailyBriefService::is_active(test_date));
+
+        // Test guard drops and cleans up automatically
+        {
+            let _token = DailyBriefService::register_active(test_date);
+            assert!(DailyBriefService::is_active(test_date));
+            let _guard = DailyBriefActiveGuard(test_date.to_string());
+        }
+        assert!(!DailyBriefService::is_active(test_date));
     }
 }

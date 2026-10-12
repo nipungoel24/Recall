@@ -159,6 +159,39 @@ impl DailySummariesRepository {
         log_info!("Daily summary marked cancelled for date: {}", date);
         Ok(())
     }
+
+    /// Reconciles any daily summary processes that were left in 'pending' or 'processing'
+    /// state (e.g. from an application crash or unexpected exit).
+    pub async fn reconcile_stale_in_progress(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+        let now = Utc::now();
+        let result = sqlx::query(
+            r#"
+            UPDATE daily_summaries
+            SET
+                status = 'failed',
+                error = 'Generation was interrupted when the application was closed.',
+                updated_at = ?,
+                end_time = ?,
+                result = COALESCE(result_backup, result),
+                result_backup = NULL,
+                result_backup_timestamp = NULL
+            WHERE LOWER(status) IN ('pending', 'processing')
+            "#,
+        )
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+
+        let count = result.rows_affected();
+        if count > 0 {
+            log_info!(
+                "Reconciled {} stale in-progress daily summary process(es)",
+                count
+            );
+        }
+        Ok(count)
+    }
 }
 
 #[cfg(test)]
@@ -382,5 +415,70 @@ mod tests {
         assert_eq!(row.status, "cancelled");
         let restored: Value = serde_json::from_str(row.result.as_deref().unwrap()).unwrap();
         assert_eq!(restored["markdown"], "# Before cancel");
+    }
+
+    #[tokio::test]
+    async fn test_reconcile_stale_in_progress() {
+        let pool = test_pool().await;
+
+        DailySummariesRepository::create_or_reset_daily(&pool, "2026-08-14", "[]", "fp1")
+            .await
+            .unwrap();
+        DailySummariesRepository::update_daily_completed(
+            &pool,
+            "2026-08-14",
+            serde_json::json!({ "markdown": "# Aug 14 brief" }),
+            1,
+            1.0,
+        )
+        .await
+        .unwrap();
+
+        DailySummariesRepository::create_or_reset_daily(&pool, "2026-08-15", "[]", "fp2")
+            .await
+            .unwrap();
+        DailySummariesRepository::update_daily_completed(
+            &pool,
+            "2026-08-15",
+            serde_json::json!({ "markdown": "# Aug 15 previous" }),
+            1,
+            1.0,
+        )
+        .await
+        .unwrap();
+        DailySummariesRepository::create_or_reset_daily(&pool, "2026-08-15", "[]", "fp3")
+            .await
+            .unwrap();
+
+        DailySummariesRepository::create_or_reset_daily(&pool, "2026-08-16", "[]", "fp4")
+            .await
+            .unwrap();
+
+        let reconciled_count = DailySummariesRepository::reconcile_stale_in_progress(&pool)
+            .await
+            .unwrap();
+        assert_eq!(reconciled_count, 2);
+
+        let aug14 = DailySummariesRepository::get_daily_summary(&pool, "2026-08-14")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(aug14.status, "completed");
+
+        let aug15 = DailySummariesRepository::get_daily_summary(&pool, "2026-08-15")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(aug15.status, "failed");
+        let restored: Value = serde_json::from_str(aug15.result.as_deref().unwrap()).unwrap();
+        assert_eq!(restored["markdown"], "# Aug 15 previous");
+        assert!(aug15.error.unwrap().contains("interrupted"));
+
+        let aug16 = DailySummariesRepository::get_daily_summary(&pool, "2026-08-16")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(aug16.status, "failed");
+        assert_eq!(aug16.result, None);
     }
 }

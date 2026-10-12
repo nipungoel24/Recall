@@ -169,15 +169,16 @@ previously overclaimed WAL and an incorrect migration count of 15).
 | T-5 | **S3** | **FIXED** | `qa-routes.test.mjs` converted from `bun:test` to `node:test` + `loadTsModule`, achieving 100% test pass on Windows/Node. |
 | T-6 | **S3** | **FIXED** | `tsconfig.json` excludes `tests`, ensuring `npx tsc --noEmit` validates application code with 0 errors. |
 | T-7 | **S2** | **FIXED** | Production CSP in `tauri.conf.json` tightened: removed obsolete ports (5167, 8178, 11434), external registry (api.ollama.ai), and disabled asset protocol (asset.localhost). Automated regression tests added in `security-csp.test.mjs`. |
+| R-1 | **S1** | **FIXED** | Daily Brief runtime failure on `/daily?date=...`: orphaned `PENDING`/`PROCESSING` states in `daily_summaries` after crash/restart permanently locked generation with "already being generated", while frontend `useDailyBrief.ts` masked Tauri string IPC rejections (`typeof error === 'string'`) to generic "Daily brief generation failed.". Reconciled stale records on startup and during status check, tied concurrency check to in-memory active tasks (`SummaryService::is_active` / `DailyBriefService::is_active`), and preserved error message strings in frontend. |
 
 ## 2. Validation matrix
 
 | Suite | Command | Baseline `7c4adf9` | Post-Hardening / RC Baseline |
 |---|---|---|---|
-| Rust unit & integration | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | **484 pass / 0 fail / 2 ignored / 1 doc pass** (+101) |
+| Rust unit & integration | `cargo test --workspace` | 383 pass / 0 fail / 2 ignored | **486 pass / 0 fail / 2 ignored / 1 doc pass** (+103) |
 | Rust fmt | `cargo fmt --all -- --check` | FAIL | **PASS** |
 | Rust lint | `cargo clippy --workspace --all-targets` | pass | **PASS** (0 errors) |
-| Frontend unit & behavioral | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | **698 pass / 0 fail / 0 known failures** (138 suites) |
+| Frontend unit & behavioral | `node --test tests/lib/*.test.mjs` | 645 / 643 / 2 known | **703 pass / 0 fail / 0 known failures** (138 suites) |
 | Contract audit | `node tests/contract/audit.mjs` | 80 pass / 0 violations | **82 pass / 0 violations** |
 | TypeScript compilation | `tsc --noEmit` (`src/`) | clean | **clean** (0 errors) |
 | Next.js production build | `npm run build` | pass | **PASS (13/13 static pages prerendered)** |

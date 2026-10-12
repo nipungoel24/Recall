@@ -5,7 +5,7 @@ use crate::state::AppState;
 use crate::summary::daily_brief::{parse_date_key, DEFAULT_DAILY_TEMPLATE_ID};
 use crate::summary::daily_service::DailyBriefService;
 use crate::summary::templates;
-use log::{error as log_error, info as log_info};
+use log::{error as log_error, info as log_info, warn as log_warn};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
 
@@ -51,7 +51,14 @@ pub async fn api_generate_daily_summary<R: Runtime>(
 
     let pool = state.db_manager.pool().clone();
 
-    // Reject concurrent generation for the same day.
+    // Reject concurrent generation for the same day only if an in-memory task is actively running.
+    if DailyBriefService::is_active(&date_key) {
+        return Err(format!(
+            "A daily brief is already being generated for {}.",
+            date_key
+        ));
+    }
+
     if let Some(existing) = DailySummariesRepository::get_daily_summary(&pool, &date_key)
         .await
         .map_err(|e| format!("Failed to check existing daily brief: {}", e))?
@@ -59,10 +66,11 @@ pub async fn api_generate_daily_summary<R: Runtime>(
         if existing.status.eq_ignore_ascii_case("pending")
             || existing.status.eq_ignore_ascii_case("processing")
         {
-            return Err(format!(
-                "A daily brief is already being generated for {}.",
+            log_warn!(
+                "Found orphaned {} daily summary process for {}; resetting and starting fresh",
+                existing.status,
                 date_key
-            ));
+            );
         }
     }
 
@@ -130,6 +138,8 @@ pub async fn api_generate_daily_summary<R: Runtime>(
         }
     });
 
+    let cancellation_token = DailyBriefService::register_active(&date_key);
+
     let date_key_clone = date_key.clone();
     let resolved_clone = cleaned_ids.clone();
     tauri::async_runtime::spawn(async move {
@@ -143,6 +153,7 @@ pub async fn api_generate_daily_summary<R: Runtime>(
             final_prompt,
             final_template_id,
             summary_language,
+            cancellation_token,
         )
         .await;
     });
@@ -167,17 +178,40 @@ pub async fn api_get_daily_summary<R: Runtime>(
 
     match DailySummariesRepository::get_daily_summary(pool, &date_key).await {
         Ok(Some(process)) => {
+            let mut status = process.status.to_lowercase();
+            let mut error = process.error;
+
+            // If the database says pending or processing, but NO task is actually running in memory,
+            // this is an orphaned process from a previous crash/exit. Reconcile it!
+            if (status == "pending" || status == "processing")
+                && !DailyBriefService::is_active(&date_key)
+            {
+                log_warn!(
+                    "Found orphaned {} daily summary process for {} during status check; marking as failed",
+                    status,
+                    date_key
+                );
+                let _ = DailySummariesRepository::update_daily_failed(
+                    pool,
+                    &date_key,
+                    "Generation was interrupted before completing.",
+                )
+                .await;
+                status = "failed".to_string();
+                error = Some("Generation was interrupted before completing.".to_string());
+            }
+
             let data = process
                 .result
                 .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
             let meeting_ids =
                 serde_json::from_str::<Vec<String>>(&process.meeting_ids).unwrap_or_default();
             Ok(DailySummaryResponse {
-                status: process.status.to_lowercase(),
+                status,
                 date: date_key,
                 meeting_ids,
                 data,
-                error: process.error,
+                error,
                 start: process.start_time.map(|t| t.to_rfc3339()),
                 end: process.end_time.map(|t| t.to_rfc3339()),
             })

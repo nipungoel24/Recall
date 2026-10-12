@@ -2,6 +2,9 @@ use log::info;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::manager::DatabaseManager;
+use crate::database::repositories::{
+    daily_summary::DailySummariesRepository, summary::SummaryProcessesRepository,
+};
 use crate::state::AppState;
 
 /// Initialize database on app startup
@@ -29,6 +32,20 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
         let db_manager = DatabaseManager::new_from_app_handle(app)
             .await
             .map_err(|e| format!("Failed to initialize database manager: {}", e))?;
+
+        let pool = db_manager.pool();
+        if let Err(e) = DailySummariesRepository::reconcile_stale_in_progress(pool).await {
+            log::warn!(
+                "Failed to reconcile stale daily summary processes on startup: {}",
+                e
+            );
+        }
+        if let Err(e) = SummaryProcessesRepository::reconcile_stale_in_progress(pool).await {
+            log::warn!(
+                "Failed to reconcile stale summary processes on startup: {}",
+                e
+            );
+        }
 
         app.manage(AppState { db_manager });
         info!("Database initialized successfully");

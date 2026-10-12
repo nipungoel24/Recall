@@ -218,4 +218,34 @@ impl SummaryProcessesRepository {
         );
         Ok(())
     }
+
+    /// Reconciles any meeting summary processes that were left in 'pending' or 'processing'
+    /// state (e.g. from an application crash or unexpected exit).
+    pub async fn reconcile_stale_in_progress(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+        let now = Utc::now();
+        let result = sqlx::query(
+            r#"
+            UPDATE summary_processes
+            SET
+                status = 'failed',
+                error = 'Generation was interrupted when the application was closed.',
+                updated_at = ?,
+                end_time = ?,
+                result = COALESCE(result_backup, result),
+                result_backup = NULL,
+                result_backup_timestamp = NULL
+            WHERE LOWER(status) IN ('pending', 'processing')
+            "#,
+        )
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+
+        let count = result.rows_affected();
+        if count > 0 {
+            log_info!("Reconciled {} stale in-progress summary process(es)", count);
+        }
+        Ok(count)
+    }
 }

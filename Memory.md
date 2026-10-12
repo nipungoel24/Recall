@@ -2039,11 +2039,30 @@ recoverable checkpoints are left on disk. It is never reported as saved.
 - Automated regression suite added: `frontend/tests/lib/security-csp.test.mjs` (8/8 tests passing).
 - Documented 10-point manual desktop QA handoff checklist in `docs/PHYSICAL_DESKTOP_QA_CHECKLIST.md` (all marked NOT RUN pending physical workstation verification).
 
+### Daily Brief Runtime Failure & Reliability Closure (Defect R-1 Closed)
+- **Root Cause 1 (Orphaned Task Latch):** In `frontend/src-tauri/src/summary/daily_commands.rs`, `api_generate_daily_summary` checked only persistent SQLite state: `if existing.status == "pending" || existing.status == "processing" { return Err("A daily brief is already being generated..."); }`. An earlier task interrupted by an app crash/exit (such as the 2026-10-04 run for 2026-08-05 in the user database) permanently deadlocked generation and retries.
+- **Root Cause 2 (Error Masking in Frontend):** In `frontend/src/hooks/daily/useDailyBrief.ts`, catch blocks used `error instanceof Error ? error.message : 'Daily brief generation failed.'`. Because Tauri IPC rejections return primitive strings, `error instanceof Error` was `false`, erasing actionable backend error messages.
+- **Root Cause 3 (Hydration State Drops):** In `useDailyBrief.ts`, `hydrate()` treated `pending` and `failed` rows as `idle`, causing UI desynchronization with the database and preventing clean recovery.
+- **Backend Resolution:**
+  - Added in-memory task tracking via `SummaryService::is_active` and `DailyBriefService::is_active`, `register_active`, `cleanup_active`.
+  - Wrapped background tasks in `DailyBriefActiveGuard` to guarantee cancellation token cleanup even on panics.
+  - Concurrency rejection now strictly checks whether a background task is actually alive in memory (`DailyBriefService::is_active`), treating orphaned database statuses as stale and logging a warning.
+  - Implemented `DailySummariesRepository::reconcile_stale_in_progress` and `SummaryProcessesRepository::reconcile_stale_in_progress`, running automatically during app initialization (`initialize_database_on_startup`) and on status query (`api_get_daily_summary`).
+- **Frontend Resolution:**
+  - Added `formatErrorMessage` helper handling strings, `Error` instances, and fallbacks.
+  - Enhanced `hydrate()` to poll on both `pending` and `processing` states, and to surface `failed` or `error` results with full error details.
+- **Automated Regression Coverage:**
+  - Added Rust unit test `test_reconcile_stale_in_progress` in `daily_summary.rs`.
+  - Added Rust unit test `test_daily_brief_active_tracking_and_guard` in `daily_service.rs`.
+  - Added Node regression suite `tests/lib/qa-daily-brief-error-recovery.test.mjs` (5/5 tests passing).
+- **User Data Safety:**
+  - Real user SQLite database verified untouched (4,632,576 bytes).
+
 ### Comprehensive Validation Scorecard
-- Rust workspace tests: 484 passed, 0 failed, 2 ignored, 1 doc test passed (`cargo test --workspace --offline`).
+- Rust workspace tests: 486 passed, 0 failed, 2 ignored, 1 doc test passed (`cargo test --workspace --offline`).
 - Rust code formatting: PASS (`cargo fmt --all -- --check`).
 - Rust Clippy lints: PASS (0 errors, `cargo clippy --workspace --all-targets --offline`).
-- Frontend unit/integration tests: 698 passed, 0 failed across 138 test suites (`node --test tests/lib/*.test.mjs`).
+- Frontend unit/integration tests: 703 passed, 0 failed across 138 test suites (`node --test tests/lib/*.test.mjs`).
 - Frontend contract audit: 82 passed, 0 violations (`node tests/contract/audit.mjs`).
 - TypeScript compilation: clean (0 errors, `npx tsc --noEmit`).
 - Next.js production build: 13/13 static pages prerendered successfully (`npm run build`).
