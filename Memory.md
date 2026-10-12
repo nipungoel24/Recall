@@ -2090,3 +2090,10 @@ recoverable checkpoints are left on disk. It is never reported as saved.
   - TypeScript compilation: clean (0 errors, `npx tsc --noEmit`).
   - Next.js production build: 13/13 static pages prerendered (`npm run build`).
   - Live database hash: identical before and after (`36D8EC023AF44B8B286760E656C49BC14E930269E45B9715C4B54861984EBBC4`).
+
+### Recall Desktop Separate Packaging & Installation Milestone
+- **Distinct Identity Configuration:** Set `productName: "Recall Desktop"` and `identifier: "ai.recall.desktop"` in `frontend/src-tauri/tauri.conf.json`. Updated `frontend/tests/lib/branding-regression.test.mjs` (5/5 PASS).
+- **Windows NSIS Installer Built:** Built `C:\Kaam_Dhanda\Projects\Recall\target\release\bundle\nsis\Recall Desktop_0.4.0_x64-setup.exe` (161,246,188 bytes) with bundled sidecars (`llama-helper`, `ffmpeg`) and pre-rendered Next.js frontend.
+- **Parallel Non-Destructive Installation:** Installed cleanly to `C:\Users\Nipun\AppData\Local\Recall Desktop` with Start Menu shortcut `Recall Desktop.lnk`. Preserved legacy Meetily installation at `C:\Users\Nipun\AppData\Local\Recall` and shortcut `Recall.lnk`.
+- **Database & Data Isolation:** Verified live Meetily database `%APPDATA%\com.meetily.ai\meeting_minutes.sqlite` remained 100% untouched (`36D8EC023AF44B8B286760E656C49BC14E930269E45B9715C4B54861984EBBC4`). App data directory scoped to `%APPDATA%\ai.recall.desktop`.
+- **Installed App Verification:** Launched newly installed application (`C:\Users\Nipun\AppData\Local\Recall Desktop\recall.exe`). Verified via Chrome DevTools Protocol on port 9222: Home page displays Recall, Daily page loads August 5, 2026 with authentic synthesized brief (12 meetings, 1h 52m, Copy/Export/Regenerate), date switching to August 4, 2026 shows 4 meetings with clean empty brief state, switching back to August 5 rehydrates the brief immediately.

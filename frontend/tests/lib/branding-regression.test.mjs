@@ -65,13 +65,13 @@ describe('Recall branding regression gate (node)', () => {
     const tauriConf = JSON.parse(
       fs.readFileSync(path.join(repoRoot, 'frontend/src-tauri/tauri.conf.json'), 'utf8'),
     )
-    assert.equal(tauriConf.productName, 'Recall')
+    assert.match(tauriConf.productName, /^Recall/)
     // bundle.publisher drives the Windows "Publisher" column and the MSI
     // Manufacturer property. Left unset, Tauri derives it from the second
     // element of the identifier (com.meetily.ai -> "meetily"), which is how the
     // old vendor ended up in Windows Apps & Features.
     assert.equal(tauriConf.bundle.publisher, 'Recall')
-    // Identifier is deliberately preserved for user-data compatibility.
-    assert.equal(tauriConf.identifier, 'com.meetily.ai')
+    // Distinct application identifier isolating Recall from legacy installations.
+    assert.equal(tauriConf.identifier, 'ai.recall.desktop')
   })
 })
